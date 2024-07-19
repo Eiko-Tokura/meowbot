@@ -14,7 +14,7 @@ import Control.Monad.Trans.ReaderState
 commandHelp :: BotCommand
 commandHelp = botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  helpText <- pureMaybe $ MP.mRunParserF helpParser msg
+  helpText <- hoistMaybe $ MP.mRunParserF helpParser msg
   return [baSendToChatId cid helpText]
   where
     helpParser = do
@@ -23,7 +23,7 @@ commandHelp = botT $ do
       mParam <- MP.tryMaybe . mconcat $ map ((\str -> do {cap <- MP.string str; MP.spaces0; MP.end; return cap}) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
-        Nothing -> return . pack . concat $ 
+        Nothing  -> return . pack . concat $ 
           [ "你好，这里是Eiko的喵喵~目前支持的命令："
           , concatMap (("\n:" ++ ) . fst) helpList
           , "\n可以使用 :help <command>如:help cat来查看详细命令的帮助。"

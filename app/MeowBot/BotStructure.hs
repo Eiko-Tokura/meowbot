@@ -6,15 +6,15 @@
 module MeowBot.BotStructure where
 
 import MeowBot.CQCode
-import Control.Monad.Trans.State as ST
+import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Trans.State as ST
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.ReaderState as RST
 import Command.Aokana.Scripts
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text (Text, pack, unpack)
 import Data.Ord (comparing)
-import Control.Monad 
 import Data.List (maximumBy)
 import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=))
 import Data.Aeson.Types (Parser, (.:?))

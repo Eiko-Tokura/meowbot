@@ -10,6 +10,7 @@ module External.ChatAPI
 
 import Control.Exception (try, SomeException)
 import Control.Monad.Trans.Except
+import Control.Monad.Trans
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Data.Aeson
@@ -99,7 +100,7 @@ generateRequestBody (ChatParams model md msys) mes = toStrict $ encode $
                           -- \ think step by step, conclude your answer at the end. \
                           -- \ When not asked by a question, just be cute."
         strModel = case model of
-          GPT3 -> "gpt-3.5-turbo"
+          GPT3 -> "gpt-4o-mini"
           GPT4 -> "gpt-4o"
 
 type APIKey = String
@@ -129,13 +130,13 @@ displayResponse inp = let chos = choices inp in
 
 simpleChat :: ChatParams -> String -> ExceptT String IO String
 simpleChat model prompt = do
-  apiKey <- ExceptT . fmap (first show) . try @SomeException $ readFile apiKeyFile
+  apiKey <- ExceptT . fmap (bimap show (head . lines)) . try @SomeException $ readFile apiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey model [promptMessage prompt]
   return $ displayResponse result
 
 messageChat :: ChatParams -> [Message] -> ExceptT String IO String
 messageChat params prevMsg = do
-  apiKey <- ExceptT . fmap (first show) . try @SomeException $ readFile apiKeyFile
+  apiKey <- ExceptT . fmap (bimap show (head . lines)) . try @SomeException $ readFile apiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey params prevMsg
   return $ turnResponseToMsg result
     where turnResponseToMsg res = let strRes = displayResponse res in strRes --Message "assistant" $ pack strRes

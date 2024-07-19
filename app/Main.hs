@@ -19,6 +19,7 @@ import Data.Aeson (eitherDecode)
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
 import Network.WebSockets (Connection, ClientApp, runClient, receiveData)
+import Debug.Trace
 
 import Control.Monad.Trans.State
 import Control.Monad.Trans
@@ -38,8 +39,7 @@ main = do
 botClient :: ClientApp ()
 botClient connection = do
   putStrLn "Connected to go-cqhttp WebSocket server."
-  initial_data <- initialData
-  botLoop connection initial_data
+  initialData >>= botLoop connection 
 
 botLoop :: Connection -> AllData -> IO never_returns
 botLoop conn allData = runStateT (botSingleLoop conn) allData >>= botLoop conn . snd
@@ -74,7 +74,7 @@ botSingleLoop conn = do
 initialData :: IO AllData
 initialData = do
   fileExist <- doesFileExist savedDataPath
-  if fileExist 
+  if fileExist
     then do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile savedDataPath

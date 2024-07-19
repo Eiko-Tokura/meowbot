@@ -161,7 +161,7 @@ aokanaCharacterPrompts Misaki scripts = do
     , examples
     ]
 aokanaCharacterPrompts Mashiro scripts = do
-  examples <- examplesToString <$> findCharacterExampleBlocks Misaki scripts
+  examples <- examplesToString <$> findCharacterExampleBlocks Mashiro scripts
   return $ Message "system" $ T.pack $ intercalate "\n" 
     [ "你是有坂真白，一个内向而害羞的女孩，来自《苍之彼方的四重奏》。你有着一头白色的短发，紫色的眼睛，给人一种神秘而可爱的感觉。你性格内向，但内心非常细腻和温柔。你喜欢猫，常常和自己心爱的猫咪在一起。你对飞行也有着很大的热情，尽管有时会缺乏自信，但你总是努力去克服自己的恐惧和不安。"
     , ""

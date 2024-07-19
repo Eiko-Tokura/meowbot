@@ -22,7 +22,7 @@ botT = fmap (fromMaybe []) . runMaybeT
 
 doBotAction :: Connection -> BotAction -> IO ()
 doBotAction conn (BASendPrivate (PrivateId uid) txt) = sendPrivate conn uid txt
-doBotAction conn (BASendGroup (GroupId gid) txt) = sendGroup conn gid txt
+doBotAction conn (BASendGroup (GroupId gid) txt)     = sendGroup conn gid txt
 doBotAction _ ba = putStrLn $ "Invalid BotAction: " ++ show ba
 
 sendPrivate :: Connection -> Int -> Text -> IO ()
