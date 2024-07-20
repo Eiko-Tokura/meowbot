@@ -17,7 +17,7 @@ Welcome to contribute and play with MeowMeow!
 
 If you want to run it, you need the following files to support the above functions: (otherwise the corresponding functions will not work)
 
-1. LLOneBot framework (replacing cqhttp).
+1. LLOneBot framework (replacing cqhttp) or natpcat.
 2. create a file 'apiKey' containing the API key of ChatGPT in the root directory of the project.
 3. add aokana voice files in ./aokana/voice and script files in ./aokana/scripts
 
