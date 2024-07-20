@@ -56,7 +56,7 @@ commandRandom = botT $ do
             , string "normal"      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
             , string "exponential" >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)
             , string "poisson"     >> commandSeparator >> (     Distribution . Poisson     <$> positiveFloat)
-            , string "binomial"    >> commandSeparator >> (fmap Distribution . Binomial    <$> int <* spaces <*> positiveFloat)
+            , string "binomial"    >> commandSeparator >> (fmap Distribution . Binomial    <$> positiveInt <* spaces <*> positiveFloat)
             , string "geometric"   >> commandSeparator >> (     Distribution . Geometric   <$> positiveFloat)
             , string "beta"        >> commandSeparator >> (fmap Distribution . Beta        <$> (positiveFloat <* spaces) <*> positiveFloat)
             , string "choose" >> (ChooseFromList <$> many (commandSeparator >> word))

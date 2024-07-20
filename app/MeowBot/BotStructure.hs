@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -42,7 +43,7 @@ data AllData = AllData
   , otherdata :: OtherData
   } deriving Show
 
-data OtherData = OtherData 
+data OtherData = OtherData
   { message_number :: Int -- all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , sent_messages :: [CQMessage]
     -- In the future one can add course data.. etc

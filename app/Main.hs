@@ -19,7 +19,6 @@ import Data.Aeson (eitherDecode)
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
 import Network.WebSockets (Connection, ClientApp, runClient, receiveData)
-import Debug.Trace
 
 import Control.Monad.Trans.State
 import Control.Monad.Trans
@@ -58,13 +57,13 @@ botSingleLoop conn = do
         modify $ updateAllDataByMessage cqmsg
         lift $ putStrLn "<- response."
       PrivateMessage -> do
-        modify $ updateAllDataByMessage cqmsg
         mid <- increaseAbsoluteId
+        modify $ updateAllDataByMessage $ cqmsg {absoluteId = Just mid}
         lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
         doBotCommands conn allPrivateCommands
       GroupMessage -> do
-        modify $ updateAllDataByMessage cqmsg
         mid <- increaseAbsoluteId
+        modify $ updateAllDataByMessage cqmsg {absoluteId = Just mid}
         lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
         doBotCommands conn allGroupCommands
       UnknownMessage -> return ()

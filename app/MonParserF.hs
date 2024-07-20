@@ -191,7 +191,7 @@ digit = itemIn ['0'..'9']
 digits = many digit
 
 int :: ParserF Char Int
-int = foldl1 (<>)
+int = foldr1 (<>)
   [ just '-' >> negate . read <$> digits
   , read <$> digits
   ]
