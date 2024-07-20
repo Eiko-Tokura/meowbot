@@ -20,12 +20,12 @@ import Debug.Trace
 
 commandCat :: BotCommand
 commandCat = botT $ do
-  (msg, cid, uid, mid) <- MaybeT $ traceWith show . getEssentialContent <$> ask
+  (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
   let msys = lookup cid $ sysMessages sd
-  lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser msys mid) (traceWith show $ getFirstTree whole_chat)
+  lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
