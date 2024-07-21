@@ -14,7 +14,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.ReaderState as RST
 import Command.Aokana.Scripts
 import Data.Maybe (fromMaybe, listToMaybe)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack, unpack) 
 import Data.Ord (comparing)
 import Data.List (maximumBy)
 import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=))
@@ -31,7 +31,14 @@ data ChatId = GroupId Int | PrivateId Int deriving (Eq, Show, Ord, Read)
 
 type Chat = [MP.Tree CQMessage]
 
-data BotAction = BASendPrivate ChatId Text | BASendGroup ChatId Text deriving Show
+data BotAction 
+  = BASendPrivate 
+    ChatId       -- ^ ChatId, the chat to send to
+    Text         -- ^ Text, the message to send
+  | BASendGroup 
+    ChatId       -- ^ ChatId, the chat to send to
+    Text         -- ^ Text, the message to send
+  deriving Show
 -- | BAReplyGroup Int Int | BAReplyPrivate Int Int | BASendImagePrivate ImagePath Int | BASendImageGroup ImagePath Int -- | ...More actions, like Poke, ... etc
 
 type ChatRoom = (ChatId, Chat)
@@ -82,13 +89,13 @@ data CQMessage = CQMessage
   , echoR        :: Maybe Text
   , absoluteId   :: Maybe Int
   , metaMessage  :: Maybe MetaMessage
-  } deriving (Show, Read, Generic)
+  } deriving (Show, Read, Eq, Generic)
 
 emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
-  } deriving (Show, Read, Generic)
+  } deriving (Show, Read, Eq, Generic)
 
 instance FromJSON ResponseData where
   parseJSON = withObject "ResponseData" $ \o -> do
@@ -139,15 +146,15 @@ saveData prev_data = do
 
 savedDataPath = "savedData"
 
-increaseAbsoluteId :: (Monad m) => StateT AllData m Int
-increaseAbsoluteId = globalize wholechat otherdata AllData $ do
+gIncreaseAbsoluteId :: (Monad m) => StateT AllData m Int
+gIncreaseAbsoluteId = globalize wholechat otherdata AllData increaseAbsoluteId
+
+increaseAbsoluteId :: (Monad m) => ReaderStateT r OtherData m Int
+increaseAbsoluteId = do
   other_data <- RST.get
   let mid = message_number other_data
   RST.put $ other_data {message_number = mid + 1}
   return $ mid + 1
-
---increaseAbsoluteId :: OtherData -> (Int, OtherData)
---increaseAbsoluteId otherdata = let mid = message_number otherdata in (mid + 1, otherdata {message_number = mid + 1})
 
 data SendMessageForm = SendMessageForm {
   action :: Text,
@@ -192,21 +199,25 @@ updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
         other_data
       Nothing -> AllData whole_chat other_data
 
-    Response -> let rdata = responseData cqmsg in
+    Response -> let (rdata, mecho) = (responseData cqmsg, echoR cqmsg) in
       case rdata of
         Nothing     -> AllData whole_chat other_data
-        Just rsdata -> updateAllDataByResponse rsdata (AllData whole_chat other_data)
+        Just rsdata -> updateAllDataByResponse (rsdata, mecho) (AllData whole_chat other_data)
     _ -> AllData whole_chat other_data
 
-updateAllDataByResponse :: ResponseData -> AllData -> AllData
-updateAllDataByResponse rdata alldata = 
+updateAllDataByResponse :: (ResponseData, Maybe Text) -> AllData -> AllData
+updateAllDataByResponse (rdata, mecho) alldata = 
   case (message_id rdata, (sent_messages . otherdata) alldata) of
     (Nothing,_) -> alldata
     (_, []) -> alldata
-    (Just mid, m0:ms) -> case (groupId m0, userId m0) of
-      (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (GroupId gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-      (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (PrivateId uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-      _ -> alldata
+    (Just mid, sentMessageList) -> 
+      let m0 = fromMaybe (head sentMessageList) $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
+          ms = filter (/= m0) sentMessageList
+      in
+      case (groupId m0, userId m0) of
+        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (GroupId gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (PrivateId uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        _ -> alldata
 
 attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
 attachRule msg1 = 
@@ -291,26 +302,39 @@ sendIOeToChatId (_, cid, _, mid) ioess other_data = do
              ], 
               either 
                 (const other_data)
-                (\str -> insertMyResponse other_data cid (generateMetaMessage str [MReplyTo mid]) ) ess
+                (\str -> insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data ) ess
            )
 
 sendToChatId :: EssentialContent -> String -> OtherData -> ([BotAction], OtherData)
 sendToChatId (_, cid, _, mid) str other_data = 
-  ([baSendToChatId cid (pack str)], insertMyResponse other_data cid (generateMetaMessage str [MReplyTo mid]) )
+  ([baSendToChatId cid (pack str)], insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data )
 
-insertMyResponse :: OtherData -> ChatId -> MetaMessage -> OtherData
-insertMyResponse other_data (GroupId gid) meta = 
+-- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
+insertMyResponse :: ChatId -> MetaMessage -> OtherData -> OtherData
+insertMyResponse (GroupId gid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
-    my = emptyCQMessage {eventType = SelfMessage, absoluteId = Just aid, groupId = Just gid, metaMessage = Just meta}
+    my = emptyCQMessage 
+      { eventType   = SelfMessage
+      , absoluteId  = Just aid
+      , groupId     = Just gid
+      , metaMessage = Just meta
+      , echoR       = Just $ pack $ show aid
+      }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-insertMyResponse other_data (PrivateId uid) meta = 
+insertMyResponse (PrivateId uid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
-    my = emptyCQMessage {eventType = SelfMessage, absoluteId = Just aid, userId = Just uid, metaMessage = Just meta}
+    my = emptyCQMessage 
+      { eventType   = SelfMessage
+      , absoluteId  = Just aid
+      , userId      = Just uid
+      , metaMessage = Just meta
+      , echoR       = Just $ pack $ show aid
+      }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
 
 data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MSysMessage Message
 generateMetaMessage :: String -> [MetaMessageItem] -> MetaMessage
-generateMetaMessage str items = MetaMessage 
+generateMetaMessage str items = MetaMessage
   { onlyMessage = str
   , cqcodes     = [cqcode | MCQCode cqcode <- items]
   , replyTo     = listToMaybe [mid | MReplyTo mid <- items]

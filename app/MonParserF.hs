@@ -311,7 +311,7 @@ data MetaMessage = MetaMessage
   , cqcodes :: [CQCode]
   , replyTo :: Maybe Int
   , withSystemMessage :: Maybe Message
-  } deriving (Show, Read)
+  } deriving (Show, Read, Eq)
 
 eitherParse :: ParserF t a -> ParserF t b -> ParserF t (Either a b)
 eitherParse f g = do

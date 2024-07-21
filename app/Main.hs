@@ -57,13 +57,13 @@ botSingleLoop conn = do
         modify $ updateAllDataByMessage cqmsg
         lift $ putStrLn "<- response."
       PrivateMessage -> do
-        mid <- increaseAbsoluteId
-        modify $ updateAllDataByMessage $ cqmsg {absoluteId = Just mid}
+        mid <- gIncreaseAbsoluteId
+        modify $ updateAllDataByMessage   cqmsg {absoluteId = Just mid}
         lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
         doBotCommands conn allPrivateCommands
       GroupMessage -> do
-        mid <- increaseAbsoluteId
-        modify $ updateAllDataByMessage cqmsg {absoluteId = Just mid}
+        mid <- gIncreaseAbsoluteId
+        modify $ updateAllDataByMessage   cqmsg {absoluteId = Just mid}
         lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
         doBotCommands conn allGroupCommands
       UnknownMessage -> return ()

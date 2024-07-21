@@ -95,8 +95,9 @@ commandAokana = botT $ do
             Just charPrompt -> putStrLn $ T.unpack $ content charPrompt
           return ([ baSendToChatId cid $ T.pack simplifiedBlock
                   , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
-                  ], insertMyResponse other_data cid 
+                  ], insertMyResponse cid 
                        (generateMetaMessage simplifiedBlock (MReplyTo mid : maybeToList (MSysMessage <$> charPrompt)) ) 
+                       other_data  
                  ) 
                        -- this will make the message repliable, potentially much more fun!
     restrictNumber :: Int -> [String] -> [String]

@@ -16,8 +16,6 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
-import Debug.Trace
-
 commandCat :: BotCommand
 commandCat = botT $ do
   (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
@@ -99,6 +97,7 @@ treeCatParser msys mid = do
                , (params, Message { role = "assistant", content = T.pack $ extractMetaMessage amsg})
                ]
       )
+    
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of
     Right list ->

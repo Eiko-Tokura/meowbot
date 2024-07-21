@@ -6,7 +6,7 @@ data CQCode
   | CQRecord String
   | CQImage String
   | CQOther String 
-  deriving (Show, Read)
+  deriving (Show, Read, Eq)
 
 embedCQCode :: CQCode -> String
 embedCQCode (CQAt qq)     = "[CQ:at,qq=" ++ show qq ++ "]"

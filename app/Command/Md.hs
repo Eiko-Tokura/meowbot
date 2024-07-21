@@ -45,7 +45,7 @@ sendIOeToChatIdMd (_, cid, _, mid) ioess other_data = do
              ], 
               either 
                 (const other_data) 
-                (\(str,_) -> insertMyResponse other_data cid (generateMetaMessage str [MReplyTo mid]) ) ess
+                (\(str,_) -> insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data ) ess
           )
   where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
 

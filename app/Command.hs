@@ -1,5 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Command where
+module Command 
+  ( BotCommand
+  , doBotCommands
+  , botT
+  ) where
 
 import MeowBot.BotStructure
 import Data.Text (Text, pack)
@@ -9,7 +13,7 @@ import Network.WebSockets (Connection, sendTextData)
 
 import Control.Monad.Trans
 import Control.Monad.Trans.State
-import Control.Monad.Trans.ReaderState
+import Control.Monad.Trans.ReaderState as RS
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
 
@@ -20,39 +24,24 @@ type BotCommand = ReaderStateT WholeChat OtherData IO [BotAction]
 botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStateT WholeChat OtherData m [a]
 botT = fmap (fromMaybe []) . runMaybeT
 
-doBotAction :: Connection -> BotAction -> IO ()
-doBotAction conn (BASendPrivate (PrivateId uid) txt) = sendPrivate conn uid txt
-doBotAction conn (BASendGroup (GroupId gid) txt)     = sendGroup conn gid txt
-doBotAction _ ba = putStrLn $ "Invalid BotAction: " ++ show ba
+doBotAction :: Connection -> BotAction -> ReaderStateT WholeChat OtherData IO ()
+doBotAction conn (BASendPrivate (PrivateId uid) txt) = RS.get >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number 
+doBotAction conn (BASendGroup (GroupId gid) txt)     = RS.get >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
+doBotAction _ ba = lift $ putStrLn $ "Invalid BotAction: " ++ show ba
 
-sendPrivate :: Connection -> Int -> Text -> IO ()
-sendPrivate conn uid text = do
-  sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) (Just $ pack . show $ uid))
+sendPrivate :: Connection -> Int -> Text -> Maybe Text -> IO ()
+sendPrivate conn uid text mecho = do
+  sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) mecho)
   putStrLn $ concat ["-> user ", show uid, ": ", T.unpack text]
 
-sendGroup :: Connection -> Int -> Text -> IO ()
-sendGroup conn gid text = do
-  sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) (Just $ pack . show $ gid))
+sendGroup :: Connection -> Int -> Text -> Maybe Text -> IO ()
+sendGroup conn gid text mecho = do
+  sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) mecho)
   putStrLn $ concat ["-> group ", show gid, ": ", T.unpack text]
 
--- Input all data, all commands, do the commands that is required by the input, then return updated data
+-- | Input all data, all commands, do the commands that is required by the input, then return updated data
 doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO () 
-doBotCommands conn commands = do
-  actions <- globalize wholechat otherdata AllData `mapM` commands
-  mapM_ (lift . doBotAction conn) $ concat actions
-  
--- doBotCommands :: Connection -> AllData -> [BotCommand] -> IO AllData
--- doBotCommands conn alldata botcommands = do
---  l_lBotActionXOtherData <- 
---    filter (not . null) <$> (($ other_data) . ($ whole_chat) . runReaderStateT) `mapM` botcommands
---  case l_lBotActionXOtherData of
---    [] -> return alldata 
---    _  -> do 
---      let lBA = (fst . head) l_lBotActionXOtherData
---      case lBA of
---        [] -> return ()
---        (_:_) -> doBotAction conn `mapM_` lBA
---      return $ AllData 
---        (wholechat alldata)
---        (updateOtherData (otherdata alldata) ((snd . head) l_lBotActionXOtherData))
+doBotCommands conn commands = globalize wholechat otherdata AllData $ do
+  actions <- sequence commands
+  doBotAction conn `mapM_` concat actions
 
