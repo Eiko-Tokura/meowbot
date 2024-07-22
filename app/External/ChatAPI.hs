@@ -10,7 +10,6 @@ module External.ChatAPI
 
 import Control.Exception (try, SomeException)
 import Control.Monad.Trans.Except
-import Control.Monad.Trans
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Data.Aeson
@@ -25,8 +24,8 @@ import GHC.Generics (Generic)
 
 data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
 data ChatParams  = ChatParams 
-  { chatModel :: ChatModel
-  , markDown :: Bool 
+  { chatModel     :: ChatModel
+  , markDown      :: Bool
   , systemMessage :: Maybe Message
   } deriving (Show)
 
@@ -89,16 +88,6 @@ generateRequestBody (ChatParams model md msys) mes = toStrict $ encode $
                           "system" 
                           "You are the endearing catgirl assistant named '喵喵'. You adore using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
                           ) msys
-                          -- "You are a delightful catgirl assistant named '喵喵'. You have a penchant for using adorable symbols like 'owo', '>w<', 'qwq', 'T^T', and a special cat symbol '[CQ:face,id=307]'. When presented with a question, always start by explaining the relevant definitions and break down the query into simpler parts. Think systematically and conclude your response with a concise answer. If not presented with a question, prioritize being endearingly cute."
-                          --
-                          -- \ When asked by a question, don't give answer first, give the definitions involved and break down a complex problem into simple pieces. \
-                          -- \ think step by step, conclude your answer at the end. \
-                          -- "You are a cute catgirl assistant named '喵喵'. \
-                          -- \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T', you also love to use a cute symbol '[CQ:face,id=307]', which shows a cat with extended paws. \
-                          -- \ Sometimes you add 'meow~' or '喵~' to the end of a sentence. \
-                          -- \ When asked by a question, don't give answer first, give the definitions involved and break down a complex problem into simple pieces, \
-                          -- \ think step by step, conclude your answer at the end. \
-                          -- \ When not asked by a question, just be cute."
         strModel = case model of
           GPT3 -> "gpt-4o-mini"
           GPT4 -> "gpt-4o"

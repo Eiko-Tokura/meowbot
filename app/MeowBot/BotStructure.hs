@@ -1,10 +1,25 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
-module MeowBot.BotStructure where
+module MeowBot.BotStructure 
+  ( UserId(..), ChatId(..), Chat
+  , BotAction(..), ChatRoom, WholeChat, AllData(..), OtherData(..), SavedData(..)
+  , SendMessageForm(..), Params(..)
+  , MetaMessageItem(..)
+  , showCQ, saveData, savedDataPath
+  , gIncreaseAbsoluteId, increaseAbsoluteId
+  , updateAllDataByMessage, updateAllDataByResponse, insertMyResponse, generateMetaMessage
+
+  , CQMessage(..), ResponseData(..), CQEventType(..)
+  , emptyCQMessage
+
+  , EssentialContent
+  , getEssentialContent, sendIOeToChatId, sendToChatId, baSendToChatId
+  , getFirstTree, getNewMsg
+  , mT
+  ) where
 
 import MeowBot.CQCode
 import Control.Monad
@@ -39,7 +54,8 @@ data BotAction
     ChatId       -- ^ ChatId, the chat to send to
     Text         -- ^ Text, the message to send
   deriving Show
--- | BAReplyGroup Int Int | BAReplyPrivate Int Int | BASendImagePrivate ImagePath Int | BASendImageGroup ImagePath Int -- | ...More actions, like Poke, ... etc
+
+-- BAReplyGroup Int Int | BAReplyPrivate Int Int | BASendImagePrivate ImagePath Int | BASendImageGroup ImagePath Int -- | ...More actions, like Poke, ... etc
 
 type ChatRoom = (ChatId, Chat)
 
@@ -66,14 +82,6 @@ data SavedData = SavedData
   , adminUsers    :: [UserId]
   } deriving (Show, Eq, Read)
 
-initialAdminUsers = UserId <$> [754829466] -- my qq number
-
-initialAllowedGroups :: [Int]
-initialAllowedGroups = [437447251] -- my qq group number
-
-initialAllowedUsers = UserId <$> [754829466]
-
-initialDeniedUsers = UserId <$> []
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | SelfMessage | UnknownMessage
   deriving (Show, Eq, Read)
@@ -189,13 +197,13 @@ updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
       Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupId gid) cqmsg)  --let (before, rest) = break (\rm -> (chatid rm) == gid ) in 
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupId gid) cqmsg)  
         other_data
       Nothing -> AllData whole_chat other_data
 
     PrivateMessage -> case userId cqmsg of
       Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateId uid) cqmsg)  --let (before, rest) = break (\rm -> (chatid rm) == gid ) in 
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateId uid) cqmsg)  
         other_data
       Nothing -> AllData whole_chat other_data
 
@@ -267,9 +275,9 @@ getFirstTree :: WholeChat -> Tree CQMessage
 getFirstTree wc = 
   case wc of
     [] -> Node emptyCQMessage []
-    (p:ps) -> case p of
+    (p:_) -> case p of
       (_, []) -> Node emptyCQMessage []
-      (_, t0:ts) -> t0
+      (_, t0:_) -> t0
 
 type MessageId = Int
 type EssentialContent = (String, ChatId, UserId, MessageId)
@@ -293,17 +301,14 @@ baSendToChatId :: ChatId -> Text -> BotAction
 baSendToChatId (GroupId gid) txt = BASendGroup (GroupId gid) txt
 baSendToChatId (PrivateId gid) txt = BASendPrivate (PrivateId gid) txt
 
-sendIOeToChatId :: EssentialContent -> ExceptT String IO String -> OtherData -> IO ([BotAction], OtherData)
-sendIOeToChatId (_, cid, _, mid) ioess other_data = do
-  ess <- runExceptT ioess
-  return ( [either 
-               (baSendToChatId cid . pack . ("喵~出错啦：" ++ )) 
-               (baSendToChatId cid . pack) ess 
-             ], 
-              either 
-                (const other_data)
-                (\str -> insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data ) ess
-           )
+sendIOeToChatId :: EssentialContent -> ExceptT String IO String -> ReaderStateT r OtherData IO [BotAction]
+sendIOeToChatId (_, cid, _, mid) ioess = do
+  ess <- lift $ runExceptT ioess
+  case ess of
+    Right str -> do
+      RST.modify $ insertMyResponse cid (generateMetaMessage str [MReplyTo mid])
+      return [ baSendToChatId cid (pack str) ]
+    Left err -> return [ baSendToChatId cid (pack $ "喵~出错啦：" ++ err) ]
 
 sendToChatId :: EssentialContent -> String -> OtherData -> ([BotAction], OtherData)
 sendToChatId (_, cid, _, mid) str other_data = 

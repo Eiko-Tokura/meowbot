@@ -8,7 +8,7 @@ import System.Directory
 import System.FilePath
 import Data.Time
 import Data.List (sort)
-import Control.Exception (try, IOException)
+import Control.Exception (try, SomeException)
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 
@@ -19,7 +19,7 @@ mdToPdfCommand fn = pandocPart ++ tempInputFile fn ++ " -o \"pdf/output" ++ fn +
 
 pdfToImageCommand fn = "python pdf2png.py \"pdf/output" ++ fn ++ ".pdf\" images/" ++ fn
 
-markdownToImage :: String -> IO (Either IOException [FilePath])
+markdownToImage :: String -> IO (Either SomeException [FilePath])
 markdownToImage markdownString = runExceptT $ do
     -- get current time as folder name
     unixTime <- lift getCurrentTime

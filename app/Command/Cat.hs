@@ -28,8 +28,7 @@ commandCat = botT $ do
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
-  lift $ onlyStateT $ (if md then sendIOeToChatIdMd else sendIOeToChatId)
-    (msg, cid, uid, mid) ioEChatResponse
+  lift $ (if md then sendIOeToChatIdMd else sendIOeToChatId) (msg, cid, uid, mid) ioEChatResponse
   where checkAllowedCatUsers _  GPT3 anybody = return anybody
         checkAllowedCatUsers sd GPT4 g@(GroupId gid) = mIf (gid `elem` allowedGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateId uid) = mIf (UserId uid `elem` allowedUsers sd) p

@@ -57,14 +57,14 @@ botSingleLoop conn = do
         modify $ updateAllDataByMessage cqmsg
         lift $ putStrLn "<- response."
       PrivateMessage -> do
-        mid <- gIncreaseAbsoluteId
-        modify $ updateAllDataByMessage   cqmsg {absoluteId = Just mid}
-        lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
+        cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
+        modify $ updateAllDataByMessage   cqmsg'
+        lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn allPrivateCommands
       GroupMessage -> do
-        mid <- gIncreaseAbsoluteId
-        modify $ updateAllDataByMessage   cqmsg {absoluteId = Just mid}
-        lift $ putStrLn $ "<- " ++ showCQ cqmsg {absoluteId = Just mid}
+        cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
+        modify $ updateAllDataByMessage   cqmsg'
+        lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn allGroupCommands
       UnknownMessage -> return ()
       _ -> return ()
@@ -82,12 +82,8 @@ initialData = do
     else do
       putStrLn "No saved data file found, starting with empty data! owo" 
       AllData [] . OtherData 0 [] (SavedData [] initialAllowedGroups initialAllowedUsers initialDeniedUsers initialAdminUsers ) <$> getAllScripts
-
--- Things I learned in this project, just some notes, not a plan
--- 1. Either就是coproduct
--- 2. Either e是函子，是Monad
--- 3. the unit () is a final object, but not initial object, it is canonically isomorphic to a set with one element.
--- 4. the full sub category of Num class is pre-additive but not additive, since there is no zero object.
--- 5. In haskell, everything is safe except for the type variables. They can be error prone and produce hidden error if not paying attention to. I suggest labeling out the exact type you are using everytime using type variables.
--- 6. Before you build something big, do take time to write and think what you should be doing, like this one.
--- 7. name@pattern can be used to capture both the whole data and parts of the data
+  where 
+    initialAllowedGroups = [437447251]            -- my qq group number
+    initialAllowedUsers  = UserId <$> [754829466]
+    initialAdminUsers    = UserId <$> [754829466] -- my qq number
+    initialDeniedUsers   = UserId <$> []

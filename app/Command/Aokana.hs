@@ -52,7 +52,7 @@ aokanaParser = do
                 , MP.string "-misaki"  >> return (Character Misaki)
                 , MP.string "-mashiro" >> return (Character Mashiro)
                 , MP.string "-rika"    >> return (Character Rika)
-                ] 
+                ]
     queryKeyword = Keyword <$> MP.nonFlagWord
 
 searchScripts :: [AokanaQuery] -> [ScriptBlock] -> [ScriptBlock]
@@ -75,15 +75,17 @@ commandAokana = botT $ do
   let scripts = aokana other_data
       results = searchScripts queries scripts
       hasVoice = filter (\block -> not $ null [ () | Voice _ <- associatedData block ]) results
-  lift $ onlyStateT $ sendResults cid mid results hasVoice queries
+  lift $ sendResults cid mid results hasVoice queries
   where 
-    sendResults cid mid results hasVoice queries other_data
-      | null results        = return ([baSendToChatId cid "啥也没有找到！o.o"], other_data)
-      | List `elem` queries = return ([baSendToChatId cid $ T.pack $ intercalate "\n" $ restrictNumber 5 $ simplify zh <$> results], other_data)
-      | null hasVoice       = return ([baSendToChatId cid $ T.pack $ ("这段话没有语音owo\n" ++) $ simplify zh $ head results], other_data)
+    sendResults cid mid results hasVoice queries 
+      | null results        = return [baSendToChatId cid "啥也没有找到！o.o"]
+      | List `elem` queries = return [baSendToChatId cid $ T.pack $ intercalate "\n" $ restrictNumber 5 $ simplify zh <$> results]
+      | null hasVoice       = return [baSendToChatId cid $ T.pack $ ("这段话没有语音owo\n" ++) $ simplify zh $ head results]
       | otherwise           = do
-          ranBlock <- (hasVoice !!) <$> getUniformR (0, length hasVoice - 1)
-          cd <- getCurrentDirectory
+          ranBlock <- lift $ (hasVoice !!) <$> getUniformR (0, length hasVoice - 1)
+          cd <- lift getCurrentDirectory
+                       
+          other_data <- get
           let voice = head [v | Voice v <- associatedData ranBlock]
               simplifiedBlock = intercalate "\n"
                                   [ simplify jp ranBlock
@@ -92,14 +94,12 @@ commandAokana = botT $ do
           charPrompt <- mT $ (`aokanaCharacterPrompts` aokana other_data) <$> scriptCharacter ranBlock 
           case charPrompt of
             Nothing -> return ()
-            Just charPrompt -> putStrLn $ T.unpack $ content charPrompt
-          return ([ baSendToChatId cid $ T.pack simplifiedBlock
-                  , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
-                  ], insertMyResponse cid 
+            Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt
+          modify $ insertMyResponse cid  -- this will make the message repliable, potentially much more fun!
                        (generateMetaMessage simplifiedBlock (MReplyTo mid : maybeToList (MSysMessage <$> charPrompt)) ) 
-                       other_data  
-                 ) 
-                       -- this will make the message repliable, potentially much more fun!
+          return [ baSendToChatId cid $ T.pack simplifiedBlock
+                 , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
+                 ]
     restrictNumber :: Int -> [String] -> [String]
     restrictNumber n xs =  [show i ++ " " ++ x | (i, x) <- zip [1 :: Int ..] $ take n xs]
                         ++ ["(显示了前" ++ show (min n (length xs)) ++ "/" ++ show (length xs) ++ "条)"]

@@ -36,16 +36,15 @@ turnMdCQCode :: String -> ExceptT String IO String
 turnMdCQCode md = fmap (\fps -> concat [embedCQCode (CQImage filepath) | filepath <- fps]) $ ExceptT $ first ((++ "\n Showing the original message: " ++ md) . ("Error o.o occurred while rendering markdown pictures o.o " ++) . show) <$> markdownToImage md
 
 
-sendIOeToChatIdMd :: EssentialContent -> ExceptT String IO String -> OtherData -> IO ([BotAction], OtherData)
-sendIOeToChatIdMd (_, cid, _, mid) ioess other_data = do
-  ess <- runExceptT ioe_ess
-  return ( [either 
-               (baSendToChatId cid . T.pack . ("喵~出错啦：" ++ )) 
-               (baSendToChatId cid . T.pack . snd) ess 
-             ], 
-              either 
-                (const other_data) 
-                (\(str,_) -> insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data ) ess
-          )
-  where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
+sendIOeToChatIdMd :: EssentialContent -> ExceptT String IO String -> ReaderStateT r OtherData IO [BotAction]
+--OtherData -> IO ([BotAction], OtherData)
+sendIOeToChatIdMd (_, cid, _, mid) ioess = do
+  ess <- lift $ runExceptT ioe_ess
+  case ess of
+    Right (str, mdcq) -> do
+      modify $ insertMyResponse cid (generateMetaMessage str [MReplyTo mid])
+      return [ baSendToChatId cid . T.pack $ mdcq ]
+    Left err -> do
+      return [ baSendToChatId cid . T.pack . ("喵~出错啦：" ++ ) $ err ]
+   where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
 
