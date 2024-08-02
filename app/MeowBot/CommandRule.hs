@@ -17,7 +17,7 @@ data UserObject
   | AllUsers
   | AllGroups
   | UGroup UserGroup 
-  | GGroup GroupGroup 
+  | GGroup GroupGroup
   | SingleUser UserId 
   | SingleGroup GroupId
   deriving (Show, Eq, Ord, Read)

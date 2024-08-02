@@ -11,6 +11,8 @@ module MonParserF
   , digit, digits, int, nonNegative, positive, nonNegativeInt, positiveInt, float, positiveFloat  -- numbers
   , cqcode, cqcodeExceptFace, cqmsg, intercalateP, eitherParse, htmlCodes
   , headCommand
+  , parseByRead
+  , canBeEmpty
 
   ,(<+>), (<:>)
 
@@ -22,7 +24,7 @@ import External.ChatAPI (Message(..))
 import Control.Monad (when)
 import Control.Applicative (liftA2)
 import Data.Maybe (listToMaybe, fromMaybe)
-import Data.Either(lefts, rights)
+import Data.Either(lefts, rights, fromRight)
 
 class (Functor f) => Parsable f where -- parsable functors would include [] and Tree
   node :: f a -> Maybe a
@@ -223,6 +225,13 @@ htmlDecode = many $ htmlCodes <> item
 digit = itemIn ['0'..'9']
 digits = many digit
 
+parseByRead :: Read a => ParserF Char a
+parseByRead = do
+  str <- many0 item
+  case reads str of
+    [(x, "")] -> return x
+    _ -> zero
+
 -- | Polymorphic parser for integers
 int :: (Integral a, Read a) => ParserF Char a
 int =  (just '-' >> negate . read <$> digits)
@@ -270,6 +279,9 @@ space = just ' '
 string :: String -> ParserF Char String
 string "" = unit ""
 string (x:xs) = just x <:> string xs
+
+canBeEmpty :: ParserF b a -> ParserF b (Maybe a)
+canBeEmpty p = fromRight Nothing <$> (end <+> (Just <$> p))
 
 tryMaybe :: ParserF b a -> ParserF b (Maybe a)
 tryMaybe (CreateParserF p) = CreateParserF $ \str -> let r = p str in
