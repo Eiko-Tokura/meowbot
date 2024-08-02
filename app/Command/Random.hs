@@ -36,7 +36,7 @@ sampleQuery (ChooseFromList list)          = Left          <$> uniformElemS list
 sampleQuery (CustomDistribution list)      = Left          <$> discreteSamplingByList (normalizeDistList list)
 
 commandRandom :: BotCommand --ReaderStateT WholeChat OtherData IO [BotAction]
-commandRandom = botT $ do
+commandRandom = BotCommand Random $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   query <- MaybeT $ return $ MP.mRunParserF randomParser msg
   do
@@ -47,11 +47,11 @@ commandRandom = botT $ do
     display (Right (Left i)) = show i ++ " :: Int"
     display (Right (Right d)) = show d ++ " :: Double"
     randomParser :: ParserF Char RandomQuery
-    randomParser = foldl1 (<>) 
+    randomParser = foldr1 (<>) 
       [ do
           headCommand "random"
           commandSeparator
-          foldl1 (<>)
+          foldr1 (<>)
             [ string "uniform"     >> commandSeparator >> (fmap Distribution . Uniform     <$> (float <* spaces) <*> float)
             , string "normal"      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
             , string "exponential" >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)

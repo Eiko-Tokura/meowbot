@@ -12,9 +12,9 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
 commandHelp :: BotCommand
-commandHelp = botT $ do
+commandHelp = BotCommand Help $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  helpText <- hoistMaybe $ MP.mRunParserF helpParser msg
+  helpText <- pureMaybe $ MP.mRunParserF helpParser msg
   return [baSendToChatId cid helpText]
   where
     helpParser = do

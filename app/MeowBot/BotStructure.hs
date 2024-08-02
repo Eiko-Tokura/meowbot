@@ -1,11 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BlockArguments #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia#-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
 module MeowBot.BotStructure 
-  ( UserId(..), ChatId(..), Chat
+  ( GroupId(..), UserId(..), ChatId(..), Chat, MessageId
   , BotAction(..), ChatRoom, WholeChat, AllData(..), OtherData(..), SavedData(..)
+  , UserGroup(..), GroupGroup(..)
   , SendMessageForm(..), Params(..)
   , MetaMessageItem(..)
   , showCQ, saveData, savedDataPath
@@ -22,12 +23,14 @@ module MeowBot.BotStructure
   ) where
 
 import MeowBot.CQCode
+import MeowBot.CommandRule
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.State as ST
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.ReaderState as RST
 import Command.Aokana.Scripts
+import Data.Coerce
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text (Text, pack, unpack) 
 import Data.Ord (comparing)
@@ -40,22 +43,23 @@ import MonParserF (MetaMessage(..), cqmsg, Tree(..), flatten)
 import qualified MonParserF as MP
 import Debug.Trace
 
-newtype UserId = UserId Int deriving (Eq, Show, Ord, Read)
+--import Database.Persist
 
-data ChatId = GroupId Int | PrivateId Int deriving (Eq, Show, Ord, Read)
+data ChatId = GroupChat GroupId | PrivateChat UserId
+  deriving (Show, Eq, Ord, Read)
 
 type Chat = [MP.Tree CQMessage]
 
-data BotAction 
-  = BASendPrivate 
-    ChatId       -- ^ ChatId, the chat to send to
+data BotAction
+  = BASendPrivate
+    UserId       -- ^ the user to send to
     Text         -- ^ Text, the message to send
-  | BASendGroup 
-    ChatId       -- ^ ChatId, the chat to send to
+  | BASendGroup
+    GroupId      -- ^ the group chat to send to
     Text         -- ^ Text, the message to send
+  | BARetractMsg
+    MessageId    -- ^ MessageId, the message to delete (retract)
   deriving Show
-
--- BAReplyGroup Int Int | BAReplyPrivate Int Int | BASendImagePrivate ImagePath Int | BASendImageGroup ImagePath Int -- | ...More actions, like Poke, ... etc
 
 type ChatRoom = (ChatId, Chat)
 
@@ -76,12 +80,10 @@ data OtherData = OtherData
 
 data SavedData = SavedData
   { sysMessages :: [(ChatId, Message)]
-  , allowedGroups :: [Int]
-  , allowedUsers  :: [UserId]
-  , deniedUsers   :: [UserId]
-  , adminUsers    :: [UserId]
+  , userGroups  :: [(UserId, UserGroup)]
+  , groupGroups :: [(GroupId, GroupGroup)]
+  , commandRules :: [CommandRule]
   } deriving (Show, Eq, Read)
-
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | SelfMessage | UnknownMessage
   deriving (Show, Eq, Read)
@@ -89,8 +91,8 @@ data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | SelfMe
 data CQMessage = CQMessage
   { eventType    :: CQEventType
   , messageId    :: Maybe Int
-  , groupId      :: Maybe Int
-  , userId       :: Maybe Int
+  , groupId      :: Maybe GroupId
+  , userId       :: Maybe UserId
   , message      :: Maybe Text
   , time         :: Maybe Int
   , responseData :: Maybe ResponseData
@@ -138,12 +140,15 @@ instance FromJSON CQMessage where
                 Just msgl -> let lcqmsg = MP.runParserF cqmsg $ fromMaybe "" strmsg in listToMaybe $ map fst lcqmsg ) 
 
 showCQ :: CQMessage -> String
-showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", messageContent]
-  where messageType = show $ eventType cqmsg
-        absId = maybe "" (\c -> "[" <> show c <> "] ") . absoluteId $ cqmsg
-        chatId = maybe "" show . groupId $ cqmsg
-        senderId = maybe "" (\c -> "(" ++ show c ++ ")") . userId $ cqmsg
+showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", messageContent, mcqcodes]
+  where messageType    = show $ eventType cqmsg
+        absId          = maybe "" (\c -> "[" <> show c <> "] ") . absoluteId $ cqmsg
+        chatId         = maybe "" show . groupId $ cqmsg
+        senderId       = maybe "" (\c -> "(" ++ show c ++ ")") . userId $ cqmsg
         messageContent = maybe "" unpack $ message cqmsg
+        mcqcodes       = maybe "" (("\n"++) . show) $ mNonEmpty . cqcodes =<< metaMessage cqmsg
+        mNonEmpty []   = Nothing
+        mNonEmpty l    = Just l
 
 saveData :: AllData -> StateT AllData IO () -- if savedData changed, save it to file
 saveData prev_data = do
@@ -168,15 +173,21 @@ data SendMessageForm = SendMessageForm {
   action :: Text,
   params :: Params,
   echo   :: Maybe Text
-} deriving (Generic, Show)
+} deriving (Generic, Show, ToJSON)
 
-data Params = PrivateParams {
-  user_id     :: Int,
-  messageText :: Text
-} | GroupParams {
-  group_id    :: Int,
-  messageText :: Text
-} deriving (Show)
+data Params 
+  = PrivateParams 
+    { user_id     :: UserId
+    , messageText :: Text
+    } 
+  | GroupParams 
+    { group_id    :: GroupId
+    , messageText :: Text
+    }
+  | DeleteParams
+    { messageIdDelete  :: MessageId
+    }
+  deriving (Show)
 
 instance ToJSON Params where
   toJSON (PrivateParams uid msg) =
@@ -187,23 +198,23 @@ instance ToJSON Params where
     object [ "group_id" .= gid
            , "message" .= msg
            ]
-
-instance ToJSON SendMessageForm
+  toJSON (DeleteParams mid) =
+    object [ "message_id" .= mid
+           ]
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
-
 updateAllDataByMessage :: CQMessage -> AllData -> AllData
 updateAllDataByMessage cqmsg (AllData whole_chat other_data) = 
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
       Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupId gid) cqmsg)  
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupChat gid) cqmsg)  
         other_data
       Nothing -> AllData whole_chat other_data
 
     PrivateMessage -> case userId cqmsg of
       Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateId uid) cqmsg)  
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateChat uid) cqmsg)  
         other_data
       Nothing -> AllData whole_chat other_data
 
@@ -223,8 +234,8 @@ updateAllDataByResponse (rdata, mecho) alldata =
           ms = filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of
-        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (GroupId gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (PrivateId uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
         _ -> alldata
 
 attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
@@ -286,21 +297,23 @@ getEssentialContent :: WholeChat -> Maybe EssentialContent
 getEssentialContent wchat = let cqmsg = getNewMsg wchat in
   (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
         <*> (case eventType cqmsg of
-              GroupMessage -> GroupId <$> groupId cqmsg
-              PrivateMessage -> PrivateId <$> userId cqmsg
+              GroupMessage -> GroupChat <$> groupId cqmsg
+              PrivateMessage -> PrivateChat <$> userId cqmsg
               _ -> Nothing
             )
-        <*> (UserId <$> userId cqmsg)
+        <*> userId cqmsg
         <*> messageId cqmsg
  
 mT :: (Applicative t) => Maybe (t a) -> t (Maybe a)
 mT Nothing = pure Nothing
 mT (Just ioa) = Just <$> ioa 
 
+-- | Abstract representation of sending a message to a chat id.
 baSendToChatId :: ChatId -> Text -> BotAction
-baSendToChatId (GroupId gid) txt = BASendGroup (GroupId gid) txt
-baSendToChatId (PrivateId gid) txt = BASendPrivate (PrivateId gid) txt
+baSendToChatId (GroupChat gid)   txt = BASendGroup gid txt
+baSendToChatId (PrivateChat uid) txt = BASendPrivate uid txt
 
+-- | runing an ExceptT String IO String action with string result, and send the result to a chat id. Handles exceptions.
 sendIOeToChatId :: EssentialContent -> ExceptT String IO String -> ReaderStateT r OtherData IO [BotAction]
 sendIOeToChatId (_, cid, _, mid) ioess = do
   ess <- lift $ runExceptT ioess
@@ -310,13 +323,14 @@ sendIOeToChatId (_, cid, _, mid) ioess = do
       return [ baSendToChatId cid (pack str) ]
     Left err -> return [ baSendToChatId cid (pack $ "喵~出错啦：" ++ err) ]
 
+-- | send message to a chat id, recording the message as reply.
 sendToChatId :: EssentialContent -> String -> OtherData -> ([BotAction], OtherData)
 sendToChatId (_, cid, _, mid) str other_data = 
   ([baSendToChatId cid (pack str)], insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data )
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 insertMyResponse :: ChatId -> MetaMessage -> OtherData -> OtherData
-insertMyResponse (GroupId gid) meta other_data = 
+insertMyResponse (GroupChat gid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
     my = emptyCQMessage 
       { eventType   = SelfMessage
@@ -326,12 +340,12 @@ insertMyResponse (GroupId gid) meta other_data =
       , echoR       = Just $ pack $ show aid
       }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-insertMyResponse (PrivateId uid) meta other_data = 
+insertMyResponse (PrivateChat uid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
     my = emptyCQMessage 
       { eventType   = SelfMessage
       , absoluteId  = Just aid
-      , userId      = Just uid
+      , userId      = Just $ coerce uid
       , metaMessage = Just meta
       , echoR       = Just $ pack $ show aid
       }

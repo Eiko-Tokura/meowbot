@@ -14,7 +14,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.ReaderState
 
 commandMd :: BotCommand
-commandMd = do
+commandMd = BotCommand Md $ do
   mess <- getEssentialContent <$> ask
   case mess of
     Nothing -> return []

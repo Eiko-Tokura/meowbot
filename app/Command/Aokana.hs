@@ -35,6 +35,9 @@ aokanaRelPath = "aokana"
 voiceRelPath :: FilePath
 voiceRelPath = "voice"
 
+voiceExtension :: String
+voiceExtension = ".mp3"
+
 scriptRelPath :: FilePath
 scriptRelPath = "scripts"
 
@@ -66,12 +69,12 @@ searchScripts queries = filter $ \block -> all (queryBlock block) queries
       | otherwise = False
 
 commandAokana :: BotCommand
-commandAokana = botT $ do
+commandAokana = BotCommand Aokana $ botT $ do
   (msg, cid, _, mid) <- MaybeT $ getEssentialContent <$> ask
   queries <- pureMaybe $ MP.mRunParserF aokanaParser msg
   other_data <- lift get
-  let sd = savedData other_data
-  cid <- pureMaybe $ U.checkCidInAllowedGroups sd cid
+  --let sd = savedData other_data
+  --cid <- pureMaybe $ U.checkGroupIn sd cid AllowedGroup
   let scripts = aokana other_data
       results = searchScripts queries scripts
       hasVoice = filter (\block -> not $ null [ () | Voice _ <- associatedData block ]) results
@@ -105,16 +108,16 @@ commandAokana = botT $ do
                         ++ ["(显示了前" ++ show (min n (length xs)) ++ "/" ++ show (length xs) ++ "条)"]
 
 voicePath :: FilePath -> String -> FilePath
-voicePath cd voiceId = cd </> aokanaRelPath </> voiceRelPath </> (toLower <$> voiceId ++ ".ogg")
+voicePath cd voiceId = cd </> aokanaRelPath </> voiceRelPath </> (toLower <$> voiceId ++ voiceExtension)
 
 getAllVoices :: IO [(AokanaCharacter, String, FilePath)]
 getAllVoices = do
   files <- listDirectory (aokanaRelPath </> voiceRelPath)
-  -- filter all '.ogg' files
-  let oggFiles = filter (isSuffixOf ".ogg") files
+  -- filter all voice files
+  let voiceFiles = filter (isSuffixOf voiceExtension) files
   cd <- getCurrentDirectory
   let voicePath = cd </> aokanaRelPath </> voiceRelPath
-  return (MP.mRunParserF (aokanaVoiceFileParser voicePath) `mapMaybe` oggFiles)
+  return (MP.mRunParserF (aokanaVoiceFileParser voicePath) `mapMaybe` voiceFiles)
   where
     aokanaVoiceFileParser :: FilePath -> ParserF Char (AokanaCharacter, String, FilePath)
     aokanaVoiceFileParser vdir = do
@@ -125,7 +128,7 @@ getAllVoices = do
                 <> (MP.string "rika"    >> return ("rika", Rika))
       void $ MP.just '_'
       voiceId <- MP.till '.'
-      extension <- MP.string ".ogg"
+      extension <- MP.string voiceExtension
       return (character, voiceId, vdir </> (characterStr ++ "_" ++ voiceId ++ extension))
 
 getAllScripts :: IO [ScriptBlock]

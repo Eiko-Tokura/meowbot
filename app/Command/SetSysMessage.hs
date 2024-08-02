@@ -13,7 +13,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
 commandSetSysMessage :: BotCommand
-commandSetSysMessage = botT $ do
+commandSetSysMessage = BotCommand System $ botT $ do
   ess@(msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   msys <- pureMaybe $ MP.mRunParserF sysMsgParser msg
   other_data <- lift get

@@ -17,7 +17,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
 commandCat :: BotCommand
-commandCat = botT $ do
+commandCat = BotCommand Cat $ botT $ do
   (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
   other_data <- lift get
   whole_chat <- lift ask
@@ -30,8 +30,8 @@ commandCat = botT $ do
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
   lift $ (if md then sendIOeToChatIdMd else sendIOeToChatId) (msg, cid, uid, mid) ioEChatResponse
   where checkAllowedCatUsers _  GPT3 anybody = return anybody
-        checkAllowedCatUsers sd GPT4 g@(GroupId gid) = mIf (gid `elem` allowedGroups sd) g
-        checkAllowedCatUsers sd GPT4 p@(PrivateId uid) = mIf (UserId uid `elem` allowedUsers sd) p
+        checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
+        checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
 catParser :: Maybe Message -> ParserF Char (ChatParams, String) 
 catParser msys = do 
@@ -74,7 +74,7 @@ treeCatParser msys mid = do
              ) of
           Just msys' -> 
             do
-              innerList <- MP.many0 
+              innerList <- MP.many0
                 (do
                   umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
                   amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)

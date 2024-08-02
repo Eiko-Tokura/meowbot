@@ -8,7 +8,9 @@ import Command.SetSysMessage
 import Command.User
 import Command.Aokana
 import Command.Random
+import Command.Retract
 import MeowBot.BotStructure
+import MeowBot.CommandRule
 
 import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
@@ -24,10 +26,10 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans
 
 allPrivateCommands :: [BotCommand]
-allPrivateCommands =[commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom]
+allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands = allPrivateCommands
+allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract]
 
 main :: IO ()
 main = do
@@ -81,9 +83,18 @@ initialData = do
       AllData [] . OtherData 0 [] msavedData <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo" 
-      AllData [] . OtherData 0 [] (SavedData [] initialAllowedGroups initialAllowedUsers initialDeniedUsers initialAdminUsers ) <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules) <$> getAllScripts
   where 
-    initialAllowedGroups = [437447251]            -- my qq group number
-    initialAllowedUsers  = UserId <$> [754829466]
-    initialAdminUsers    = UserId <$> [754829466] -- my qq number
-    initialDeniedUsers   = UserId <$> []
+    initialUGroups = [(me, Admin)]
+    initialGGroups = [(myGroup, AllowedGroup)]
+    initialRules = 
+      [ Allow (UGroup Admin)          AllCommands
+      , Allow AllUserAndGroups        (CGroup [Cat, Help, Md, Random])
+      , Allow (GGroup AllowedGroup)   (CGroup [System, Aokana])
+      , Allow (UGroup Allowed)        (CGroup [System, Aokana])
+      , Allow (SingleGroup myGroup)   (SingleCommand Retract)
+      , Deny  (UGroup Denied)         AllCommands
+      ]
+    me = 754829466 :: UserId
+    myGroup = 437447251 :: GroupId
+

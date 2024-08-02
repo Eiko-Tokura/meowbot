@@ -57,6 +57,7 @@ executable meowbot
                  , Command.Help
                  , Command.Md
                  , Command.Random
+                 , Command.Retract
                  , Command.SetSysMessage
                  , Command.Aokana
                  , Command.Aokana.Scripts
@@ -66,6 +67,7 @@ executable meowbot
                  , External.ChatAPI
                  , External.MarkdownImage
                  , MeowBot.CQCode
+                 , MeowBot.CommandRule
                  , MeowBot.BotStructure
                  , MonParserF
                  , Probability.Foundation

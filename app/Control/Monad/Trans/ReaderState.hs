@@ -53,7 +53,7 @@ globalize readOnly stateOnly createAll v = StateT $ \all -> do
   return (a, createAll r s')
 
 pureMaybe :: Monad m => Maybe a -> MaybeT m a
-pureMaybe = hoistMaybe
+pureMaybe = MaybeT . return
 
 onlyState :: Monad m => (s -> (a, s)) -> ReaderStateT r s m a
 onlyState = onlyStateT . (return .)
