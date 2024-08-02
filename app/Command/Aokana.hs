@@ -4,7 +4,6 @@ module Command.Aokana where
 import MeowBot.BotStructure
 import Command
 import Command.Aokana.Scripts
-import qualified Command.User as U
 
 import Control.Exception
 import Control.Monad

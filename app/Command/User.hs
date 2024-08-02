@@ -21,7 +21,7 @@ data Action = Add | Remove | List
 
 commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
-  (msg, cid, uid, _) <- MaybeT $ getEssentialContent <$> ask
+  (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   um <- pureMaybe $ MP.mRunParserF userParser msg
   other <- lift get
   let sd = savedData other
@@ -65,8 +65,12 @@ userParser =
                                    , MP.string "remove" >> return Remove
                                    , MP.string "list" >> return List ]
         userGroupParser = foldr1 (<>) [ MP.string "admin" >> return Admin
-                                      , MP.string "allowed" >> return Allowed ]
-        groupGroupParser = MP.string "allowed" >> return AllowedGroup
+                                      , MP.string "allowed" >> return Allowed 
+                                      , CustomUserGroup <$> MP.word
+                                      ]
+        groupGroupParser = mconcat [ MP.string "allowed" >> return AllowedGroup
+                                   , CustomGroupGroup <$> MP.word 
+                                   ]
         idParser = read <$> (do d <- MP.digits; if length d > 12 then MP.zero else return d)
         ruleParser = MP.parseByRead
 

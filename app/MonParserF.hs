@@ -143,7 +143,7 @@ insideBrackets (l, r) = do
   _ <- just l
   many (isNot r) <* just r
 
--- | Parse a word, which is a continuous string of characters that are not spaces, or a string inside a pair of quotes.
+-- | Parse a non-empty word, which is a continuous string of characters that are not spaces, or a string inside a pair of quotes.
 word :: ParserF Char String
 word = foldr1 (<>)
       [ insideBrackets ('\'', '\'')
