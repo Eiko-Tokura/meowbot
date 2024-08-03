@@ -5,7 +5,7 @@
 
 module External.ChatAPI 
   ( 
-    simpleChat, Message(..), messageChat, ChatModel(..), ChatParams(..)
+    simpleChat, Message(..), messageChat, ChatModel(..), ChatParams(..), ChatSetting(..)
   ) where
 
 import Control.Exception (try, SomeException)
@@ -26,8 +26,13 @@ data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
 data ChatParams  = ChatParams 
   { chatModel     :: ChatModel
   , markDown      :: Bool
-  , systemMessage :: Maybe Message
+  , chatSetting   :: Maybe ChatSetting
   } deriving (Show)
+
+data ChatSetting = ChatSetting
+  { systemMessage :: Maybe Message
+  , systemTemp    :: Maybe Double
+  } deriving (Show, Eq, Read)
 
 data ChatCompletionResponse = ChatCompletionResponse
   { responseId :: Text
@@ -77,9 +82,9 @@ promptMessage :: String -> Message
 promptMessage prompt = Message "user" (pack prompt)
 
 generateRequestBody :: ChatParams -> [Message] -> ByteString
-generateRequestBody (ChatParams model md msys) mes = toStrict $ encode $
-  ChatRequest strModel (systemMessage : mes) 0.6
-  where systemMessage = if md then Message 
+generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
+  ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (mset >>= systemTemp))
+  where sysMessage = if md then Message 
                           "system"
                           "You are a endearing catgirl assistant named '喵喵'. \
                           \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'.  \
@@ -87,7 +92,7 @@ generateRequestBody (ChatParams model md msys) mes = toStrict $ encode $
                         else fromMaybe (Message 
                           "system" 
                           "You are the endearing catgirl assistant named '喵喵'. You adore using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
-                          ) msys
+                          ) (mset >>= systemMessage)
         strModel = case model of
           GPT3 -> "gpt-4o-mini"
           GPT4 -> "gpt-4o"

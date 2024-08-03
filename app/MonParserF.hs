@@ -20,7 +20,7 @@ module MonParserF
   ) where
 
 import MeowBot.CQCode
-import External.ChatAPI (Message(..))
+import External.ChatAPI (Message(..), ChatSetting(..))
 import Control.Monad (when)
 import Control.Applicative (liftA2)
 import Data.Maybe (listToMaybe, fromMaybe)
@@ -371,7 +371,7 @@ data MetaMessage = MetaMessage
   { onlyMessage :: String
   , cqcodes :: [CQCode]
   , replyTo :: Maybe Int
-  , withSystemMessage :: Maybe Message
+  , withChatSetting :: Maybe ChatSetting
   } deriving (Show, Read, Eq)
 
 eitherParse :: ParserF t a -> ParserF t b -> ParserF t (Either a b)
@@ -403,5 +403,5 @@ cqmsg = do
     { onlyMessage = fromMaybe "" $ mRunParserF htmlDecode $ rights leither
     , cqcodes = lefts leither
     , replyTo = listToMaybe [id | CQReply id <- lefts leither] 
-    , withSystemMessage = Nothing
+    , withChatSetting = Nothing
     }

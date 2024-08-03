@@ -22,7 +22,7 @@ commandCat = BotCommand Cat $ botT $ do
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
-  let msys = lookup cid $ sysMessages sd -- looking for custom system message
+  let msys = lookup cid $ chatSettings sd -- looking for custom system message
   lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
@@ -33,7 +33,7 @@ commandCat = BotCommand Cat $ botT $ do
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
-catParser :: Maybe Message -> ParserF Char (ChatParams, String) 
+catParser :: Maybe ChatSetting -> ParserF Char (ChatParams, String) 
 catParser msys = do 
   MP.spaces0
   parseCat <> parseMeowMeow
@@ -54,14 +54,14 @@ catParser msys = do
       str <- MP.many MP.item
       return (ChatParams GPT3 False msys, str)
 
-replyCatParser :: Maybe Message -> ParserF Char (ChatParams, String)
+replyCatParser :: Maybe ChatSetting -> ParserF Char (ChatParams, String)
 replyCatParser msys = catParser msys <> ( do
   MP.spaces0
   str <- MP.many MP.item
   return (ChatParams GPT3 False msys, str)
   )
 
-treeCatParser :: Maybe Message -> Int -> ParserF CQMessage [(ChatParams, Message)]
+treeCatParser :: Maybe ChatSetting -> Int -> ParserF CQMessage [(ChatParams, Message)]
 treeCatParser msys mid = do
   elist <- 
     ( do
@@ -70,7 +70,7 @@ treeCatParser msys mid = do
         case ( do
                 MP.mRunParserF aokanaParser (extractMetaMessage firstUMsg)  -- the first user input should be an aokana command
                 meta <- metaMessage firstAMsg                              
-                return $ MP.withSystemMessage meta -- there might be modified system message
+                return $ MP.withChatSetting meta -- there might be modified system message
              ) of
           Just msys' -> 
             do

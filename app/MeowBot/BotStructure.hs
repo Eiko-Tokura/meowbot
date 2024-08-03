@@ -71,7 +71,7 @@ data AllData = AllData
   } deriving Show
 
 data OtherData = OtherData
-  { message_number :: Int -- all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
+  { message_number :: Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , sent_messages :: [CQMessage]
     -- In the future one can add course data.. etc
   , savedData     :: SavedData
@@ -79,9 +79,9 @@ data OtherData = OtherData
   } deriving (Show)
 
 data SavedData = SavedData
-  { sysMessages :: [(ChatId, Message)]
-  , userGroups  :: [(UserId, UserGroup)]
-  , groupGroups :: [(GroupId, GroupGroup)]
+  { chatSettings :: [(ChatId, ChatSetting)]
+  , userGroups   :: [(UserId, UserGroup)]
+  , groupGroups  :: [(GroupId, GroupGroup)]
   , commandRules :: [CommandRule]
   } deriving (Show, Eq, Read)
 
@@ -137,7 +137,7 @@ instance FromJSON CQMessage where
               <*> pure Nothing
               <*> pure ( case message of 
                 Nothing -> Nothing
-                Just msgl -> let lcqmsg = MP.runParserF cqmsg $ fromMaybe "" strmsg in listToMaybe $ map fst lcqmsg ) 
+                Just _ -> let lcqmsg = MP.runParserF cqmsg $ fromMaybe "" strmsg in listToMaybe $ map fst lcqmsg ) 
 
 showCQ :: CQMessage -> String
 showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", messageContent, mcqcodes]
@@ -150,7 +150,8 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", message
         mNonEmpty []   = Nothing
         mNonEmpty l    = Just l
 
-saveData :: AllData -> StateT AllData IO () -- if savedData changed, save it to file
+-- | if savedData changed, save it to file
+saveData :: AllData -> StateT AllData IO () 
 saveData prev_data = do
   new_data <- ST.get
   lift $ when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) do
@@ -351,12 +352,12 @@ insertMyResponse (PrivateChat uid) meta other_data =
       }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
 
-data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MSysMessage Message
+data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MChatSetting ChatSetting
 generateMetaMessage :: String -> [MetaMessageItem] -> MetaMessage
 generateMetaMessage str items = MetaMessage
   { onlyMessage = str
   , cqcodes     = [cqcode | MCQCode cqcode <- items]
   , replyTo     = listToMaybe [mid | MReplyTo mid <- items]
-  , withSystemMessage = listToMaybe [msg | MSysMessage msg <- items]
+  , withChatSetting = listToMaybe [set | MChatSetting set <- items]
   }
 

@@ -15,7 +15,7 @@ import Control.Monad.Trans.ReaderState
 import MonParserF (ParserF(..))
 import qualified MonParserF as MP
 
-import External.ChatAPI (Message(..))
+import External.ChatAPI (Message(..), ChatSetting(..))
 import MeowBot.CQCode
 
 import Data.Either
@@ -96,7 +96,7 @@ commandAokana = BotCommand Aokana $ botT $ do
             Nothing -> return ()
             Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt
           modify $ insertMyResponse cid  -- this will make the message repliable, potentially much more fun!
-                       (generateMetaMessage simplifiedBlock (MReplyTo mid : maybeToList (MSysMessage <$> charPrompt)) ) 
+                       (generateMetaMessage simplifiedBlock (MReplyTo mid : maybeToList (MChatSetting . (`ChatSetting` Nothing) . Just <$> charPrompt)) ) 
           return [ baSendToChatId cid $ T.pack simplifiedBlock
                  , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
                  ]

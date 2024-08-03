@@ -27,7 +27,7 @@ data UserObject
 data CommandObject 
   = AllCommands 
   | CGroup [CommandId] 
-  | SingleCommand CommandId 
+  | SingleCommand CommandId
   | SubtractCommand CommandObject CommandObject 
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
@@ -64,9 +64,9 @@ gInUserObject _ _ (SubtractUserObject uo1 uo2) = gInUserObject [] 0 uo1 && not (
 gInUserObject _ _ (ExceptUserObject uo) = not (gInUserObject [] 0 uo)
 
 inCommandObject :: CommandId -> CommandObject -> Bool
-inCommandObject _ AllCommands = True
-inCommandObject cid (SingleCommand cid') = cid == cid'
-inCommandObject cid (CGroup cids) = cid `elem` cids
-inCommandObject cid (ExceptCommands cids) = cid `notElem` cids
+inCommandObject _   AllCommands               = True
+inCommandObject cid (SingleCommand cid')      = cid == cid'
+inCommandObject cid (CGroup cids)             = cid `elem` cids
+inCommandObject cid (ExceptCommands cids)     = cid `notElem` cids
 inCommandObject cid (SubtractCommand co1 co2) = inCommandObject cid co1 && not (inCommandObject cid co2)
 
