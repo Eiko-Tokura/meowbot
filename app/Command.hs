@@ -52,7 +52,7 @@ deleteMsg conn mid = do
 
 permissionCheck :: BotCommand -> CommandValue
 permissionCheck botCommand = botT $ do
-  (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
+  (_, cid, uid, _) <- MaybeT $ getEssentialContent <$> ask
   other <- lift RS.get
   let sd = savedData other
   if checkCommandRule sd (identifier botCommand) cid uid
@@ -87,7 +87,6 @@ permissionCheck botCommand = botT $ do
         rules = commandRules sd
         ugs = userGroups sd
         ggs = groupGroups sd
-
 
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
 doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO () 

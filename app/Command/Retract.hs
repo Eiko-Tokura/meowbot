@@ -4,7 +4,6 @@ module Command.Retract
   ) where
 
 import Command
-import Command.User
 import MeowBot.BotStructure
 import MeowBot.CQCode
 import MonParserF (ParserF(..), cqcodes)
@@ -13,8 +12,6 @@ import qualified MonParserF as MP
 import Data.List
 import Data.Maybe
 
-import Control.Monad
-import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
@@ -30,7 +27,6 @@ commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> ask)
   (_, _, _, mid) <- MaybeT $ getEssentialContent <$> ask
-  -- pureMaybe $ check undefined cid (const [GroupChat $ GroupId 437447251])
   pureMaybe $ do
     props <- listToMaybe [ props | CQOther "mface" props <- cqs ]
     summary <- lookup "summary" props

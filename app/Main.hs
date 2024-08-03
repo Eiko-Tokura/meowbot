@@ -26,7 +26,7 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans
 
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract]
+allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom]
 
 allGroupCommands :: [BotCommand]
 allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract]
@@ -87,8 +87,8 @@ initialData = do
   where 
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]
-    initialRules = 
-      [ Allow (UGroup Admin)          AllCommands
+    initialRules =
+      [ Allow (UGroup Admin)          (ExceptCommands [Retract])
       , Allow AllUserAndGroups        (CGroup [Cat, Help, Md, Random])
       , Allow (GGroup AllowedGroup)   (CGroup [System, Aokana])
       , Allow (UGroup Allowed)        (CGroup [System, Aokana])

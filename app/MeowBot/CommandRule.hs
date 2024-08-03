@@ -3,7 +3,7 @@ module MeowBot.CommandRule where
 
 import Data.Aeson
 
-newtype UserId = UserId Int   deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num) via Int
+newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num) via Int
 
 data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String deriving (Show, Eq, Ord, Read)
@@ -16,13 +16,20 @@ data UserObject
   = AllUserAndGroups
   | AllUsers
   | AllGroups
-  | UGroup UserGroup 
+  | UGroup UserGroup
   | GGroup GroupGroup
   | SingleUser UserId 
   | SingleGroup GroupId
+  | SubtractUserObject UserObject UserObject
+  | ExceptUserObject UserObject
   deriving (Show, Eq, Ord, Read)
 
-data CommandObject = AllCommands | CGroup [CommandId] | SingleCommand CommandId
+data CommandObject 
+  = AllCommands 
+  | CGroup [CommandId] 
+  | SingleCommand CommandId 
+  | SubtractCommand CommandObject CommandObject 
+  | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
 
 data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User 
@@ -42,6 +49,8 @@ inUserObject _   uid (SingleUser uid') = uid == uid'
 inUserObject _   _   (SingleGroup _)   = False
 inUserObject ugs uid (UGroup ug)       = (uid, ug) `elem` ugs
 inUserObject _   _   (GGroup _)        = False
+inUserObject _   _   (SubtractUserObject uo1 uo2) = inUserObject [] 0 uo1 && not (inUserObject [] 0 uo2)
+inUserObject _   _   (ExceptUserObject uo) = not (inUserObject [] 0 uo)
 
 gInUserObject :: [(GroupId, GroupGroup)] -> GroupId -> UserObject -> Bool
 gInUserObject _ _ AllUserAndGroups     = True
@@ -51,9 +60,13 @@ gInUserObject _ _ (SingleUser _)       = False
 gInUserObject _ gid (SingleGroup gid') = gid == gid'
 gInUserObject _ _ (UGroup _)           = False
 gInUserObject ggs gid (GGroup gg)      = (gid, gg) `elem` ggs
+gInUserObject _ _ (SubtractUserObject uo1 uo2) = gInUserObject [] 0 uo1 && not (gInUserObject [] 0 uo2)
+gInUserObject _ _ (ExceptUserObject uo) = not (gInUserObject [] 0 uo)
 
 inCommandObject :: CommandId -> CommandObject -> Bool
 inCommandObject _ AllCommands = True
 inCommandObject cid (SingleCommand cid') = cid == cid'
 inCommandObject cid (CGroup cids) = cid `elem` cids
+inCommandObject cid (ExceptCommands cids) = cid `notElem` cids
+inCommandObject cid (SubtractCommand co1 co2) = inCommandObject cid co1 && not (inCommandObject cid co2)
 

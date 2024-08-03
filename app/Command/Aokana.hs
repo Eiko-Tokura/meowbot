@@ -72,8 +72,6 @@ commandAokana = BotCommand Aokana $ botT $ do
   (msg, cid, _, mid) <- MaybeT $ getEssentialContent <$> ask
   queries <- pureMaybe $ MP.mRunParserF aokanaParser msg
   other_data <- lift get
-  --let sd = savedData other_data
-  --cid <- pureMaybe $ U.checkGroupIn sd cid AllowedGroup
   let scripts = aokana other_data
       results = searchScripts queries scripts
       hasVoice = filter (\block -> not $ null [ () | Voice _ <- associatedData block ]) results

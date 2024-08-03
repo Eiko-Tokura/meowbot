@@ -12,12 +12,12 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
-data UserManagement 
-  = UserManagement Action  UserGroup  (Maybe UserId)
+data UserManagement
+  = UserManagement  Action UserGroup  (Maybe UserId)
   | GroupManagement Action GroupGroup (Maybe GroupId)
-  | RuleManagement Action (Maybe CommandRule)
+  | RuleManagement  Action (Maybe CommandRule)
 
-data Action = Add | Remove | List
+data Action = Add | Remove | List 
 
 commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
@@ -25,17 +25,16 @@ commandUser = BotCommand User $ botT $ do
   um <- pureMaybe $ MP.mRunParserF userParser msg
   other <- lift get
   let sd = savedData other
-  -- _ <- pureMaybe $ checkAdminUsers sd uid
   let (actions, sd') = case um of
-        UserManagement Add ug (Just uid)                      -> ([reportUM other cid um], sd {userGroups = insert (uid, ug) $ userGroups sd})
-        UserManagement Remove ug (Just uid)                   -> ([reportUM other cid um], sd {userGroups = filter (/= (uid, ug)) $ userGroups sd})
-        UserManagement List _ _                       -> ([reportUM other cid um], sd)
+        UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = insert (uid, ug) $ userGroups sd})
+        UserManagement Remove ug (Just uid)  -> ([reportUM other cid um], sd {userGroups = filter (/= (uid, ug)) $ userGroups sd})
+        UserManagement List _ _              -> ([reportUM other cid um], sd)
         GroupManagement Add gg (Just gid)    -> ([reportUM other cid um], sd {groupGroups = insert (gid, gg) $ groupGroups sd})
         GroupManagement Remove gg (Just gid) -> ([reportUM other cid um], sd {groupGroups = filter (/= (gid, gg)) $ groupGroups sd})
-        GroupManagement List _ _               -> ([reportUM other cid um], sd)
-        RuleManagement Add (Just cr) -> ([reportUM other cid um], sd {commandRules = insert cr $ commandRules sd})
-        RuleManagement Remove (Just cr) -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd})
-        RuleManagement List _ -> ([reportUM other cid um], sd)
+        GroupManagement List _ _             -> ([reportUM other cid um], sd)
+        RuleManagement Add (Just cr)         -> ([reportUM other cid um], sd {commandRules = insert cr $ commandRules sd})
+        RuleManagement Remove (Just cr)      -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd})
+        RuleManagement List _                -> ([reportUM other cid um], sd)
         _ -> ([], sd)
   lift . put $ other {savedData = sd'}
   return actions
@@ -48,7 +47,7 @@ commandUser = BotCommand User $ botT $ do
           GroupManagement List gg _            -> show gg ++ "群列表：" ++ show (map fst $ filter ((== gg) . snd) $ groupGroups $ savedData other_data)
           RuleManagement Add (Just cr)         -> "已添加规则" ++ show cr
           RuleManagement Remove (Just cr)      -> "已移除规则" ++ show cr
-          RuleManagement List _                -> "规则列表：" ++ intercalate "\n" (show <$> commandRules (savedData other_data))
+          RuleManagement List _                -> "规则列表：" ++ "\n[ " ++ intercalate "\n, " (show <$> commandRules (savedData other_data)) ++ "\n]"
           _ -> "user_id / group_id parameter cannot be empty o.o"
 
 userParser :: ParserF Char UserManagement
@@ -63,7 +62,8 @@ userParser =
     RuleManagement <$> actionParser <*> (MP.spaces0 >> MP.canBeEmpty ruleParser))
   where actionParser = foldr1 (<>) [ MP.string "add" >> return Add
                                    , MP.string "remove" >> return Remove
-                                   , MP.string "list" >> return List ]
+                                   , MP.string "list" >> return List 
+                                   ]
         userGroupParser = foldr1 (<>) [ MP.string "admin" >> return Admin
                                       , MP.string "allowed" >> return Allowed 
                                       , CustomUserGroup <$> MP.word
@@ -84,9 +84,6 @@ checkUidIn sd uid ug = mIf ((uid, ug) `elem` userGroups sd) uid
 checkGroupIn :: SavedData -> ChatId -> GroupGroup -> Maybe ChatId
 checkGroupIn _ (PrivateChat uid) _ = Just (PrivateChat uid)
 checkGroupIn sd g@(GroupChat gid) gg = mIf ((gid, gg) `elem` groupGroups sd) g
-
-check :: SavedData -> ChatId -> (SavedData -> [ChatId]) -> Maybe ChatId
-check sd cid f = mIf (cid `elem` f sd) cid
 
 checkAdminUsers :: SavedData -> UserId -> Maybe UserId
 checkAdminUsers sd uid = mIf ((uid, Admin) `elem` userGroups sd) uid

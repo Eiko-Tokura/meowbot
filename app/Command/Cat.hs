@@ -22,7 +22,7 @@ commandCat = BotCommand Cat $ botT $ do
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
-  let msys = lookup cid $ sysMessages sd
+  let msys = lookup cid $ sysMessages sd -- looking for custom system message
   lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
@@ -100,7 +100,7 @@ treeCatParser msys mid = do
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of
     Right list ->
-      case MP.mRunParserF (if isEmpty list then catParser msys else replyCatParser msys) (extractMetaMessage lastMsg) of
+      case MP.mRunParserF (if null list then catParser msys else replyCatParser msys) (extractMetaMessage lastMsg) of
             Just (params, metaLast) -> return $ concat list ++ 
                 [ (params, Message { role = "user", content = T.pack metaLast}) ]
             _ -> MP.zero
@@ -110,6 +110,4 @@ treeCatParser msys mid = do
             _ -> MP.zero
   where extractMetaMessage CQMessage{metaMessage = Nothing} = ""
         extractMetaMessage CQMessage{metaMessage = Just mmsg} = MP.onlyMessage mmsg
-        isEmpty [] = True
-        isEmpty (_:_) = False
 
