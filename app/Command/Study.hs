@@ -4,6 +4,7 @@ module Command.Study
   , commandBook
   , helpStudy
   , makeBook
+  , studyParser
   ) where
 
 -- this command involves:
@@ -60,10 +61,10 @@ infixr 6 <+>
 data StudyQuery 
   = SearchBook [SearchQuery]
   | ReadBook BookName 
-      (   [ PageNumber <+> AbsolutePageNumber ]
-      <+> ( PageType
+      (   ( PageType
           , [ PageInsideType <+> PageNumber <+> AbsolutePageNumber ]
           )
+      <+> [ PageNumber <+> AbsolutePageNumber ]
       )
   | InfoEdit BookName Action (Maybe BookInfoType)
   deriving Show
@@ -98,7 +99,7 @@ helpStudy = T.unlines
   , "study info <bookname> show : 查看书籍信息"
   , "study info <bookname> show author/offset/tags/pagetype: 查看书籍信息"
   , "study info <bookname> set/remove/show author/offset/tags : 修改书籍信息"
-  , "study info <bookname> set/remove/show pageType <pages/[abs-pages]> menu/content/exercise/cover/foreword/<any string> : 修改页面类型"
+  , "study info <bookname> set/remove/show <pageType> <pages/[abs-pages]> menu/content/exercise/cover/foreword/<any string> : 修改页面类型"
   , "pageType : menu/content/exercise/cover/foreword/<any string>"
   ]
 
@@ -112,7 +113,7 @@ pageTypeP = mconcat
   , string "exercise" >> return Exercise
   , string "cover"    >> return Cover
   , string "foreword" >> return Foreword
-  , MarkedAs <$> word
+  -- , MarkedAs <$> word
   ]
 
 studyParser :: ParserF Char StudyQuery
@@ -121,14 +122,14 @@ studyParser = headCommand "study" >> commandSeparator >> mconcat
       SearchBook <$> many0 (commandSeparator >> (Keyword <$> word))
   , string "read" >> commandSeparator >> 
       ReadBook <$> word 
-               <*> ( many0 (commandSeparator >> ePageNumber)
-                   <+> ((,) <$> (commandSeparator >> pageTypeP) 
-                            <*> intercalateP0 commandSeparator (just '+' *> (PageInsideType <$> positiveInt) <+> ePageNumber))
+               <*> ( ((,) <$> (commandSeparator >> pageTypeP) 
+                          <*> many0 (commandSeparator >> (just '+' *> (PageInsideType <$> positiveInt) <+> ePageNumber)))
+                   <+> many0 (commandSeparator >> ePageNumber)
                    )
   , string "info" >> commandSeparator >>
       InfoEdit <$> word 
                <*> (commandSeparator
-                   >> (string "add"    >> return Set)
+                   >> (string "set" <> string "add" >> return Set)
                    <> (string "remove" >> return Remove)
                    <> (string "show"   >> return Show)
                    )
@@ -138,7 +139,8 @@ studyParser = headCommand "study" >> commandSeparator >> mconcat
                    <> (string "tags"   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateP0 commandSeparator (BookTag <$> word))))
                    <> (string "pagetype" >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateP0 commandSeparator ePageNumber
                           <*> canBeEmpty 
-                              (  (string "menu"     >> return Menu)
+                              ( commandSeparator
+                              >> (string "menu"     >> return Menu)
                               <> (string "exercise" >> return Exercise)
                               <> (string "chapter"  >> return Chapter)
                               <> (string "cover"    >> return Cover)
@@ -164,7 +166,7 @@ commandStudy = BotCommand Study $ botT $ do
       let searchResult = searchBooks searchQs allBooks
       in return [ baSendToChatId cid $ T.pack $ intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
 
-    ReadBook bookname (Left pages) -> do
+    ReadBook bookname (Right pages) -> do
       match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           absPageNumbersToView = map (offsetPageNumber offset `either` id) pages  :: [AbsolutePageNumber]
@@ -182,7 +184,7 @@ commandStudy = BotCommand Study $ botT $ do
       else 
         return [ baSendToChatId cid $ T.pack $ concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) (traceWith show pagesToView) ]
 
-    ReadBook bookname (Right (pageType, pages')) -> do
+    ReadBook bookname (Left (pageType, pages')) -> do
       match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           pagesOfGivenType = [ page | page <- book_pages match, page_type page == Just pageType ]
@@ -203,7 +205,7 @@ commandStudy = BotCommand Study $ botT $ do
           newPages = case infoType of
             PageTypeInfo pages pageType -> [ if page_absoluteNumber page `elem` map (either (offsetPageNumber offset) id) pages then page { page_type = pageType } else page | page <- book_pages match ]
             _ -> book_pages match
-          newBooks = [ if book_name book == bookname 
+          newBooks = [ if book == match 
                        then book { book_info = newInfo 
                                  , book_pages = newPages
                                  } 
@@ -227,7 +229,7 @@ commandStudy = BotCommand Study $ botT $ do
                 then page { page_type = Nothing } else page | page <- book_pages match 
               ]
             _ -> book_pages match
-          newBooks = [ if book_name book == bookname 
+          newBooks = [ if book == match 
                        then book { book_info = newInfo 
                                  , book_pages = newPages
                                  }
