@@ -58,6 +58,7 @@ executable meowbot
                  , Command.Md
                  , Command.Random
                  , Command.Retract
+                 , Command.Study
                  , Command.SetSysMessage
                  , Command.Aokana
                  , Command.Aokana.Scripts
@@ -69,6 +70,8 @@ executable meowbot
                  , MeowBot.CQCode
                  , MeowBot.CommandRule
                  , MeowBot.BotStructure
+                 , MeowBot.Data.Book
+                 , Data.FilePathFor
                  , MonParserF
                  , Probability.Foundation
     -- LANGUAGE extensions used by modules in this package.
@@ -90,10 +93,12 @@ executable meowbot
 	       , time
 	       , mtl
                , process
+	       --, persistent
                , directory
 	       , filepath
                , random
 	       , lens
+	       , safe
                --, ChatAPI
     -- Directories containing source files.
     hs-source-dirs:   app

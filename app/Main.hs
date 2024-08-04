@@ -7,8 +7,9 @@ import Command.Help
 import Command.SetSysMessage
 import Command.User
 import Command.Aokana
-import Command.Random
+import Command.Random (commandRandom)
 import Command.Retract
+import Command.Study
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 
@@ -16,6 +17,7 @@ import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
 import System.Directory (doesFileExist)
+import System.Environment (getArgs)
 import Data.Text (unpack)
 import Data.Aeson (eitherDecode)
 import qualified Data.Text.Encoding as TE
@@ -25,33 +27,45 @@ import Network.WebSockets (Connection, ClientApp, runClient, receiveData)
 import Control.Monad.Trans.State
 import Control.Monad.Trans
 
+import Debug.Trace
+
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom]
+allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract]
+allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook]
+
+type RunningMode = [DebugFlag]
+data DebugFlag = DebugJson | DebugCQMessage deriving (Eq)
+
+traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
+traceModeWith flag ls f a 
+  | flag `elem` ls = trace (f a) a
+  | otherwise      = a
 
 main :: IO ()
 main = do
+  args <- getArgs
+  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ]
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
-  runClient "127.0.0.1" 3001 "" botClient
+  runClient "127.0.0.1" 3001 "" (botClient mode)
 
-botClient :: ClientApp ()
-botClient connection = do
+botClient :: RunningMode -> ClientApp ()
+botClient mode connection = do
   putStrLn "Connected to go-cqhttp WebSocket server."
-  initialData >>= botLoop connection 
+  initialData >>= botLoop mode connection 
 
-botLoop :: Connection -> AllData -> IO never_returns
-botLoop conn allData = runStateT (botSingleLoop conn) allData >>= botLoop conn . snd
+botLoop :: RunningMode -> Connection -> AllData -> IO never_returns
+botLoop mode conn allData = runStateT (botSingleLoop mode conn) allData >>= botLoop mode conn . snd
 
-botSingleLoop :: Connection -> StateT AllData IO ()
-botSingleLoop conn = do
-  msgText <- lift $ receiveData conn
+botSingleLoop :: RunningMode -> Connection -> StateT AllData IO ()
+botSingleLoop mode conn = do
+  msgText <- lift $ traceModeWith DebugJson mode unpack <$> receiveData conn
   preData <- get
   let strText = unpack msgText
       eCQmsg  = eitherDecode ((BL.fromStrict . TE.encodeUtf8) msgText) :: Either String CQMessage
-  case eCQmsg of
+  case traceModeWith DebugCQMessage mode show eCQmsg of
     Left errMsg -> lift $ putStrLn ("Failed to decode message: " ++ errMsg ++ "\n" ++ strText)
     Right cqmsg -> case eventType cqmsg of
       HeartBeat -> return ()
@@ -83,7 +97,7 @@ initialData = do
       AllData [] . OtherData 0 [] msavedData <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo" 
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules) <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) <$> getAllScripts
   where 
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]
@@ -95,6 +109,7 @@ initialData = do
       , Allow (SingleGroup myGroup)   (SingleCommand Retract)
       , Deny  (UGroup Denied)         AllCommands
       ]
+    initialBooks = []
     me = 754829466 :: UserId
     myGroup = 437447251 :: GroupId
 

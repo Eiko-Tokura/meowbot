@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia#-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -24,6 +25,7 @@ module MeowBot.BotStructure
 
 import MeowBot.CQCode
 import MeowBot.CommandRule
+import MeowBot.Data.Book
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.State as ST
@@ -35,7 +37,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Text (Text, pack, unpack) 
 import Data.Ord (comparing)
 import Data.List (maximumBy)
-import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=))
+import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=), withText)
 import Data.Aeson.Types (Parser, (.:?))
 import GHC.Generics (Generic)
 import External.ChatAPI 
@@ -83,6 +85,7 @@ data SavedData = SavedData
   , userGroups   :: [(UserId, UserGroup)]
   , groupGroups  :: [(GroupId, GroupGroup)]
   , commandRules :: [CommandRule]
+  , books        :: [Book]
   } deriving (Show, Eq, Read)
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | SelfMessage | UnknownMessage
@@ -93,6 +96,7 @@ data CQMessage = CQMessage
   , messageId    :: Maybe Int
   , groupId      :: Maybe GroupId
   , userId       :: Maybe UserId
+  , sender       :: Maybe Sender
   , message      :: Maybe Text
   , time         :: Maybe Int
   , responseData :: Maybe ResponseData
@@ -101,7 +105,23 @@ data CQMessage = CQMessage
   , metaMessage  :: Maybe MetaMessage
   } deriving (Show, Read, Eq, Generic)
 
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+data Sender = Sender
+  { nickname :: Maybe Text
+  , card     :: Maybe Text
+  , role     :: Maybe Role
+  } deriving (Show, Read, Eq, Generic, FromJSON)
+
+data Role = ROwner | RAdmin | RMember | RUnknown
+  deriving (Show, Read, Eq)
+
+instance FromJSON Role where
+  parseJSON = withText "Role" $ \case
+    "owner" -> return ROwner
+    "admin" -> return RAdmin
+    "member" -> return RMember
+    _ -> return RUnknown
+
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -130,6 +150,7 @@ instance FromJSON CQMessage where
               <*> obj .:? "message_id"
               <*> obj .:? "group_id"
               <*> obj .:? "user_id"
+              <*> obj .:? "sender"
               <*> pure message
               <*> obj .:? "time"
               <*> pure dataObj

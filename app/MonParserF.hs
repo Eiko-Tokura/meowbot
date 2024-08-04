@@ -9,7 +9,7 @@ module MonParserF
   , string, word, nonFlagWord, insideBrackets, till, inBraket, collectItemsUntil, collectItemsInBracket, collectInBigBracket, collectItemsUntilLevel0
   , htmlDecode, lower, upper, letter, space, spaceOrEnter, commandSeparator, commandSeparator2, spaces0, spaces, identifier
   , digit, digits, int, nonNegative, positive, nonNegativeInt, positiveInt, float, positiveFloat  -- numbers
-  , cqcode, cqcodeExceptFace, cqmsg, intercalateP, eitherParse, htmlCodes
+  , cqcode, cqcodeExceptFace, cqmsg, intercalateP, intercalateP0, eitherParse, htmlCodes
   , headCommand
   , parseByRead
   , canBeEmpty
@@ -354,6 +354,9 @@ cqother str = CQOther str <$> intercalateP (itemIn ",;")
 
 intercalateP :: ParserF b s -> ParserF b a -> ParserF b [a]
 intercalateP sep p = p <:> many0 (sep *> p)
+
+intercalateP0 :: ParserF b s -> ParserF b a -> ParserF b [a]
+intercalateP0 sep p = try0 $ intercalateP sep p
 
 cqcodeExceptFace :: ParserF Char CQCode
 cqcodeExceptFace = do

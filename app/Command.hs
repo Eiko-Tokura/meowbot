@@ -3,6 +3,7 @@ module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
   , botT
+  , restrictNumber
   ) where
 
 import MeowBot.BotStructure
@@ -26,6 +27,11 @@ data BotCommand = BotCommand
   { identifier :: CommandId
   , command    :: CommandValue
   }
+
+restrictNumber :: Int -> [String] -> [String]
+restrictNumber _ [] = ["什么也没找到 o.o"]
+restrictNumber n xs =  [show i ++ " " ++ x | (i, x) <- zip [1 :: Int ..] $ take n xs]
+                    ++ ["(显示了前" ++ show (min n (length xs)) ++ "/" ++ show (length xs) ++ "条)" | length xs > n]
 
 botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStateT WholeChat OtherData m [a]
 botT = fmap (fromMaybe []) . runMaybeT

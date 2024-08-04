@@ -100,9 +100,6 @@ commandAokana = BotCommand Aokana $ botT $ do
           return [ baSendToChatId cid $ T.pack simplifiedBlock
                  , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
                  ]
-    restrictNumber :: Int -> [String] -> [String]
-    restrictNumber n xs =  [show i ++ " " ++ x | (i, x) <- zip [1 :: Int ..] $ take n xs]
-                        ++ ["(显示了前" ++ show (min n (length xs)) ++ "/" ++ show (length xs) ++ "条)"]
 
 voicePath :: FilePath -> String -> FilePath
 voicePath cd voiceId = cd </> aokanaRelPath </> voiceRelPath </> (toLower <$> voiceId ++ voiceExtension)

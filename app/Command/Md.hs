@@ -2,6 +2,7 @@ module Command.Md where
 
 import Command
 import Data.Bifunctor 
+import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
 import MeowBot.BotStructure
 import MeowBot.CQCode
@@ -19,11 +20,11 @@ commandMd = BotCommand Md $ do
   case mess of
     Nothing -> return []
     Just (msg, cid, _, _) -> do
-      mEitherStrings <- lift $ mT $ markdownToImage <$> MP.mRunParserF mdParser msg
+      mEitherStrings <- lift $ mT $ runExceptT . markdownToImage <$> MP.mRunParserF mdParser msg
       case mEitherStrings of
         Nothing -> return []
         Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
-        Just (Right fps) -> return [baSendToChatId cid (T.pack $ concat $ [embedCQCode $ CQImage outPath | outPath <- fps])]
+        Just (Right fps) -> return [baSendToChatId cid (T.pack $ concat $ [embedCQCode $ CQImage $ useAbsPath outPath | outPath <- fps])]
   where 
     mdParser :: ParserF Char String
     mdParser = do
@@ -33,7 +34,7 @@ commandMd = BotCommand Md $ do
     
 
 turnMdCQCode :: String -> ExceptT String IO String
-turnMdCQCode md = fmap (\fps -> concat [embedCQCode (CQImage filepath) | filepath <- fps]) $ ExceptT $ first ((++ "\n Showing the original message: " ++ md) . ("Error o.o occurred while rendering markdown pictures o.o " ++) . show) <$> markdownToImage md
+turnMdCQCode md = fmap (\fps -> concat [embedCQCode (CQImage filepath) | filepath <- fps]) $ ExceptT $ first ((++ "\n Showing the original message: " ++ md) . ("Error o.o occurred while rendering markdown pictures o.o " ++) . show) <$> runExceptT (map useAnyPath <$> markdownToImage md)
 
 
 sendIOeToChatIdMd :: EssentialContent -> ExceptT String IO String -> ReaderStateT r OtherData IO [BotAction]

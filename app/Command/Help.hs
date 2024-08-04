@@ -3,6 +3,7 @@ module Command.Help where
 
 import Command
 import Command.Random (helpRandom)
+import Command.Study (helpStudy)
 import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
@@ -20,7 +21,7 @@ commandHelp = BotCommand Help $ botT $ do
     helpParser = do
       MP.headCommand "help"
       MP.spaces0
-      mParam <- MP.tryMaybe . mconcat $ map ((\str -> do {cap <- MP.string str; MP.spaces0; MP.end; return cap}) . fst) helpList;
+      mParam <- MP.tryMaybe . mconcat $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
         Nothing  -> return . pack . concat $ 
@@ -44,6 +45,7 @@ helpList =
   , ("help", ":help <command>\n查看帮助")
   , ("aokana", ":aokana [flags/search items]\n 随机选取一段苍彼的语音对话！可用flags: -asuka, -misaki, -mashiro, -rika, -list. 搜索项和flags之间用空格分隔。搜索项也可以用英文引号括起来，这样会包含空格。搜索会在四种语言中进行。")
   , ("random", helpRandom)
+  , ("study", helpStudy)
   ]
   where replyHelp = "您可以回复我的消息以使用上下文。回复会以Tree的数据结构组织，您可以回复任何一个节点，但有长度限制。回复时可以指定:cat,:supercat,:mdcat等指令，不指定时默认使用:cat回复。"
 
