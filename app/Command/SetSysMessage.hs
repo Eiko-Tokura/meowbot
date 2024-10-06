@@ -1,5 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Command.SetSysMessage where
+module Command.SetSysMessage 
+  (
+    commandSetSysMessage
+  ) where
 
 import Command
 import MonParserF ((<+>))
@@ -35,8 +38,7 @@ commandSetSysMessage = BotCommand System $ botT $ do
       ( do
         MP.headCommand "system"
         MP.commandSeparator
-        MP.string "set" >> Just <$> MP.many MP.item 
-        <+> MP.string "unset" >> return Nothing
+        (MP.string "set" >> MP.commandSeparator >> Just <$> MP.many MP.item) <> (MP.string "unset" >> return Nothing)
       ) <+> (MP.headCommand "temperature" >> MP.commandSeparator >> MP.positiveFloat)
 
 updateSysSetting :: Either (Maybe Message) Double -> ChatId -> [(ChatId, ChatSetting)] -> [(ChatId, ChatSetting)]

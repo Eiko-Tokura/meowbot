@@ -5,7 +5,7 @@
 
 module External.ChatAPI 
   ( 
-    simpleChat, Message(..), messageChat, ChatModel(..), ChatParams(..), ChatSetting(..)
+    simpleChat, Message(..), messageChat, ChatModel(..), ChatParams(..), ChatSetting(..), chatSettingMaybeWrapper
   ) where
 
 import Control.Exception (try, SomeException)
@@ -26,13 +26,16 @@ data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
 data ChatParams  = ChatParams 
   { chatModel     :: ChatModel
   , markDown      :: Bool
-  , chatSetting   :: Maybe ChatSetting
+  , chatSetting   :: ChatSetting
   } deriving (Show)
 
 data ChatSetting = ChatSetting
   { systemMessage :: Maybe Message
   , systemTemp    :: Maybe Double
   } deriving (Show, Eq, Read)
+
+chatSettingMaybeWrapper :: Maybe ChatSetting -> ChatSetting
+chatSettingMaybeWrapper = fromMaybe (ChatSetting Nothing Nothing)
 
 data ChatCompletionResponse = ChatCompletionResponse
   { responseId :: Text
@@ -83,7 +86,7 @@ promptMessage prompt = Message "user" (pack prompt)
 
 generateRequestBody :: ChatParams -> [Message] -> ByteString
 generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
-  ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (mset >>= systemTemp))
+  ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (systemTemp mset))
   where sysMessage = if md then Message 
                           "system"
                           "You are a endearing catgirl assistant named '喵喵'. \
@@ -92,7 +95,7 @@ generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
                         else fromMaybe (Message 
                           "system" 
                           "You are the endearing catgirl assistant named '喵喵'. You adore using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
-                          ) (mset >>= systemMessage)
+                          ) (systemMessage mset)
         strModel = case model of
           GPT3 -> "gpt-4o-mini"
           GPT4 -> "gpt-4o"

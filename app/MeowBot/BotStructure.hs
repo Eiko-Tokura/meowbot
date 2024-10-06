@@ -5,7 +5,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
 module MeowBot.BotStructure 
-  ( GroupId(..), UserId(..), ChatId(..), Chat, MessageId
+  ( BotCommand(..), BotModules(..), CommandValue
+  , GroupId(..), UserId(..), ChatId(..), Chat, MessageId, BotName
   , BotAction(..), ChatRoom, WholeChat, AllData(..), OtherData(..), SavedData(..)
   , UserGroup(..), GroupGroup(..)
   , SendMessageForm(..), Params(..)
@@ -18,8 +19,9 @@ module MeowBot.BotStructure
   , emptyCQMessage
 
   , EssentialContent
-  , getEssentialContent, sendIOeToChatId, sendToChatId, baSendToChatId
-  , getFirstTree, getNewMsg
+  , cqmsgToEssentialContent
+  , getEssentialContent, getEssentialContentAtN, sendIOeToChatId, sendToChatId, baSendToChatId
+  , getFirstTree, getNewMsg, getNewMsgN
   , mT
   ) where
 
@@ -47,10 +49,16 @@ import Debug.Trace
 
 --import Database.Persist
 
+type BotName = Maybe String
+
 data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read)
 
 type Chat = [MP.Tree CQMessage]
+
+type ChatRoom = (ChatId, Chat)
+
+type WholeChat = [ChatRoom] 
 
 data BotAction
   = BASendPrivate
@@ -63,20 +71,33 @@ data BotAction
     MessageId    -- ^ MessageId, the message to delete (retract)
   deriving Show
 
-type ChatRoom = (ChatId, Chat)
-
-type WholeChat = [ChatRoom] 
-
 data AllData = AllData
   { wholechat :: WholeChat
   , otherdata :: OtherData
   } deriving Show
+
+type CommandValue = ReaderStateT WholeChat OtherData IO [BotAction]
+-- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
+-- CommandValue is a monadic value of the monad (ReaderStateT WholeChat OtherData IO)
+
+data BotCommand = BotCommand
+  { identifier :: CommandId
+  , command    :: CommandValue
+  } 
+
+data BotModules = BotModules
+  { canUseGroupCommands   :: [CommandId]
+  , canUsePrivateCommands :: [CommandId]
+  , nameOfBot :: BotName
+  , globalSysMsg :: Maybe String
+  } deriving (Show)
 
 data OtherData = OtherData
   { message_number :: Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , sent_messages :: [CQMessage]
     -- In the future one can add course data.. etc
   , savedData     :: SavedData
+  , botModules    :: BotModules
   , aokana        :: [ScriptBlock]
   } deriving (Show)
 
@@ -177,9 +198,11 @@ saveData prev_data = do
   new_data <- ST.get
   lift $ when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) do
     putStrLn "Saved data changed, I'm saving it to file! owo"
-    writeFile savedDataPath $ show $ savedData (otherdata new_data)
+    writeFile (savedDataPath $ nameOfBot $ botModules $ otherdata new_data) $ show $ savedData (otherdata new_data)
 
-savedDataPath = "savedData"
+savedDataPath :: BotName -> FilePath
+savedDataPath Nothing = "savedData"
+savedDataPath (Just n) = "savedData-" ++ n
 
 gIncreaseAbsoluteId :: (Monad m) => StateT AllData m Int
 gIncreaseAbsoluteId = globalize wholechat otherdata AllData increaseAbsoluteId
@@ -312,11 +335,35 @@ getFirstTree wc =
       (_, []) -> Node emptyCQMessage []
       (_, t0:_) -> t0
 
+getNewMsgN :: Int -> WholeChat -> [CQMessage]
+getNewMsgN _ [] = []
+getNewMsgN n wholechat = take n $ concatMap flatten $ snd (head wholechat)
+
 type MessageId = Int
 type EssentialContent = (String, ChatId, UserId, MessageId)
 
 getEssentialContent :: WholeChat -> Maybe EssentialContent
-getEssentialContent wchat = let cqmsg = getNewMsg wchat in
+getEssentialContent wchat = cqmsgToEssentialContent (getNewMsg wchat)
+
+getEssentialContentAtN :: Int -> WholeChat -> Maybe EssentialContent
+getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat !? (n-1))
+  where (!?) :: [a] -> Int -> Maybe a
+        (!?) [] _ = Nothing
+        (!?) (x:_) 0 = Just x
+        (!?) (_:xs) n = xs !? (n-1)
+
+-- let cqmsg = getNewMsg wchat in
+--   (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
+--         <*> (case eventType cqmsg of
+--               GroupMessage -> GroupChat <$> groupId cqmsg
+--               PrivateMessage -> PrivateChat <$> userId cqmsg
+--               _ -> Nothing
+--             )
+--         <*> userId cqmsg
+--         <*> messageId cqmsg
+
+cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
+cqmsgToEssentialContent cqmsg = 
   (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
         <*> (case eventType cqmsg of
               GroupMessage -> GroupChat <$> groupId cqmsg

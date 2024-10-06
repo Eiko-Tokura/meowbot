@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, GADTs #-}
+{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, GADTs, TypeApplications #-}
 module Command.Retract 
   ( commandRetract
   ) where
@@ -6,12 +6,12 @@ module Command.Retract
 import Command
 import MeowBot.BotStructure
 import MeowBot.CQCode
-import MonParserF (ParserF(..), cqcodes)
-import qualified MonParserF as MP
+import MonParserF as MP
 
 import Data.List
 import Data.Maybe
 
+import Control.Monad
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
@@ -26,10 +26,43 @@ import Control.Monad.Trans.ReaderState
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> ask)
-  (_, _, _, mid) <- MaybeT $ getEssentialContent <$> ask
-  pureMaybe $ do
-    props <- listToMaybe [ props | CQOther "mface" props <- cqs ]
-    summary <- lookup "summary" props
-    if any (`isInfixOf` summary) ["哭哭", "呜呜"]
-      then return [BARetractMsg mid] else return []
-  
+  (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
+  (msg1, cid1, uid1, mid1) <- MaybeT $ getEssentialContentAtN 2 <$> ask
+  pureMaybe $ listToMaybe $ catMaybes
+    [ do
+        props   <- listToMaybe [ props | CQOther "mface" props <- cqs ]
+        summary <- lookup "summary" props
+        if any (`isInfixOf` summary) ["哭哭", "呜呜"]
+          then return [BARetractMsg mid] else return []
+    , do
+        props <- listToMaybe [ props | CQOther "image" props <- cqs ]
+        fn <- lookup "file" props
+        fs <- lookup "file_size" props
+        boolToMaybe $ or
+          [ fs == "34780"
+          , fn == "47292F10974A403AE3C2A01D977879FF.png"
+          , fn == "45A7FB5B532C98723658B1A138F4EDAE.png"
+          , fn == "DC3C2C1982B3404796FE4470D7E0600C.png"
+          ]
+        return [BARetractMsg mid]
+    , do -- managing the bahavior of another bot
+        boolToMaybe $ uid `elem` chinoBotIds
+        listToMaybe . catMaybes $ 
+          [ void $ mRunParserF 
+            ( string "bid:" >> int @Integer >> 
+              spaceOrEnter  >> string "捡到来自" >> many item
+            ) msg
+          , boolToMaybe ( "渣男" `isInfixOf` msg)
+          ]
+        return [BARetractMsg mid]
+    , do
+        boolToMaybe $ any (`isInfixOf` msg1) ["上号", "网抑云"]
+        boolToMaybe $ uid `elem` chinoBotIds
+        return [BARetractMsg mid]
+    ]
+    where chinoBotIds = [UserId 3287727775, UserId 3055323571]
+
+boolToMaybe :: Bool -> Maybe ()
+boolToMaybe True = Just ()
+boolToMaybe False = Nothing
+

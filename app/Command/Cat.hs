@@ -12,6 +12,8 @@ import MonParserF (ParserF(..))
 import qualified MonParserF as MP
 import Control.Monad.IOe
 
+import Control.Applicative
+
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
@@ -22,8 +24,12 @@ commandCat = BotCommand Cat $ botT $ do
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
-  let msys = lookup cid $ chatSettings sd -- looking for custom system message
-  lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser msys mid) (getFirstTree whole_chat)
+  let msys = ChatSetting 
+               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botModules other_data))
+               (systemTemp =<< lookup cid (chatSettings sd))
+  -- looking for custom system message
+      botname = nameOfBot $ botModules other_data
+  lChatModelMsg <- pureMaybe $ MP.mRunParserF (treeCatParser botname msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
@@ -33,8 +39,17 @@ commandCat = BotCommand Cat $ botT $ do
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
-catParser :: Maybe ChatSetting -> ParserF Char (ChatParams, String) 
-catParser msys = do 
+catParser :: BotName -> ChatSetting -> ParserF Char (ChatParams, String) 
+catParser (Just botname) msys = do
+  MP.spaces0
+  parseMeowMeow
+  where
+    parseMeowMeow = do
+      MP.string botname
+      MP.commandSeparator2
+      str <- MP.many MP.item
+      return (ChatParams GPT3 False msys, str)
+catParser Nothing msys = do 
   MP.spaces0
   parseCat <> parseMeowMeow
   where
@@ -54,15 +69,15 @@ catParser msys = do
       str <- MP.many MP.item
       return (ChatParams GPT3 False msys, str)
 
-replyCatParser :: Maybe ChatSetting -> ParserF Char (ChatParams, String)
-replyCatParser msys = catParser msys <> ( do
+replyCatParser :: BotName -> ChatSetting -> ParserF Char (ChatParams, String)
+replyCatParser name msys = catParser name msys <> ( do
   MP.spaces0
   str <- MP.many MP.item
   return (ChatParams GPT3 False msys, str)
   )
 
-treeCatParser :: Maybe ChatSetting -> Int -> ParserF CQMessage [(ChatParams, Message)]
-treeCatParser msys mid = do
+treeCatParser :: BotName -> ChatSetting -> Int -> ParserF CQMessage [(ChatParams, Message)]
+treeCatParser name msys mid = do
   elist <- 
     ( do
         firstUMsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage] ) -- will be dropped
@@ -78,12 +93,12 @@ treeCatParser msys mid = do
                 (do
                   umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
                   amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-                  let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys', "") $ MP.mRunParserF (catParser msys') (extractMetaMessage umsg)
+                  let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False (chatSettingMaybeWrapper msys'), "") $ MP.mRunParserF (catParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage umsg)
                   return [ (params, Message { role = "user", content = T.pack metaUMsg})
                          , (params, Message { role = "assistant", content = T.pack $ extractMetaMessage amsg})
                          ]
                 )
-              let params = ChatParams GPT3 False msys'
+              let params = ChatParams GPT3 False (chatSettingMaybeWrapper msys')
               return (msys', [(params, Message "assistant" $ T.pack $ extractMetaMessage firstAMsg)] : innerList)
           Nothing -> MP.zero
     )
@@ -91,7 +106,7 @@ treeCatParser msys mid = do
     MP.many0 (do 
         umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
         amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-        let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.mRunParserF (replyCatParser msys) (extractMetaMessage umsg) 
+        let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.mRunParserF (replyCatParser name msys) (extractMetaMessage umsg) 
         return [ (params, Message { role = "user" , content = T.pack metaUMsg })
                , (params, Message { role = "assistant", content = T.pack $ extractMetaMessage amsg})
                ]
@@ -100,11 +115,11 @@ treeCatParser msys mid = do
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of
     Right list ->
-      case MP.mRunParserF (if null list then catParser msys else replyCatParser msys) (extractMetaMessage lastMsg) of
+      case MP.mRunParserF (if null list then catParser name msys else replyCatParser name msys) (extractMetaMessage lastMsg) of
             Just (params, metaLast) -> return $ concat list ++ 
                 [ (params, Message { role = "user", content = T.pack metaLast}) ]
             _ -> MP.zero
-    Left (msys', list) -> case MP.mRunParserF (replyCatParser msys') (extractMetaMessage lastMsg) of
+    Left (msys', list) -> case MP.mRunParserF (replyCatParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage lastMsg) of
             Just (params, metaLast) -> return $ concat list ++ 
                 [ (params, Message { role = "user", content = T.pack metaLast}) ]
             _ -> MP.zero

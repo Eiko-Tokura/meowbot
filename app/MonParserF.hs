@@ -14,7 +14,7 @@ module MonParserF
   , parseByRead
   , canBeEmpty
 
-  ,(<+>), (<:>)
+  , (<+>), (<:>)
 
   , mRunParserF
   ) where

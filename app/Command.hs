@@ -19,15 +19,6 @@ import Control.Monad.Trans.ReaderState as RS
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
 
-type CommandValue = ReaderStateT WholeChat OtherData IO [BotAction]
--- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
--- CommandValue is a monadic value of the monad (ReaderStateT WholeChat OtherData IO)
-
-data BotCommand = BotCommand
-  { identifier :: CommandId
-  , command    :: CommandValue
-  }
-
 restrictNumber :: Int -> [String] -> [String]
 restrictNumber _ [] = ["什么也没找到 o.o"]
 restrictNumber n xs =  [show i ++ " " ++ x | (i, x) <- zip [1 :: Int ..] $ take n xs]

@@ -38,6 +38,8 @@ import External.MarkdownImage
 
 import Debug.Trace
 
+traceWith f a = trace (f a) a
+
 --import Control
 
 -- we want to implement the following functions, implement according to the order below:
@@ -75,10 +77,10 @@ data StudyQuery
 --    :<>: HeadCommand "read"  :-: Word BookName :-: (PageNumber <+> AbsolutePageNumber)
 
 data BookManagement
-  = Upload BookName (FilePathFor Abs PDF)
+  = Upload BookName (FilePathFor Abs File PDF)
   | Delete BookName
-  | LocalMakeBook BookName (FilePathFor Rel PDF)
-  | LocalAddBook BookName (FilePathFor Rel Image)
+  | LocalMakeBook BookName (FilePathFor Rel File PDF)
+  | LocalAddBook BookName (FilePathFor Rel Directory Image)
 
 data Action = Set | Remove | Show deriving Show
 
@@ -269,7 +271,7 @@ simplifiedListing book = unwords $ catMaybes
      , (++ ")") . ("(" ++ ) <$> bookInfo_author (book_info book)
      ]
 
-makeBook :: BookName -> BookInfo -> FilePathFor anyPathType PDF -> ExceptT SomeException IO Book
+makeBook :: BookName -> BookInfo -> FilePathFor anyPathType File PDF -> ExceptT SomeException IO Book
 makeBook bookname bookinfo pdf = do
   page_images <- sortOn fst . coerce <$> pdfToImageWithPageNumber pdf
   pdfAbFp <- toAbsPath pdf
@@ -279,7 +281,7 @@ makeBook bookname bookinfo pdf = do
     return $ BookPage (useAnyPath imgAbFp) absPageNum pageType
   return $ Book bookname (Just $ useAbsPath pdfAbFp) bookPages bookinfo
 
-makeBookFromImageDir :: (ComposablePath anyPathType Rel) => BookName -> BookInfo -> Maybe (FilePathFor anyPathType' PDF) -> FilePathFor anyPathType  Image -> ExceptT SomeException IO Book
+makeBookFromImageDir :: (ComposablePath anyPathType Rel) => BookName -> BookInfo -> Maybe (FilePathFor anyPathType' File PDF) -> FilePathFor anyPathType Directory Image -> ExceptT SomeException IO Book
 makeBookFromImageDir bookname bookinfo mpdfFile imgDir = do
   page_images <- sortOn fst . map (\image -> (AbsolutePageNumber . readPageNumber . useRelPath . takeBaseName $ image , imgDir </> image)) <$> listDirectory imgDir
   mpdfAbFp <- case mpdfFile of

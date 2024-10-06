@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import Command
@@ -18,14 +19,18 @@ import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
+import Data.Maybe (listToMaybe)
 import Data.Text (unpack)
 import Data.Aeson (eitherDecode)
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
-import Network.WebSockets (Connection, ClientApp, runClient, receiveData)
+import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest)
 
 import Control.Monad.Trans.State
 import Control.Monad.Trans
+import Control.Monad
+
+import GHC.Conc (forkIO)
 
 import Debug.Trace
 
@@ -36,7 +41,11 @@ allGroupCommands :: [BotCommand]
 allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook]
 
 type RunningMode = [DebugFlag]
-data DebugFlag = DebugJson | DebugCQMessage deriving (Eq)
+data DebugFlag = DebugJson | DebugCQMessage deriving (Eq, Show)
+data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Show)
+newtype IdentityFlag = UseName String deriving (Eq, Show)
+newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
+--newtype SystemMessageFlag = UseSysMessage String deriving (Eq, Show)
 
 traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
 traceModeWith flag ls f a 
@@ -46,21 +55,57 @@ traceModeWith flag ls f a
 main :: IO ()
 main = do
   args <- getArgs
-  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ]
+  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ] 
+      runFlags 
+        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (tail args) (tail $ tail args) ] 
+        ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
+      identityFlags 
+        =  [ UseName name | ("--name", name) <- zip args (tail args) ]
+      commandIds
+        =  if "--all-commands" `elem` args 
+           then []
+           else [ read cmd | ("--command", cmd) <- zip args (tail args) ]
+      mGlobalSysMsg
+        =  listToMaybe [ sysMsg | ("--sys-msg", sysMsg) <- zip args (tail args) ]
+  putStrLn "Meow~ Here comes the MeowBot! owo"
+  putStrLn $ "Running mode: "   ++ show mode
+  putStrLn $ "Running flags: "  ++ show runFlags
+  putStrLn $ "Identity flags: " ++ show identityFlags
+  putStrLn $ "Command flags: "  ++ show commandIds
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
-  runClient "127.0.0.1" 3001 "" (botClient mode)
+  let withDefault def [] = def
+      withDefault _ xs = xs
+      botModules = BotModules
+        { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) commandIds
+        , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) commandIds
+        , nameOfBot = case identityFlags of
+            [] -> Nothing
+            (UseName n) : _ -> Just n
+        , globalSysMsg = mGlobalSysMsg
+        }
+  if null runFlags
+  then runClient "127.0.0.1" 3001 "" (botClient botModules mode)
+  else forM_ runFlags $ \case
+    (RunClient ip port) -> void $ runClient ip port "" (botClient botModules mode)
+    (RunServer ip port) -> void $ runServer ip port (botServer botModules mode)
 
-botClient :: RunningMode -> ClientApp ()
-botClient mode connection = do
+botClient :: BotModules -> RunningMode -> ClientApp ()
+botClient mods mode connection = do
   putStrLn "Connected to go-cqhttp WebSocket server."
-  initialData >>= botLoop mode connection 
+  initialData mods >>= botLoop mods mode connection
 
-botLoop :: RunningMode -> Connection -> AllData -> IO never_returns
-botLoop mode conn allData = runStateT (botSingleLoop mode conn) allData >>= botLoop mode conn . snd
+botServer :: BotModules -> RunningMode -> PendingConnection -> IO ()
+botServer mods mode connection = do
+  conn <- acceptRequest connection
+  putStrLn "As server, connected to go-cqhttp WebSocket client."
+  initialData mods >>= botLoop mods mode conn
 
-botSingleLoop :: RunningMode -> Connection -> StateT AllData IO ()
-botSingleLoop mode conn = do
+botLoop :: BotModules -> RunningMode -> Connection -> AllData -> IO never_returns
+botLoop mods mode conn allData = runStateT (botSingleLoop mods mode conn) allData >>= botLoop mods mode conn . snd
+
+botSingleLoop :: BotModules -> RunningMode -> Connection -> StateT AllData IO ()
+botSingleLoop mods mode conn = do
   msgText <- lift $ traceModeWith DebugJson mode unpack <$> receiveData conn
   preData <- get
   let strText = unpack msgText
@@ -76,28 +121,28 @@ botSingleLoop mode conn = do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ updateAllDataByMessage   cqmsg'
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
-        doBotCommands conn allPrivateCommands
+        doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
       GroupMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ updateAllDataByMessage   cqmsg'
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
-        doBotCommands conn allGroupCommands
+        doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
       UnknownMessage -> return ()
       _ -> return ()
   saveData preData
 
-initialData :: IO AllData
-initialData = do
-  fileExist <- doesFileExist savedDataPath
+initialData :: BotModules -> IO AllData
+initialData mods = do
+  fileExist <- doesFileExist (savedDataPath $ nameOfBot mods)
   if fileExist
     then do
       putStrLn "Found saved data file, loading data! owo"
-      savedData <- readFile savedDataPath
+      savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 [] msavedData <$> getAllScripts
+      AllData [] . OtherData 0 [] msavedData mods <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo" 
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) mods <$> getAllScripts
   where 
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]
