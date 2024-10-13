@@ -48,7 +48,7 @@ executable meowbot
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
 
-    ghc-options:    -Wall -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -O -threaded -rtsopts -with-rtsopts=-N
+    ghc-options:    -Wall -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O -threaded -rtsopts -with-rtsopts=-N 
 
     -- Modules included in this executable, other than Main.
     other-modules: Command
@@ -103,4 +103,4 @@ executable meowbot
     -- Directories containing source files.
     hs-source-dirs:   app
 
-    default-language: Haskell2010
+    default-language: GHC2021
