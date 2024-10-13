@@ -41,11 +41,10 @@ allGroupCommands :: [BotCommand]
 allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook]
 
 type RunningMode = [DebugFlag]
-data DebugFlag = DebugJson | DebugCQMessage deriving (Eq, Show)
+data DebugFlag   = DebugJson | DebugCQMessage deriving (Eq, Show)
 data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Show)
 newtype IdentityFlag = UseName String deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
---newtype SystemMessageFlag = UseSysMessage String deriving (Eq, Show)
 
 traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
 traceModeWith flag ls f a 
@@ -59,7 +58,7 @@ main = do
       runFlags 
         =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (tail args) (tail $ tail args) ] 
         ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
-      identityFlags 
+      identityFlags
         =  [ UseName name | ("--name", name) <- zip args (tail args) ]
       commandIds
         =  if "--all-commands" `elem` args 

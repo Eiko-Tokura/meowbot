@@ -214,11 +214,11 @@ increaseAbsoluteId = do
   RST.put $ other_data {message_number = mid + 1}
   return $ mid + 1
 
-data SendMessageForm = SendMessageForm {
-  action :: Text,
-  params :: Params,
-  echo   :: Maybe Text
-} deriving (Generic, Show, ToJSON)
+data SendMessageForm = SendMessageForm 
+  { action :: Text
+  , params :: Params
+  , echo   :: Maybe Text
+  } deriving (Generic, Show, ToJSON)
 
 data Params 
   = PrivateParams 
@@ -351,16 +351,6 @@ getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat
         (!?) [] _ = Nothing
         (!?) (x:_) 0 = Just x
         (!?) (_:xs) n = xs !? (n-1)
-
--- let cqmsg = getNewMsg wchat in
---   (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
---         <*> (case eventType cqmsg of
---               GroupMessage -> GroupChat <$> groupId cqmsg
---               PrivateMessage -> PrivateChat <$> userId cqmsg
---               _ -> Nothing
---             )
---         <*> userId cqmsg
---         <*> messageId cqmsg
 
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
 cqmsgToEssentialContent cqmsg = 
