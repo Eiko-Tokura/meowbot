@@ -160,7 +160,8 @@ restrictPages = take 5
 commandStudy :: BotCommand
 commandStudy = BotCommand Study $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  query <- pureMaybe $ MP.mRunParserF studyParser msg
+  studyParser' <- lift $ commandParserTransformByBotName studyParser
+  query <- pureMaybe $ MP.mRunParserF studyParser' msg
   other_data <- lift get
   let allBooks = books $ savedData other_data
   case query of

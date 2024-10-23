@@ -4,6 +4,7 @@ module Command
   , doBotCommands
   , botT
   , restrictNumber
+  , commandParserTransformByBotName
   ) where
 
 import MeowBot.BotStructure
@@ -14,10 +15,18 @@ import qualified Data.Text as T
 import Network.WebSockets (Connection, sendTextData)
 
 import Control.Monad.Trans
-import Control.Monad.Trans.State
+import Control.Monad.Trans.State hiding (get)
 import Control.Monad.Trans.ReaderState as RS
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
+import qualified MonParserF as MP
+
+commandParserTransformByBotName :: Monad m => MP.ParserF Char a -> ReaderStateT WholeChat OtherData m (MP.ParserF Char a)
+commandParserTransformByBotName cp = do
+  botname <- nameOfBot . botModules <$> get
+  return $ case botname of
+    Just bn -> MP.string bn >> MP.try0 MP.commandSeparator >> cp
+    Nothing -> cp
 
 restrictNumber :: Int -> [String] -> [String]
 restrictNumber _ [] = ["什么也没找到 o.o"]

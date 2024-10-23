@@ -61,6 +61,7 @@ commandRetract = BotCommand Retract $ botT $ do
         return [BARetractMsg mid]
     ]
     where chinoBotIds = [UserId 3287727775, UserId 3055323571, UserId 1714828270]
+          asllIds     = [UserId 1102028091]
 
 boolToMaybe :: Bool -> Maybe ()
 boolToMaybe True = Just ()

@@ -22,7 +22,8 @@ data Action = Add | Remove | List
 commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  um <- pureMaybe $ MP.mRunParserF userParser msg
+  userParser' <- lift $ commandParserTransformByBotName userParser
+  um <- pureMaybe $ MP.mRunParserF userParser' msg
   other <- lift get
   let sd = savedData other
   let (actions, sd') = case um of

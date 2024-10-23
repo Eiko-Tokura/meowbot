@@ -17,10 +17,11 @@ import Control.Monad.Trans.ReaderState
 commandMd :: BotCommand
 commandMd = BotCommand Md $ do
   mess <- getEssentialContent <$> ask
+  mdParser' <- commandParserTransformByBotName mdParser
   case mess of
     Nothing -> return []
     Just (msg, cid, _, _) -> do
-      mEitherStrings <- lift $ mT $ runExceptT . markdownToImage <$> MP.mRunParserF mdParser msg
+      mEitherStrings <- lift $ mT $ runExceptT . markdownToImage <$> MP.mRunParserF mdParser' msg
       case mEitherStrings of
         Nothing -> return []
         Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]

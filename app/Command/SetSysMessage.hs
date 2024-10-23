@@ -19,7 +19,8 @@ import Control.Monad.Trans.ReaderState
 commandSetSysMessage :: BotCommand
 commandSetSysMessage = BotCommand System $ botT $ do
   ess@(msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  msys <- pureMaybe $ MP.mRunParserF sysMsgParser msg
+  sysMsgParser' <- lift $ commandParserTransformByBotName sysMsgParser
+  msys <- pureMaybe $ MP.mRunParserF sysMsgParser' msg
   other_data <- lift get
   let sd = savedData other_data
   --pureMaybe $ checkIfIsGroupNeedBeAllowedUsers sd (cid, uid)
