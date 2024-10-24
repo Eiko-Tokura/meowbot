@@ -9,23 +9,26 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import qualified MonParserF as MP
 
+import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
 commandHelp :: BotCommand
 commandHelp = BotCommand Help $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  helpText <- pureMaybe $ MP.mRunParserF helpParser msg
+  mbotName <- lift $ nameOfBot . botModules <$> get
+  helpParser' <- lift $ commandParserTransformByBotName $ helpParser mbotName
+  helpText <- pureMaybe $ MP.mRunParserF helpParser' msg
   return [baSendToChatId cid helpText]
   where
-    helpParser = do
+    helpParser botName = do
       MP.headCommand "help"
       MP.spaces0
       mParam <- MP.tryMaybe . mconcat $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
         Nothing  -> return . pack . concat $ 
-          [ "你好，这里是Eiko的喵喵~目前支持的命令："
+          [ "你好，这里是" ++ fromMaybe "Eiko的喵喵" botName ++ "~目前支持的命令："
           , concatMap (("\n:" ++ ) . fst) helpList
           , "\n可以使用 :help <command>如:help cat来查看详细命令的帮助。"
           ]
