@@ -56,7 +56,7 @@ commandRetract = BotCommand Retract $ botT $ do
           ]
         return [BARetractMsg mid]
     , do
-        boolToMaybe $ any (`isInfixOf` msg1) ["上号", "网抑云"]
+        boolToMaybe $ any (`isInfixOf` msg1) ["上号", "网抑云", "到点了"]
         boolToMaybe $ uid `elem` chinoBotIds
         return [BARetractMsg mid]
     ]

@@ -22,6 +22,7 @@ import System.Environment (getArgs)
 import Data.Maybe (listToMaybe)
 import Data.Text (unpack)
 import Data.Aeson (eitherDecode)
+import Data.Coerce (coerce)
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
 import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest)
@@ -78,9 +79,7 @@ main = do
       botModules = BotModules
         { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) commandIds
         , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) commandIds
-        , nameOfBot = case identityFlags of
-            [] -> Nothing
-            (UseName n) : _ -> Just n
+        , nameOfBot = coerce $ listToMaybe identityFlags
         , globalSysMsg = mGlobalSysMsg
         }
   if null runFlags
