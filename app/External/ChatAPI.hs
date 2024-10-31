@@ -125,15 +125,17 @@ displayResponse inp = let chos = choices inp in
     [] -> ""
     _ -> (unpack . content . message . head) chos
 
+readApiKeyFile = ExceptT . fmap (bimap ((concat ["Expect api key file \"", apiKeyFile, "\", while trying to read this file, the following error occured: "] ++) . show) (head . lines)) . try @SomeException $ readFile apiKeyFile
+
 simpleChat :: ChatParams -> String -> ExceptT String IO String
 simpleChat model prompt = do
-  apiKey <- ExceptT . fmap (bimap show (head . lines)) . try @SomeException $ readFile apiKeyFile
+  apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey model [promptMessage prompt]
   return $ displayResponse result
 
 messageChat :: ChatParams -> [Message] -> ExceptT String IO String
 messageChat params prevMsg = do
-  apiKey <- ExceptT . fmap (bimap show (head . lines)) . try @SomeException $ readFile apiKeyFile
+  apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey params prevMsg
   return $ turnResponseToMsg result
     where turnResponseToMsg res = let strRes = displayResponse res in strRes --Message "assistant" $ pack strRes
