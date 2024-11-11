@@ -103,7 +103,7 @@ generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
 type APIKey = String
 fetchChatCompletionResponse :: APIKey -> ChatParams -> [Message] -> IO (Either String ChatCompletionResponse)
 fetchChatCompletionResponse apiKey model msg = do
-  let customTimeout = 30 * 1000000 -- 30 seconds in microseconds
+  let customTimeout = 40 * 1000000 -- 40 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
   manager <- newManager customManagerSettings
   request <- parseRequest "https://api.openai.com/v1/chat/completions"
