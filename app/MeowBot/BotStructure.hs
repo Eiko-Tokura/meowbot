@@ -13,14 +13,14 @@ module MeowBot.BotStructure
   , MetaMessageItem(..)
   , showCQ, saveData, savedDataPath
   , gIncreaseAbsoluteId, increaseAbsoluteId
-  , updateAllDataByMessage, updateAllDataByResponse, insertMyResponse, generateMetaMessage
+  , updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, generateMetaMessage
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
   , emptyCQMessage
 
   , EssentialContent
   , cqmsgToEssentialContent
-  , getEssentialContent, getEssentialContentAtN, sendIOeToChatId, sendToChatId, baSendToChatId
+  , getEssentialContent, getEssentialContentAtN, sendIOeToChatId, sendToChatId, baSendToChatId, baSendToChatIdFull
   , getFirstTree, getNewMsg, getNewMsgN
   , mT
   ) where
@@ -41,6 +41,7 @@ import Data.Ord (comparing)
 import Data.List (maximumBy)
 import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=), withText)
 import Data.Aeson.Types (Parser, (.:?))
+import Data.Additional
 import GHC.Generics (Generic)
 import External.ChatAPI 
 import MonParserF (MetaMessage(..), cqmsg, Tree(..), flatten)
@@ -94,12 +95,16 @@ data BotModules = BotModules
 
 data OtherData = OtherData
   { message_number :: Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
-  , sent_messages :: [CQMessage]
-    -- In the future one can add course data.. etc
+  , sent_messages :: [CQMessage] -- ^ In the future one can add course data.. etc
   , savedData     :: SavedData
   , botModules    :: BotModules
+  , runningData   :: [AdditionalData] -- ^ additional data that is running, not saved.
   , aokana        :: [ScriptBlock]
   } deriving (Show)
+
+instance HasAdditionalData OtherData where
+  getAdditionalData = runningData
+  modifyAdditionalData f od = od {runningData = f $ runningData od}
 
 data SavedData = SavedData
   { chatSettings :: [(ChatId, ChatSetting)]
@@ -124,7 +129,11 @@ data CQMessage = CQMessage
   , echoR        :: Maybe Text
   , absoluteId   :: Maybe Int
   , metaMessage  :: Maybe MetaMessage
-  } deriving (Show, Read, Eq, Generic)
+  } deriving (Show, Eq, Generic)
+
+instance HasAdditionalData CQMessage where
+  getAdditionalData = maybe [] additionalData . metaMessage
+  modifyAdditionalData f cqmsg = cqmsg {metaMessage = modifyAdditionalData f <$> metaMessage cqmsg}
 
 data Sender = Sender
   { nickname :: Maybe Text
@@ -378,18 +387,26 @@ sendIOeToChatId (_, cid, _, mid) ioess = do
   ess <- lift $ runExceptT ioess
   case ess of
     Right str -> do
-      RST.modify $ insertMyResponse cid (generateMetaMessage str [MReplyTo mid])
+      RST.modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid (pack str) ]
     Left err -> return [ baSendToChatId cid (pack $ "喵~出错啦：" ++ err) ]
 
 -- | send message to a chat id, recording the message as reply.
 sendToChatId :: EssentialContent -> String -> OtherData -> ([BotAction], OtherData)
 sendToChatId (_, cid, _, mid) str other_data = 
-  ([baSendToChatId cid (pack str)], insertMyResponse cid (generateMetaMessage str [MReplyTo mid]) other_data )
+  ([baSendToChatId cid (pack str)], insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
+
+-- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.
+-- Also increase the message number (absolute id)
+baSendToChatIdFull :: Monad m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> String -> ReaderStateT r OtherData m [BotAction]
+baSendToChatIdFull cid mid adt items str = do
+  let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- pure mid ] ++ items)
+  RST.modify $ insertMyResponseHistory cid meta
+  return [ baSendToChatId cid (pack str) ]
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
-insertMyResponse :: ChatId -> MetaMessage -> OtherData -> OtherData
-insertMyResponse (GroupChat gid) meta other_data = 
+insertMyResponseHistory :: ChatId -> MetaMessage -> OtherData -> OtherData
+insertMyResponseHistory (GroupChat gid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
     my = emptyCQMessage 
       { eventType   = SelfMessage
@@ -399,7 +416,7 @@ insertMyResponse (GroupChat gid) meta other_data =
       , echoR       = Just $ pack $ show aid
       }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-insertMyResponse (PrivateChat uid) meta other_data = 
+insertMyResponseHistory (PrivateChat uid) meta other_data = 
   other' { sent_messages = my:sent_messages other_data } where 
     my = emptyCQMessage 
       { eventType   = SelfMessage
@@ -411,11 +428,12 @@ insertMyResponse (PrivateChat uid) meta other_data =
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
 
 data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MChatSetting ChatSetting
-generateMetaMessage :: String -> [MetaMessageItem] -> MetaMessage
-generateMetaMessage str items = MetaMessage
+generateMetaMessage :: String -> [AdditionalData] -> [MetaMessageItem] -> MetaMessage
+generateMetaMessage str adt items = MetaMessage
   { onlyMessage = str
   , cqcodes     = [cqcode | MCQCode cqcode <- items]
   , replyTo     = listToMaybe [mid | MReplyTo mid <- items]
   , withChatSetting = listToMaybe [set | MChatSetting set <- items]
+  , additionalData = adt
   }
 

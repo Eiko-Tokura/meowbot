@@ -59,6 +59,10 @@ commandRetract = BotCommand Retract $ botT $ do
         boolToMaybe $ any (`isInfixOf` msg1) ["上号", "网抑云", "到点了"]
         boolToMaybe $ uid `elem` chinoBotIds
         return [BARetractMsg mid]
+    , do
+        boolToMaybe $ uid `elem` asllIds
+        _ <- listToMaybe [ props | CQOther "image" props <- cqs ]
+        return [BARetractMsg mid]
     ]
     where chinoBotIds = [UserId 3287727775, UserId 3055323571, UserId 1714828270]
           asllIds     = [UserId 1102028091]

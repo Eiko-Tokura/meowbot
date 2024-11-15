@@ -96,8 +96,8 @@ commandAokana = BotCommand Aokana $ botT $ do
           case charPrompt of
             Nothing -> return ()
             Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt
-          modify $ insertMyResponse cid  -- this will make the message repliable, potentially much more fun!
-                       (generateMetaMessage simplifiedBlock (MReplyTo mid : maybeToList (MChatSetting . (`ChatSetting` Nothing) . Just <$> charPrompt)) ) 
+          modify $ insertMyResponseHistory cid  -- this will make the message repliable, potentially much more fun!
+                       (generateMetaMessage simplifiedBlock [] (MReplyTo mid : maybeToList (MChatSetting . (`ChatSetting` Nothing) . Just <$> charPrompt)) ) 
           return [ baSendToChatId cid $ T.pack simplifiedBlock
                  , baSendToChatId cid $ T.pack $ embedCQCode $ CQRecord $ voicePath cd voice
                  ]

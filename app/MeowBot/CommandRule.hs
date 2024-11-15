@@ -32,7 +32,7 @@ data CommandObject
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
 
-data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan
+data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll
   deriving (Show, Eq, Ord, Read, Enum, Bounded)
 
 safeCommandGroup :: CommandObject

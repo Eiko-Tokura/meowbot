@@ -22,8 +22,9 @@ module MonParserF
 import MeowBot.CQCode
 import External.ChatAPI (Message(..), ChatSetting(..))
 import Control.Monad (when)
-import Control.Applicative (liftA2)
+import Control.Applicative (liftA2, Alternative(empty, (<|>)))
 import Data.Maybe (listToMaybe, fromMaybe)
+import Data.Additional 
 import Data.Either(lefts, rights, fromRight)
 
 class (Functor f) => Parsable f where -- parsable functors would include [] and Tree
@@ -100,6 +101,12 @@ cup :: ParserF a b -> ParserF a b -> ParserF a b
 instance Semigroup (ParserF b a) where
   (<>) = cup
   {-# INLINE (<>) #-}
+
+instance Alternative (ParserF b) where
+  empty = zero
+  (<|>) = cup
+  {-# INLINE empty #-}
+  {-# INLINE (<|>) #-}
 
 instance Monoid (ParserF b a) where
   mempty = zero
@@ -369,13 +376,18 @@ cqcodeExceptFace = do
     "face"  -> zero
     str     -> cqother str 
   <* just ']'
-         
+
 data MetaMessage = MetaMessage 
   { onlyMessage :: String
   , cqcodes :: [CQCode]
   , replyTo :: Maybe Int
   , withChatSetting :: Maybe ChatSetting
-  } deriving (Show, Read, Eq)
+  , additionalData :: [AdditionalData]
+  } deriving (Show, Eq)
+
+instance HasAdditionalData MetaMessage where
+  getAdditionalData = additionalData
+  modifyAdditionalData f meta = meta { additionalData = f $ additionalData meta }
 
 eitherParse :: ParserF t a -> ParserF t b -> ParserF t (Either a b)
 eitherParse f g = do
@@ -407,4 +419,5 @@ cqmsg = do
     , cqcodes = lefts leither
     , replyTo = listToMaybe [id | CQReply id <- lefts leither] 
     , withChatSetting = Nothing
+    , additionalData = []
     }

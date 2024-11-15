@@ -11,6 +11,7 @@ import Command.Aokana
 import Command.Random (commandRandom)
 import Command.Retract
 import Command.Study
+import Command.Poll
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 
@@ -36,10 +37,10 @@ import GHC.Conc (forkIO)
 import Debug.Trace
 
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook]
+allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook]
+allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll]
 
 type RunningMode = [DebugFlag]
 data DebugFlag   = DebugJson | DebugCQMessage deriving (Eq, Show)
@@ -137,10 +138,10 @@ initialData mods = do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 [] msavedData mods <$> getAllScripts
+      AllData [] . OtherData 0 [] msavedData mods [] <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo" 
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) mods <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) mods [] <$> getAllScripts
   where 
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]

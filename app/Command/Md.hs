@@ -44,7 +44,7 @@ sendIOeToChatIdMd (_, cid, _, mid) ioess = do
   ess <- lift $ runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> do
-      modify $ insertMyResponse cid (generateMetaMessage str [MReplyTo mid])
+      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid . T.pack $ mdcq ]
     Left err -> do
       return [ baSendToChatId cid . T.pack . ("喵~出错啦：" ++ ) $ err ]

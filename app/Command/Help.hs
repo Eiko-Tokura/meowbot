@@ -4,6 +4,7 @@ module Command.Help where
 import Command
 import Command.Random (helpRandom)
 import Command.Study (helpStudy)
+import Command.Poll (helpPoll)
 import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
@@ -49,6 +50,7 @@ helpList =
   , ("aokana", ":aokana [flags/search items]\n 随机选取一段苍彼的语音对话！可用flags: -asuka, -misaki, -mashiro, -rika, -list. 搜索项和flags之间用空格分隔。搜索项也可以用英文引号括起来，这样会包含空格。搜索会在四种语言中进行。")
   , ("random", helpRandom)
   , ("study", helpStudy)
+  , ("poll", helpPoll)
   ]
   where replyHelp = "您可以回复我的消息以使用上下文。回复会以Tree的数据结构组织，您可以回复任何一个节点，但有长度限制。回复时可以指定:cat,:supercat,:mdcat等指令，不指定时默认使用:cat回复。"
 
