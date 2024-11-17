@@ -14,7 +14,7 @@ import Network.HTTP.Client
 import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Data.Aeson
 import Data.Bifunctor
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Maybe (fromMaybe)

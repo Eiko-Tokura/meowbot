@@ -60,9 +60,11 @@ data ChatId = GroupChat GroupId | PrivateChat UserId
 
 type Chat = [MP.Tree CQMessage]
 
+forestSizeForEachChat = 200
+
 type ChatRoom = (ChatId, Chat)
 
-type WholeChat = [ChatRoom] 
+type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 
 data BotAction
   = BASendPrivate
@@ -82,7 +84,7 @@ data AllData = AllData
 
 rseqWholeChat :: Strategy AllData
 rseqWholeChat (AllData wc od) = do
-  wc' <- rdeepseq wc
+  wc' <- evalList (evalTuple2 r0 rseq) wc
   od' <- rseq od
   return $ AllData wc' od'
 
@@ -318,7 +320,7 @@ updateListByFuncKeyElement (l:ls) past attachTo key element
   where (keyl, treel) = l 
 
 putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]
-putElementIntoForest attachTo element forest = take 200 $ 
+putElementIntoForest attachTo element forest = (`using` evalList rseq) $ take forestSizeForEachChat $ 
   case attachTo of
     Nothing -> Node element []:forest
     Just f -> let (before, rest) = break (any f . flattenTree) forest

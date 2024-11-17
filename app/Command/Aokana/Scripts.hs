@@ -2,7 +2,6 @@
 module Command.Aokana.Scripts where
 
 import MeowBot.Parser as MP
-import Data.List
 import Control.Monad
 import qualified Data.Text as T
 

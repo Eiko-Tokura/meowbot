@@ -18,6 +18,8 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
+import Debug.Trace
+
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
   (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
