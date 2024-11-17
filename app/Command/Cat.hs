@@ -55,7 +55,7 @@ catParser Nothing msys = do
   where
     parseCat = do
       MP.just ':' <|> MP.just '：'
-      md <- MP.tryBool $ MP.string "md"
+      md <- MP.optBool $ MP.string "md"
       modelStr <- MP.string "cat" <|> MP.string "supercat"
       MP.commandSeparator
       str <- MP.some MP.item
@@ -103,7 +103,7 @@ treeCatParser name msys mid = do
           Nothing -> MP.zero
     )
     MP.|+|
-    MP.some (do 
+    MP.many (do 
         umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
         amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
         let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg) 
