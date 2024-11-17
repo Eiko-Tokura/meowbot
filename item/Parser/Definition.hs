@@ -8,6 +8,7 @@ import Control.Monad.Item
 import Control.Monad
 import Control.Applicative
 import Data.Text (Text)
+import Data.Maybe
 import qualified Data.Text as T
 
 class Stream sb b | sb -> b where
@@ -100,11 +101,17 @@ instance (MonadIsZero m) => MonadTry (ParserT b m) where
   tryMaybe ma = ParserT $ tryMaybe $ runParserT ma
   {-# INLINE tryMaybe #-}
 
-type Parser b a = ParserT b Maybe a
+type Parser b a = ParserT b [] a
 
 runParser :: (Stream sb b) => Parser b a -> sb -> Maybe a
-runParser p = evalStateT $ runParserT p
+runParser p = listToMaybe . evalStateT (runParserT p)
 {-# INLINE runParser #-}
 
-{-# SPECIALIZE runParser :: Parser Char a -> Text -> Maybe a #-}
-{-# SPECIALIZE runParser :: Parser Char a -> [Char] -> Maybe a #-}
+runParserFull :: (Stream sb b) => Parser b a -> sb -> [a]
+runParserFull p = evalStateT (runParserT p)
+{-# INLINE runParserFull #-}
+
+{-# SPECIALIZE runParser     :: Parser Char a -> Text -> Maybe a #-}
+{-# SPECIALIZE runParser     :: Parser Char a -> [Char] -> Maybe a #-}
+{-# SPECIALIZE runParserFull :: Parser Char a -> Text -> [a] #-}
+{-# SPECIALIZE runParserFull :: Parser Char a -> [Char] -> [a] #-}

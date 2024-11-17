@@ -78,39 +78,39 @@ replyCatParser name msys = catParser name msys <|> ( do
 
 treeCatParser :: BotName -> ChatSetting -> Int -> Parser CQMessage [(ChatParams, Message)]
 treeCatParser name msys mid = do
-  elist <- 
-    ( do
-        firstUMsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage] ) -- will be dropped
-        firstAMsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-        case ( do
-                MP.runParser aokanaParser (extractMetaMessage firstUMsg)  -- the first user input should be an aokana command
-                meta <- metaMessage firstAMsg                              
-                return $ MP.withChatSetting meta -- there might be modified system message
-             ) of
-          Just msys' -> 
-            do
-              innerList <- MP.many
-                (do
-                  umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
-                  amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-                  let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False (chatSettingMaybeWrapper msys'), "") $ MP.runParser (catParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage umsg)
-                  return [ (params, Message { role = "user", content = T.pack metaUMsg})
-                         , (params, Message { role = "assistant", content = extractMetaMessage amsg})
-                         ]
-                )
-              let params = ChatParams GPT3 False (chatSettingMaybeWrapper msys')
-              return (msys', [(params, Message "assistant" $ extractMetaMessage firstAMsg)] : innerList)
-          Nothing -> MP.zero
-    )
-    MP.|+|
-    MP.many (do 
-        umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
-        amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-        let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg) 
-        return [ (params, Message { role = "user" , content = T.pack metaUMsg })
-               , (params, Message { role = "assistant", content = extractMetaMessage amsg})
-               ]
-      )
+  elist  <- Right <$> 
+    --   ( do
+    --     firstUMsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage] ) -- will be dropped
+    --     firstAMsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
+    --     case ( do
+    --             MP.runParser aokanaParser (extractMetaMessage firstUMsg)  -- the first user input should be an aokana command
+    --             meta <- metaMessage firstAMsg                              
+    --             return $ MP.withChatSetting meta -- there might be modified system message
+    --          ) of
+    --       Just msys' -> 
+    --         do
+    --           innerList <- MP.many
+    --             (do
+    --               umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
+    --               amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
+    --               let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False (chatSettingMaybeWrapper msys'), "") $ MP.runParser (catParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage umsg)
+    --               return [ (params, Message { role = "user", content = T.pack metaUMsg})
+    --                      , (params, Message { role = "assistant", content = extractMetaMessage amsg})
+    --                      ]
+    --             )
+    --           let params = ChatParams GPT3 False (chatSettingMaybeWrapper msys')
+    --           return (msys', [(params, Message "assistant" $ extractMetaMessage firstAMsg)] : innerList)
+    --       Nothing -> MP.zero
+    -- )
+    -- MP.|+|
+      MP.many (do 
+          umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
+          amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
+          let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg) 
+          return [ (params, Message { role = "user" , content = T.pack metaUMsg })
+                 , (params, Message { role = "assistant", content = extractMetaMessage amsg})
+                 ]
+        ) :: Parser CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
     
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of

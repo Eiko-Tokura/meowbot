@@ -50,11 +50,16 @@ instance Functor Tree where
 
 instance Stream (Tree a) a where
   uncons EmptyTree = []
+  uncons (Node a []) = [(a, EmptyTree)]
   uncons (Node a subTrees) = (a, ) <$> subTrees
   {-# INLINE uncons #-}
 
 flattenTree :: Tree a -> [a]
-flattenTree = concat . flatten
+flattenTree EmptyTree = []
+flattenTree (Node a children) = a : concatMap flattenTree children
+
+-- flattenTree :: Tree a -> [a]
+-- flattenTree = concat . flatten
 
 item :: (MonadItem i m) => m i
 item = getItem
