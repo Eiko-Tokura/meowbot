@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Command.SetSysMessage 
   (
     commandSetSysMessage
@@ -39,7 +39,7 @@ commandSetSysMessage = BotCommand System $ botT $ do
       ( do
         MP.headCommand "system"
         MP.commandSeparator
-        (MP.string "set" >> MP.commandSeparator >> Just <$> MP.some MP.item) <|> (MP.string "unset" >> return Nothing)
+        ($(MP.stringQ "set") >> MP.commandSeparator >> Just <$> MP.some MP.item) <|> ($(MP.stringQ "unset") >> return Nothing)
       ) |+| (MP.headCommand "temperature" >> MP.commandSeparator >> MP.positiveFloat)
 
 updateSysSetting :: Either (Maybe Message) Double -> ChatId -> [(ChatId, ChatSetting)] -> [(ChatId, ChatSetting)]

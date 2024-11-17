@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, BlockArguments, TypeApplications #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, BlockArguments, TypeApplications #-}
 module Command.Aokana where
 
 import MeowBot.BotStructure
@@ -46,14 +46,14 @@ aokanaParser = do
   MP.some $ foldr1 (<|>) $ (MP.commandSeparator >>) <$>
     [ queryCharacter
     , queryKeyword
-    , MP.string "-list" >> return List
+    , $(MP.stringQ "-list") >> return List
     ]
   where
     queryCharacter = foldr1 (<|>) 
-                [ MP.string "-asuka"   >> return (Character Asuka)
-                , MP.string "-misaki"  >> return (Character Misaki)
-                , MP.string "-mashiro" >> return (Character Mashiro)
-                , MP.string "-rika"    >> return (Character Rika)
+                [ $(MP.stringQ "-asuka")   >> return (Character Asuka)
+                , $(MP.stringQ "-misaki")  >> return (Character Misaki)
+                , $(MP.stringQ "-mashiro") >> return (Character Mashiro)
+                , $(MP.stringQ "-rika")    >> return (Character Rika)
                 ]
     queryKeyword = Keyword <$> MP.nonFlagWord'
 
@@ -117,10 +117,10 @@ getAllVoices = do
     aokanaVoiceFileParser :: FilePath -> Parser Char (AokanaCharacter, String, FilePath)
     aokanaVoiceFileParser vdir = do
       (characterStr, character) <- 
-                   (MP.string "asuka"   >> return ("asuka", Asuka))
-                <|> (MP.string "misaki"  >> return ("misaki", Misaki))
-                <|> (MP.string "mashiro" >> return ("mashiro", Mashiro))
-                <|> (MP.string "rika"    >> return ("rika", Rika))
+                    ($(MP.stringQ "asuka")   >> return ("asuka", Asuka))
+                <|> ($(MP.stringQ "misaki")  >> return ("misaki", Misaki))
+                <|> ($(MP.stringQ "mashiro") >> return ("mashiro", Mashiro))
+                <|> ($(MP.stringQ "rika")    >> return ("rika", Rika))
       void $ MP.just '_'
       voiceId <- MP.someTill (MP.just '.') MP.getItem
       extension <- MP.string voiceExtension

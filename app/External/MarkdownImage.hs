@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, OverloadedStrings #-}
 module External.MarkdownImage 
   ( markdownToImage
   , pdfToImage
@@ -55,7 +55,7 @@ pdfToImageWithPageNumber pdf = do
     return [ (readPageNumber . useRelPath . takeBaseName $ imagepath, pdfImageDirectory pdf </> imagepath) | imagepath <- imagepaths ]
   where pdfImageDirectory :: FilePathFor anyPathType File PDF -> FilePathFor Rel Directory Image
         pdfImageDirectory pdf = imageDir </> changeUsage (takeBaseName pdf)
-        readPageNumber = fromMaybe (error "page number un-readable") . runParser (string "page_" *> positiveInt <* string ".png")
+        readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stringQ "page_") *> positiveInt <* $(stringQ ".png"))
         imageDir = "images"
 
 pdfToImage :: FilePathFor anyRef File PDF -> ExceptT SomeException IO [FilePathFor Rel File Image] 

@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings, GADTs, TypeApplications #-}
+{-# LANGUAGE ScopedTypeVariables, TemplateHaskell, OverloadedStrings, GADTs, TypeApplications #-}
 module Command.Retract 
   ( commandRetract
   ) where
@@ -49,8 +49,8 @@ commandRetract = BotCommand Retract $ botT $ do
         boolToMaybe $ uid `elem` chinoBotIds
         listToMaybe . catMaybes $ 
           [ void $ runParser 
-            ( string "bid:" >> int @Integer >> 
-              spaceOrEnter  >> string "捡到来自" >> some item
+            ( $(stringQ "bid:") >> int @Integer >> 
+              spaceOrEnter  >> $(stringQ "捡到来自") >> some item
             ) msg
           , boolToMaybe ( "渣男" `T.isInfixOf` msg)
           ]

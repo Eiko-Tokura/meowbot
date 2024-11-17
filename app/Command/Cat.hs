@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, OverloadedStrings #-}
 module Command.Cat where
 
 import Command
@@ -57,8 +57,8 @@ catParser Nothing msys = do
   where
     parseCat = do
       MP.just ':' <|> MP.just '：'
-      md <- MP.optBool $ MP.string "md"
-      modelStr <- MP.string "cat" <|> MP.string "supercat"
+      md <- MP.optBool $ $(MP.stringQ "md")
+      modelStr <- $(MP.stringQ "cat") <|> $(MP.stringQ "supercat")
       MP.commandSeparator
       str <- MP.some MP.item
       let model = case modelStr of
@@ -66,7 +66,7 @@ catParser Nothing msys = do
                     _ -> GPT3
       return (ChatParams model md msys, str)
     parseMeowMeow = do
-      MP.string "喵喵"
+      $(MP.stringQ "喵喵")
       MP.commandSeparator2
       str <- MP.some MP.item
       return (ChatParams GPT3 False msys, str)

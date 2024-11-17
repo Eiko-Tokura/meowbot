@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeOperators, TypeApplications, DataKinds, FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings, TypeOperators, TypeApplications, DataKinds, TemplateHaskell, FlexibleContexts #-}
 module Command.Study
   ( commandStudy
   , commandBook
@@ -102,43 +102,43 @@ ePageNumber = (PageNumber <$> int) |+| (AbsolutePageNumber <$> (just '[' *> int 
 
 pageTypeP :: Parser Char PageType
 pageTypeP = foldr1 (<|>)
-  [ string "menu"     >> return Menu
-  , string "chapter"  >> return Chapter
-  , string "exercise" >> return Exercise
-  , string "cover"    >> return Cover
-  , string "foreword" >> return Foreword
+  [ $(stringQ "menu")     >> return Menu
+  , $(stringQ "chapter")  >> return Chapter
+  , $(stringQ "exercise") >> return Exercise
+  , $(stringQ "cover")    >> return Cover
+  , $(stringQ "foreword") >> return Foreword
   -- , MarkedAs <$> word
   ]
 
 studyParser :: Parser Char StudyQuery
 studyParser = headCommand "study" >> commandSeparator >> foldr1 (<|>)
-  [ string "search" >> 
+  [ $(stringQ "search") >> 
       SearchBook <$> many (commandSeparator >> (Keyword <$> word'))
-  , string "read" >> commandSeparator >> 
+  , $(stringQ "read") >> commandSeparator >> 
       ReadBook <$> word'
                <*> ( ((,) <$> (commandSeparator >> pageTypeP) 
                           <*> many (commandSeparator >> (just '+' *> (PageInsideType <$> positiveInt) |+| ePageNumber)))
                    |+| many (commandSeparator >> ePageNumber)
                    )
-  , string "info" >> commandSeparator >>
+  , $(stringQ "info") >> commandSeparator >>
       InfoEdit <$> word' 
                <*> (commandSeparator
-                   >> (string "set" <|> string "add" >> return Set)
-                   <|> (string "remove" >> return Remove)
-                   <|> (string "show"   >> return Show)
+                   >> ($(stringQ "set") <|> $(stringQ "add") >> return Set)
+                   <|> ($(stringQ "remove") >> return Remove)
+                   <|> ($(stringQ "show")   >> return Show)
                    )
                <*> (commandSeparator 
-                   >> (string "author" >> canBeEmpty (commandSeparator >> (Author <$> word')))
-                   <|> (string "offset" >> canBeEmpty (commandSeparator >> (Offset . PageNumberOffset <$> int)))
-                   <|> (string "tags"   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateBy0 commandSeparator (BookTag <$> word'))))
-                   <|> (string "pagetype" >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateBy0 commandSeparator ePageNumber
+                   >> ($(stringQ "author") >> canBeEmpty (commandSeparator >> (Author <$> word')))
+                   <|> ($(stringQ "offset") >> canBeEmpty (commandSeparator >> (Offset . PageNumberOffset <$> int)))
+                   <|> ($(stringQ "tags")   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateBy0 commandSeparator (BookTag <$> word'))))
+                   <|> ($(stringQ "pagetype") >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateBy0 commandSeparator ePageNumber
                           <*> canBeEmpty 
                               ( commandSeparator
-                              >> (string "menu"     >> return Menu)
-                              <|> (string "exercise" >> return Exercise)
-                              <|> (string "chapter"  >> return Chapter)
-                              <|> (string "cover"    >> return Cover)
-                              <|> (string "foreword" >> return Foreword )
+                              >> ($(stringQ "menu")     >> return Menu)
+                              <|> ($(stringQ "exercise") >> return Exercise)
+                              <|> ($(stringQ "chapter")  >> return Chapter)
+                              <|> ($(stringQ "cover")    >> return Cover)
+                              <|> ($(stringQ "foreword") >> return Foreword )
                               <|> (MarkedAs <$> word)
                               )
                           )
@@ -286,7 +286,7 @@ makeBookFromImageDir bookname bookinfo mpdfFile imgDir = do
     return $ BookPage (useAnyPath imgAbFp) absPageNum pageType
   return $ Book bookname (useAbsPath <$> mpdfAbFp) bookPages bookinfo
 
-readPageNumber = fromMaybe (error "page number un-readable") . runParser (string "page_" *> positiveInt <* canBeEmpty (string ".png"))
+readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stringQ "page_") *> positiveInt <* canBeEmpty $(stringQ ".png"))
 
 commandBook :: BotCommand
 commandBook = BotCommand BookMan $ botT $ do
@@ -329,10 +329,10 @@ commandBook = BotCommand BookMan $ botT $ do
   where
     bookParser :: Parser Char BookManagement
     bookParser = headCommand "book" >> commandSeparator >> foldr1 (<|>)
-      --[ string "upload" >> commandSeparator >> Upload <$> word <*> (commandSeparator >> AbsPath <$> word)
-      [ string "delete" >> commandSeparator >> Delete <$> word'
-      , string "localmake" >> commandSeparator >> LocalMakeBook <$> word' <*> (commandSeparator >> RelPath <$> word)
-      , string "localadd" >> commandSeparator >> LocalAddBook <$> word' <*> (commandSeparator >> RelPath <$> word)
+      --[ $(stringQ "upload") >> commandSeparator >> Upload <$> word <*> (commandSeparator >> AbsPath <$> word)
+      [ $(stringQ "delete") >> commandSeparator >> Delete <$> word'
+      , $(stringQ "localmake") >> commandSeparator >> LocalMakeBook <$> word' <*> (commandSeparator >> RelPath <$> word)
+      , $(stringQ "localadd") >> commandSeparator >> LocalAddBook <$> word' <*> (commandSeparator >> RelPath <$> word)
       ]
 
 bookStats :: Book -> Text

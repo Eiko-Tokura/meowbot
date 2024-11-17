@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Command.User where
 
 import Command
@@ -61,15 +62,15 @@ userParser =
   <|>
   (MP.headCommand "rule" >> MP.spaces >>
     RuleManagement <$> actionParser <*> (MP.spaces0 >> MP.canBeEmpty ruleParser))
-  where actionParser = foldr1 (<|>) [ MP.string "add" >> return Add
-                                   , MP.string "remove" >> return Remove
-                                   , MP.string "list" >> return List 
-                                   ]
-        userGroupParser = foldr1 (<|>) [ MP.string "admin" >> return Admin
-                                      , MP.string "allowed" >> return Allowed 
+  where actionParser = foldr1 (<|>) [ $(MP.stringQ "add") >> return Add
+                                    , $(MP.stringQ "remove") >> return Remove
+                                    , $(MP.stringQ "list") >> return List 
+                                    ]
+        userGroupParser = foldr1 (<|>) [ $(MP.stringQ "admin") >> return Admin
+                                      , $(MP.stringQ "allowed") >> return Allowed 
                                       , CustomUserGroup <$> MP.word
                                       ]
-        groupGroupParser = (MP.string "allowed" >> return AllowedGroup)
+        groupGroupParser = ($(MP.stringQ "allowed") >> return AllowedGroup)
                                    <|> ( CustomGroupGroup <$> MP.word )
         idParser = read <$> (do d <- MP.digits; if length d > 12 then MP.zero else return d)
         ruleParser = MP.parseByRead

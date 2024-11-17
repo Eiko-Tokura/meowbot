@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TypeApplications, DerivingVia, DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, TypeApplications, DerivingVia, DeriveAnyClass #-}
 module Command.Poll where
 
 import Command
@@ -56,18 +56,18 @@ pollParser = do
     , listPollParser
     ]
   where
-    createPollParser = string "create"  >> commandSeparator >> 
+    createPollParser = $(stringQ "create")  >> commandSeparator >> 
       CreatePoll 
         <$> 
-          ( (string "global" >> commandSeparator >> return PollGlobal)
+          ( ($(stringQ "global") >> commandSeparator >> return PollGlobal)
             <|> return PollPrivate
           ) 
         <*> word'
         <*> some (commandSeparator >> word')
-    voteParser       = string "vote"    >> commandSeparator >> Vote       <$> int <*> some (commandSeparator >> int)
-    proposeParser    = string "propose" >> commandSeparator >> Propose    <$> int <*> word'
-    viewPollParser   = string "view"    >> commandSeparator >> ViewPoll   <$> int
-    listPollParser   = string "list"    >> return ListPoll
+    voteParser       = $(stringQ "vote")    >> commandSeparator >> Vote       <$> int <*> some (commandSeparator >> int)
+    proposeParser    = $(stringQ "propose") >> commandSeparator >> Propose    <$> int <*> word'
+    viewPollParser   = $(stringQ "view")    >> commandSeparator >> ViewPoll   <$> int
+    listPollParser   = $(stringQ "list")    >> return ListPoll
 
 pollTreeParser :: Parser CQMessage PollCommand
 pollTreeParser = do
@@ -79,7 +79,7 @@ pollTreeParser = do
     replyPollParser pollId 
       = spaces0 
       >>    (Vote pollId <$> intercalateBy commandSeparator int) 
-        <|> (string "propose" >> commandSeparator >> Propose pollId <$> some' item)
+        <|> ($(stringQ "propose") >> commandSeparator >> Propose pollId <$> some' item)
 
 commandPoll :: BotCommand
 commandPoll = BotCommand Poll $ botT $ do

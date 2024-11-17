@@ -50,13 +50,15 @@ library item
                    , Parser.Text
                    , Control.Monad.Item
                    , Parser.Definition
+                   , Parser.Template
     
-    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=1000 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog
+    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all     -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=1000 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog 
 
     build-depends:    base  >=4.7 && <5
                     , mtl
                     , transformers
                     , text
+                    , template-haskell
 
     hs-source-dirs:   item
 
@@ -67,7 +69,7 @@ executable meowbot
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
 
-    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -fexpose-all-unfoldings -funfolding-use-threshold=1000 -finfo-table-map -fdistinct-constructor-tables -eventlog
+    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -fexpose-all-unfoldings -funfolding-use-threshold=1000 -finfo-table-map -fdistinct-constructor-tables -eventlog -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
 
     -- Modules included in this executable, other than Main.
     other-modules: Command

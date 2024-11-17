@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
-{-# LANGUAGE DerivingStrategies, OverloadedStrings, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, DeriveAnyClass #-}
+{-# LANGUAGE TemplateHaskell, DerivingStrategies, OverloadedStrings, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, DeriveAnyClass #-}
 module MeowBot.Parser 
   ( module Parser.Run
   , cqmsg
@@ -86,12 +86,12 @@ cqother str = CQOther str <$> intercalateBy (itemIn ",;")
 
 cqcodeExceptFace :: Parser Char CQCode
 cqcodeExceptFace = do
-  string "[CQ:"
+  $(stringQ "[CQ:")
   cqtype :: Text <- some' $ itemNotIn ","
   just ','
   case cqtype of
-    "at"    -> string "qq=" >> CQAt <$> int
-    "reply" -> string "id=" >> CQReply <$> int
+    "at"    -> $(stringQ "qq=") >> CQAt <$> int
+    "reply" -> $(stringQ "id=") >> CQReply <$> int
     "face"  -> zero
     str     -> cqother str
   <* just ']'

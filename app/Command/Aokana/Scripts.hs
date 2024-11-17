@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Command.Aokana.Scripts where
 
 import MeowBot.Parser as MP
@@ -68,7 +68,7 @@ lineShape p = maybe MP.zero return . MP.runParser p . unLine =<< MP.getItem
 comments :: Parser Line ()
 comments = lineShape $ do
   MP.spaces0
-  MP.string "//"
+  $(MP.stringQ "//")
   return ()
 
 simplify :: (MultiLangString -> (a, Text)) -> ScriptBlock -> Text
@@ -119,10 +119,10 @@ spacesOrTabular = some $ MP.itemIn [' ', '\t']
 
 associatedDataParser :: Parser Line AssociatedData
 associatedDataParser = lineShape $ foldr1 (<|>) 
-  [ string "voice0" >> Voice <$> (spacesOrTabular >> some' item)
-  , string "scene"  >> Scene <$> (spacesOrTabular >> some' item)
-  , string "bgm0"   >> BGM   <$> (spacesOrTabular >> some' item)
-  , string "title"  >> Title <$> (spacesOrTabular >> some' item)
+  [ $(stringQ "voice0") >> Voice <$> (spacesOrTabular >> some' item)
+  , $(stringQ "scene")  >> Scene <$> (spacesOrTabular >> some' item)
+  , $(stringQ "bgm0")   >> BGM   <$> (spacesOrTabular >> some' item)
+  , $(stringQ "title")  >> Title <$> (spacesOrTabular >> some' item)
   , Other . pack <$> itemsNotIn [specialSymbol]
   ]
 

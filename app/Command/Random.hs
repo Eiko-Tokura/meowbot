@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Command.Random where
 
 import Command
@@ -54,15 +54,15 @@ commandRandom = BotCommand Random $ botT $ do
           headCommand "random"
           commandSeparator
           foldr1 (<|>)
-            [ string "uniform"     >> commandSeparator >> (fmap Distribution . Uniform     <$> (float <* spaces) <*> float)
-            , string "normal"      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
-            , string "exponential" >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)
-            , string "poisson"     >> commandSeparator >> (     Distribution . Poisson     <$> positiveFloat)
-            , string "binomial"    >> commandSeparator >> (fmap Distribution . Binomial    <$> positiveInt <* spaces <*> positiveFloat)
-            , string "geometric"   >> commandSeparator >> (     Distribution . Geometric   <$> positiveFloat)
-            , string "beta"        >> commandSeparator >> (fmap Distribution . Beta        <$> (positiveFloat <* spaces) <*> positiveFloat)
-            , string "choose" >> (ChooseFromList <$> some (commandSeparator >> word))
-            , string "custom" >> (CustomDistribution <$> some ((,) <$> (commandSeparator >> positiveFloat) <*> (commandSeparator >> word)))
+            [ $(stringQ "uniform")     >> commandSeparator >> (fmap Distribution . Uniform     <$> (float <* spaces) <*> float)
+            , $(stringQ "normal")      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
+            , $(stringQ "exponential") >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)
+            , $(stringQ "poisson")     >> commandSeparator >> (     Distribution . Poisson     <$> positiveFloat)
+            , $(stringQ "binomial")    >> commandSeparator >> (fmap Distribution . Binomial    <$> positiveInt <* spaces <*> positiveFloat)
+            , $(stringQ "geometric")   >> commandSeparator >> (     Distribution . Geometric   <$> positiveFloat)
+            , $(stringQ "beta")        >> commandSeparator >> (fmap Distribution . Beta        <$> (positiveFloat <* spaces) <*> positiveFloat)
+            , $(stringQ "choose") >> (ChooseFromList <$> some (commandSeparator >> word))
+            , $(stringQ "custom") >> (CustomDistribution <$> some ((,) <$> (commandSeparator >> positiveFloat) <*> (commandSeparator >> word)))
             ]
       , do
           headCommand "choose"
