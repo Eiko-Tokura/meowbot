@@ -8,7 +8,8 @@ import Command.Poll (helpPoll)
 import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
-import qualified MonParserF as MP
+import qualified MeowBot.Parser as MP
+import Control.Applicative
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
@@ -19,13 +20,13 @@ commandHelp = BotCommand Help $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   mbotName <- lift $ nameOfBot . botModules <$> get
   helpParser' <- lift $ commandParserTransformByBotName $ helpParser mbotName
-  helpText <- pureMaybe $ MP.mRunParserF helpParser' msg
+  helpText <- pureMaybe $ MP.runParser helpParser' msg
   return [baSendToChatId cid helpText]
   where
     helpParser botName = do
       MP.headCommand "help"
       MP.spaces0
-      mParam <- MP.tryMaybe . mconcat $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
+      mParam <- MP.tryMaybe . foldr1 (<|>) $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
         Nothing  -> return . pack . concat $ 

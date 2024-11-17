@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:            0.2.0.0
+version:            0.3.0.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -44,11 +44,30 @@ maintainer:         754829466@qq.com
 -- Extra files to be distributed with the package, such as examples or a README.
 extra-source-files: CHANGELOG.md
 
+library item
+
+    exposed-modules: Parser.Run
+                   , Parser.Text
+                   , Control.Monad.Item
+                   , Parser.Definition
+    
+    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=1000 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog
+
+    build-depends:    base  >=4.7 && <5
+                    , mtl
+                    , transformers
+                    , text
+
+    hs-source-dirs:   item
+
+    default-language: GHC2021
+
+
 executable meowbot
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
 
-    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O -threaded -rtsopts -with-rtsopts=-N 
+    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -fexpose-all-unfoldings -funfolding-use-threshold=1000 -finfo-table-map -fdistinct-constructor-tables -eventlog
 
     -- Modules included in this executable, other than Main.
     other-modules: Command
@@ -72,9 +91,10 @@ executable meowbot
                  , MeowBot.CommandRule
                  , MeowBot.BotStructure
                  , MeowBot.Data.Book
+                 , MeowBot.Parser
+                 , MeowBot.MetaMessage
                  , Data.FilePathFor
                  , Data.Additional
-                 , MonParserF
                  , Probability.Foundation
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -91,16 +111,20 @@ executable meowbot
                , http-client-tls
                , http-types
                , containers
-	       , transformers
-	       , time
-	       , mtl
+               , transformers
+               , time
+               , mtl
+               , deepseq
+               , parallel
                , process
-	       --, persistent
+               --, persistent
                , directory
-	       , filepath
+               , filepath
                , random
-	       , lens
-	       , safe
+               , lens
+               , safe
+               , ghc-debug-stub
+               , item
                --, ChatAPI
     -- Directories containing source files.
     hs-source-dirs:   app

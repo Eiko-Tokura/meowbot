@@ -1,6 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE TypeApplications #-}
 
 module External.ChatAPI 
@@ -15,12 +15,14 @@ import Network.HTTP.Client.TLS (tlsManagerSettings)
 import Data.Aeson
 import Data.Bifunctor
 import Data.Text (Text, pack, unpack)
+import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Maybe (fromMaybe)
 import Data.ByteString (ByteString)
 import Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy.Internal as BLI
 import GHC.Generics (Generic)
+import Control.DeepSeq
 
 data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
 data ChatParams  = ChatParams 
@@ -32,7 +34,7 @@ data ChatParams  = ChatParams
 data ChatSetting = ChatSetting
   { systemMessage :: Maybe Message
   , systemTemp    :: Maybe Double
-  } deriving (Show, Eq, Read)
+  } deriving (Show, Eq, Read, Generic, NFData)
 
 chatSettingMaybeWrapper :: Maybe ChatSetting -> ChatSetting
 chatSettingMaybeWrapper = fromMaybe (ChatSetting Nothing Nothing)
@@ -54,7 +56,7 @@ data Choice = Choice
 data Message = Message
   { role    :: Text
   , content :: Text
-  } deriving (Generic, Eq, Ord, Read)
+  } deriving (Generic, Eq, Ord, Read, NFData)
 
 deriving instance Show Message
 
@@ -100,8 +102,8 @@ generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
           GPT3 -> "gpt-4o-mini"
           GPT4 -> "gpt-4o"
 
-type APIKey = String
-fetchChatCompletionResponse :: APIKey -> ChatParams -> [Message] -> IO (Either String ChatCompletionResponse)
+type APIKey = Text
+fetchChatCompletionResponse :: APIKey -> ChatParams -> [Message] -> IO (Either Text ChatCompletionResponse)
 fetchChatCompletionResponse apiKey model msg = do
   let customTimeout = 40 * 1000000 -- 40 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
@@ -113,27 +115,27 @@ fetchChatCompletionResponse apiKey model msg = do
         , requestBody = RequestBodyBS requestBody
         , requestHeaders =
             [ ("Content-Type", "application/json")
-            , ("Authorization", "Bearer " <> encodeUtf8 (pack apiKey))
+            , ("Authorization", "Bearer " <> encodeUtf8 apiKey)
             ]
         }
   result <- try (httpLbs request' manager) :: IO (Either SomeException (Response BLI.ByteString))
-  return $ bimap show responseBody result >>= eitherDecode
+  return $ bimap (T.pack . show) responseBody result >>= first T.pack . eitherDecode
 
-displayResponse :: ChatCompletionResponse -> String
+displayResponse :: ChatCompletionResponse -> Text
 displayResponse inp = let chos = choices inp in
   case chos of
     [] -> ""
-    _ -> (unpack . content . message . head) chos
+    _ -> (content . message . head) chos
 
-readApiKeyFile = ExceptT . fmap (bimap ((concat ["Expect api key file \"", apiKeyFile, "\", while trying to read this file, the following error occured: "] ++) . show) (head . lines)) . try @SomeException $ readFile apiKeyFile
+readApiKeyFile = ExceptT . fmap (bimap ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) (T.pack . head . lines)) . try @SomeException $ readFile apiKeyFile
 
-simpleChat :: ChatParams -> String -> ExceptT String IO String
+simpleChat :: ChatParams -> String -> ExceptT Text IO Text
 simpleChat model prompt = do
   apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey model [promptMessage prompt]
   return $ displayResponse result
 
-messageChat :: ChatParams -> [Message] -> ExceptT String IO String
+messageChat :: ChatParams -> [Message] -> ExceptT Text IO Text
 messageChat params prevMsg = do
   apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey params prevMsg

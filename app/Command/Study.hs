@@ -22,9 +22,7 @@ import Control.Monad.Trans.ReaderState
 import Data.Maybe (listToMaybe, fromMaybe, catMaybes, mapMaybe)
 import Data.List
 import Data.Coerce
-import Data.Bifunctor
 import Data.FilePathFor
-import Data.Char (toLower)
 import qualified Data.Text as T
 import Safe (atMay)
 
@@ -32,15 +30,9 @@ import Command
 import MeowBot.BotStructure
 import MeowBot.CQCode
 import MeowBot.Data.Book
-import MonParserF as MP
+import MeowBot.Parser as MP
 import Probability.Foundation (uniformElemS)
 import External.MarkdownImage
-
-import Debug.Trace
-
-traceWith f a = trace (f a) a
-
---import Control
 
 -- we want to implement the following functions, implement according to the order below:
 --
@@ -85,13 +77,13 @@ data BookManagement
 data Action = Set | Remove | Show deriving Show
 
 data BookInfoType 
-  = Author String
+  = Author Text
   | Offset PageNumberOffset 
   | Tags [BookTag] 
   | PageTypeInfo [PageNumber <+> AbsolutePageNumber] (Maybe PageType)
   deriving Show
 
-newtype SearchQuery = Keyword String deriving Show
+newtype SearchQuery = Keyword Text deriving Show
 
 helpStudy :: T.Text
 helpStudy = T.unlines
@@ -105,11 +97,11 @@ helpStudy = T.unlines
   , "pageType : menu/content/exercise/cover/foreword/<any string>"
   ]
 
-ePageNumber :: ParserF Char (Either PageNumber AbsolutePageNumber)
-ePageNumber = (PageNumber <$> int) <+> (AbsolutePageNumber <$> (just '[' *> int <* just ']'))
+ePageNumber :: Parser Char (Either PageNumber AbsolutePageNumber)
+ePageNumber = (PageNumber <$> int) |+| (AbsolutePageNumber <$> (just '[' *> int <* just ']'))
 
-pageTypeP :: ParserF Char PageType
-pageTypeP = mconcat
+pageTypeP :: Parser Char PageType
+pageTypeP = foldr1 (<|>)
   [ string "menu"     >> return Menu
   , string "chapter"  >> return Chapter
   , string "exercise" >> return Exercise
@@ -118,36 +110,36 @@ pageTypeP = mconcat
   -- , MarkedAs <$> word
   ]
 
-studyParser :: ParserF Char StudyQuery
-studyParser = headCommand "study" >> commandSeparator >> mconcat
+studyParser :: Parser Char StudyQuery
+studyParser = headCommand "study" >> commandSeparator >> foldr1 (<|>)
   [ string "search" >> 
-      SearchBook <$> many0 (commandSeparator >> (Keyword <$> word))
+      SearchBook <$> many (commandSeparator >> (Keyword <$> word'))
   , string "read" >> commandSeparator >> 
-      ReadBook <$> word 
+      ReadBook <$> word'
                <*> ( ((,) <$> (commandSeparator >> pageTypeP) 
-                          <*> many0 (commandSeparator >> (just '+' *> (PageInsideType <$> positiveInt) <+> ePageNumber)))
-                   <+> many0 (commandSeparator >> ePageNumber)
+                          <*> many (commandSeparator >> (just '+' *> (PageInsideType <$> positiveInt) |+| ePageNumber)))
+                   |+| many (commandSeparator >> ePageNumber)
                    )
   , string "info" >> commandSeparator >>
-      InfoEdit <$> word 
+      InfoEdit <$> word' 
                <*> (commandSeparator
-                   >> (string "set" <> string "add" >> return Set)
-                   <> (string "remove" >> return Remove)
-                   <> (string "show"   >> return Show)
+                   >> (string "set" <|> string "add" >> return Set)
+                   <|> (string "remove" >> return Remove)
+                   <|> (string "show"   >> return Show)
                    )
                <*> (commandSeparator 
-                   >> (string "author" >> canBeEmpty (commandSeparator >> (Author <$> word)))
-                   <> (string "offset" >> canBeEmpty (commandSeparator >> (Offset . PageNumberOffset <$> int)))
-                   <> (string "tags"   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateP0 commandSeparator (BookTag <$> word))))
-                   <> (string "pagetype" >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateP0 commandSeparator ePageNumber
+                   >> (string "author" >> canBeEmpty (commandSeparator >> (Author <$> word')))
+                   <|> (string "offset" >> canBeEmpty (commandSeparator >> (Offset . PageNumberOffset <$> int)))
+                   <|> (string "tags"   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateBy0 commandSeparator (BookTag <$> word'))))
+                   <|> (string "pagetype" >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateBy0 commandSeparator ePageNumber
                           <*> canBeEmpty 
                               ( commandSeparator
                               >> (string "menu"     >> return Menu)
-                              <> (string "exercise" >> return Exercise)
-                              <> (string "chapter"  >> return Chapter)
-                              <> (string "cover"    >> return Cover)
-                              <> (string "foreword" >> return Foreword )
-                              <> (MarkedAs <$> word)
+                              <|> (string "exercise" >> return Exercise)
+                              <|> (string "chapter"  >> return Chapter)
+                              <|> (string "cover"    >> return Cover)
+                              <|> (string "foreword" >> return Foreword )
+                              <|> (MarkedAs <$> word)
                               )
                           )
                       )
@@ -161,16 +153,16 @@ commandStudy :: BotCommand
 commandStudy = BotCommand Study $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   studyParser' <- lift $ commandParserTransformByBotName studyParser
-  query <- pureMaybe $ MP.mRunParserF studyParser' msg
+  query <- pureMaybe $ MP.runParser studyParser' msg
   other_data <- lift get
   let allBooks = books $ savedData other_data
   case query of
     SearchBook searchQs     -> 
       let searchResult = searchBooks searchQs allBooks
-      in return [ baSendToChatId cid $ T.pack $ intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
+      in return [ baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
 
     ReadBook bookname (Right pages) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           absPageNumbersToView = map (offsetPageNumber offset `either` id) pages  :: [AbsolutePageNumber]
           pagesToView = [ page | page <- book_pages match, page_absoluteNumber page `elem` absPageNumbersToView ]
@@ -178,27 +170,27 @@ commandStudy = BotCommand Study $ botT $ do
         randomPage <- uniformElemS $ book_pages match
         let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
         return 
-          [ baSendToChatId cid $ T.pack $ intercalate "\n"
+          [ baSendToChatId cid $ T.intercalate "\n"
             [ book_name match
-            , show (coerce @_ @Int $ reverseOffsetPageNumber offset (page_absoluteNumber randomPage)) ++ ", " ++ show (coerce @_ @Int $ page_absoluteNumber randomPage) ++ "/" ++ show (length $ book_pages match)
-            , embedCQCode $ CQImage $ page_imagePath randomPage
+            , tshow (coerce @_ @Int $ reverseOffsetPageNumber offset (page_absoluteNumber randomPage)) <> ", " <> tshow (coerce @_ @Int $ page_absoluteNumber randomPage) <> "/" <> tshow (length $ book_pages match)
+            , embedCQCode $ CQImage $ T.pack $ page_imagePath randomPage
             ]
           ]
       else 
-        return [ baSendToChatId cid $ T.pack $ concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) (traceWith show pagesToView) ]
+        return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . pack . page_imagePath) pagesToView ]
 
     ReadBook bookname (Left (pageType, pages')) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           pagesOfGivenType = [ page | page <- book_pages match, page_type page == Just pageType ]
           absPageNumbersToView = 
             if null pages' then map page_absoluteNumber pagesOfGivenType -- if no pages are given, view all pages of the given type
             else mapMaybe ((fmap page_absoluteNumber . atMay pagesOfGivenType . coerce) `either` ((Just . offsetPageNumber offset) `either` Just)) pages'  :: [AbsolutePageNumber]
           pagesToView = [ page | page <- book_pages match, page_absoluteNumber page `elem` absPageNumbersToView ]
-      return [ baSendToChatId cid $ T.pack $ concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) pagesToView ]
+      return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . pack . page_imagePath) pagesToView ]
 
     InfoEdit bookname Set (Just infoType) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
       let newInfo = case infoType of
             Author author -> (book_info match) { bookInfo_author = Just author }
@@ -218,7 +210,7 @@ commandStudy = BotCommand Study $ botT $ do
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Remove (Just infoType) -> do -- removing some information
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
       let newInfo = case infoType of
             Author _ -> (book_info match) { bookInfo_author = Nothing }
@@ -242,16 +234,16 @@ commandStudy = BotCommand Study $ botT $ do
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Show (Just infoType) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let info = case infoType of
             Author _ -> bookInfo_author $ book_info match
-            Offset _ -> Just $ show $ bookInfo_pageNumberOffset $ book_info match
-            Tags _   -> Just $ show $ bookInfo_tags $ book_info match
-            PageTypeInfo pages _ -> Just $ intercalate "\n" $ [ show (page_absoluteNumber page, page_type page) | page <- book_pages match, page_absoluteNumber page `elem` map (either (offsetPageNumber $ fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match) id) pages ]
+            Offset _ -> Just $ tshow $ bookInfo_pageNumberOffset $ book_info match
+            Tags _   -> Just $ tshow $ bookInfo_tags $ book_info match
+            PageTypeInfo pages _ -> Just $ T.intercalate "\n" $ [ tshow (page_absoluteNumber page, page_type page) | page <- book_pages match, page_absoluteNumber page `elem` map (either (offsetPageNumber $ fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match) id) pages ]
       return [ baSendToChatId cid $ T.pack $ show info ]
 
     InfoEdit bookname Show Nothing -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `isInfixOf` book_name book ]
+      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       return [ baSendToChatId cid $ T.pack $ show $ book_info match ]
     _ -> return [ baSendToChatId cid "o.o?" ]
 
@@ -259,17 +251,17 @@ searchBooks :: [SearchQuery] -> [Book] -> [Book]
 searchBooks sq books = 
   [ book | book <- books
          , let bookinfo = book_info book
-         , all (\(Keyword kw) -> any ((map toLower kw `isInfixOf`) . map toLower) $ catMaybes
+         , all (\(Keyword kw) -> any ((T.toLower kw `T.isInfixOf`) . T.toLower) $ catMaybes
                   [ bookInfo_author bookinfo ]
                   ++ [ book_name book ]
                   ++ ( useBookTag <$> bookInfo_tags bookinfo )
                ) sq
   ]
 
-simplifiedListing :: Book -> String
-simplifiedListing book = unwords $ catMaybes
+simplifiedListing :: Book -> Text
+simplifiedListing book = T.unwords $ catMaybes
      [ Just $ book_name book 
-     , (++ ")") . ("(" ++ ) <$> bookInfo_author (book_info book)
+     , (<> ")") . ("(" <> ) <$> bookInfo_author (book_info book)
      ]
 
 makeBook :: BookName -> BookInfo -> FilePathFor anyPathType File PDF -> ExceptT SomeException IO Book
@@ -294,12 +286,12 @@ makeBookFromImageDir bookname bookinfo mpdfFile imgDir = do
     return $ BookPage (useAnyPath imgAbFp) absPageNum pageType
   return $ Book bookname (useAbsPath <$> mpdfAbFp) bookPages bookinfo
 
-readPageNumber = fromMaybe (error "page number un-readable") . mRunParserF (string "page_" *> positiveInt <* canBeEmpty (string ".png"))
+readPageNumber = fromMaybe (error "page number un-readable") . runParser (string "page_" *> positiveInt <* canBeEmpty (string ".png"))
 
 commandBook :: BotCommand
 commandBook = BotCommand BookMan $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
-  query <- pureMaybe $ MP.mRunParserF bookParser msg
+  query <- pureMaybe $ MP.runParser bookParser msg
   other_data <- lift get
   case query of
     Upload bookname pdf -> do
@@ -315,38 +307,38 @@ commandBook = BotCommand BookMan $ botT $ do
     Delete bookname -> do
       let newBooks = filter ((/= bookname) . book_name) $ books (savedData other_data)
       lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
-      return [ baSendToChatId cid $ T.pack "全部忘掉啦owo!" ]
+      return [ baSendToChatId cid "全部忘掉啦owo!" ]
     LocalMakeBook bookname pdf -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
       book <- lift . lift $ runExceptT $ makeBook bookname bookinfo pdf
       case book of
-        Left err -> return [ baSendToChatId cid $ T.pack $ "制作书书的时候出错了o.o\n" ++ show err ]
+        Left err -> return [ baSendToChatId cid $ "制作书书的时候出错了o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
           lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
-          return [ baSendToChatId cid $ T.pack $ "书书制作好啦owo\n" ++ bookStats book ]
+          return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
     LocalAddBook bookname imagesDir -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
       book <- lift . lift $ runExceptT $ makeBookFromImageDir bookname bookinfo Nothing imagesDir
       case book of
-        Left err -> return [ baSendToChatId cid $ T.pack $ "制作书书的时候遇到了麻烦o.o\n" ++ show err ]
+        Left err -> return [ baSendToChatId cid $ "制作书书的时候遇到了麻烦o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
           lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
-          return [ baSendToChatId cid $ T.pack $ "书书制作好啦owo\n" ++ bookStats book ]
+          return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
   where
-    bookParser :: ParserF Char BookManagement
-    bookParser = headCommand "book" >> commandSeparator >> mconcat
+    bookParser :: Parser Char BookManagement
+    bookParser = headCommand "book" >> commandSeparator >> foldr1 (<|>)
       --[ string "upload" >> commandSeparator >> Upload <$> word <*> (commandSeparator >> AbsPath <$> word)
-      [ string "delete" >> commandSeparator >> Delete <$> word
-      , string "localmake" >> commandSeparator >> LocalMakeBook <$> word <*> (commandSeparator >> RelPath <$> word)
-      , string "localadd" >> commandSeparator >> LocalAddBook <$> word <*> (commandSeparator >> RelPath <$> word)
+      [ string "delete" >> commandSeparator >> Delete <$> word'
+      , string "localmake" >> commandSeparator >> LocalMakeBook <$> word' <*> (commandSeparator >> RelPath <$> word)
+      , string "localadd" >> commandSeparator >> LocalAddBook <$> word' <*> (commandSeparator >> RelPath <$> word)
       ]
 
-bookStats :: Book -> String
-bookStats book = intercalate "\n"
+bookStats :: Book -> Text
+bookStats book = T.intercalate "\n"
   [ book_name book
-  , "作者：" ++ fromMaybe "Nothing" (bookInfo_author $ book_info book)
-  , "页数：" ++ show (length $ book_pages book)
-  , "标签：" ++ show (bookInfo_tags $ book_info book)
+  , "作者：" <> fromMaybe "Nothing" (bookInfo_author $ book_info book)
+  , "页数：" <> tshow (length $ book_pages book)
+  , "标签：" <> tshow (bookInfo_tags $ book_info book)
   ]

@@ -1,11 +1,13 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Command.Aokana.Scripts where
 
-import MonParserF as MP
+import MeowBot.Parser as MP
 import Data.List
 import Control.Monad
+import qualified Data.Text as T
 
 -- read and parse scripts
-newtype Speaker = Speaker String deriving (Show, Eq)
+newtype Speaker = Speaker Text deriving (Show, Eq)
 
 data AokanaCharacter
      = Asuka
@@ -15,32 +17,32 @@ data AokanaCharacter
   deriving (Show, Eq)
 
 data AokanaQuery
-  = Keyword String
+  = Keyword Text
   | Character AokanaCharacter
   | List
   deriving (Show, Eq)
 
 data MultiLangString = MultiLangString
-  { en :: (Maybe Speaker, String) -- ^ English
-  , jp :: (Maybe Speaker, String) -- ^ Japanese
-  , zh :: (Maybe Speaker, String) -- ^ Chinese
-  , tr :: (Maybe Speaker, String) -- ^ Traditional Chinese
+  { en :: (Maybe Speaker, Text) -- ^ English
+  , jp :: (Maybe Speaker, Text) -- ^ Japanese
+  , zh :: (Maybe Speaker, Text) -- ^ Chinese
+  , tr :: (Maybe Speaker, Text) -- ^ Traditional Chinese
   } deriving (Show, Eq)
 
-getMultiLangString :: MultiLangString -> Maybe String -- concat all the strings
+getMultiLangString :: MultiLangString -> Maybe Text -- concat all the strings
 getMultiLangString (MultiLangString (_, en) (_, jp) (_, zh) (_, tr)) = 
   let strs = [en, jp, zh, tr]
-  in case filter (not . null) strs of
+  in case filter (not . T.null) strs of
     [] -> Nothing
-    xs -> Just $ intercalate "\n" xs
+    xs -> Just $ T.intercalate "\n" xs
 
 data AssociatedData
-  = Voice String
-  | Scene String
-  | BGM   String
-  | Title String
-  | Other String
-  | Episode String
+  = Voice Text
+  | Scene Text
+  | BGM   Text
+  | Title Text
+  | Other Text
+  | Episode Text
   deriving (Show, Eq)
 
 data ScriptBlock = ScriptBlock
@@ -61,33 +63,33 @@ lines' = map Line . lines
 unlines' :: [Line] -> String
 unlines' = unlines . map unLine
 
-lineShape :: ParserF Char a -> ParserF Line a
-lineShape p = maybe MP.zero return . MP.mRunParserF p . unLine =<< MP.item
+lineShape :: Parser Char a -> Parser Line a
+lineShape p = maybe MP.zero return . MP.runParser p . unLine =<< MP.getItem
 
-comments :: ParserF Line ()
+comments :: Parser Line ()
 comments = lineShape $ do
   MP.spaces0
   MP.string "//"
   return ()
 
-simplify :: (MultiLangString -> (a, String)) -> ScriptBlock -> String
+simplify :: (MultiLangString -> (a, Text)) -> ScriptBlock -> Text
 simplify f block = maybe "" (snd . f) $ scriptContent block
 
-emptyLine :: ParserF Line ()
+emptyLine :: Parser Line ()
 emptyLine = lineShape $ do
   MP.spaces0
   MP.end
 
 paragraphToScript :: String -> Maybe [ScriptBlock]
-paragraphToScript = MP.mRunParserF parseSingleScriptFile . lines'
+paragraphToScript = MP.runParser parseSingleScriptFile . lines'
 
-parseSingleScriptFile :: ParserF Line [ScriptBlock]
-parseSingleScriptFile = MP.many0 contigousBlock
+parseSingleScriptFile :: Parser Line [ScriptBlock]
+parseSingleScriptFile = MP.some contigousBlock
 
-contigousBlock :: ParserF Line ScriptBlock
+contigousBlock :: Parser Line ScriptBlock
 contigousBlock = do
-  many0 (comments <> emptyLine)
-  associatedData <- MP.many associatedDataParser 
+  some (comments <|> emptyLine)
+  associatedData <- MP.some associatedDataParser 
   multiLangString <- MP.tryMaybe multiLangStringParser
   let mchar = determineCharacter associatedData multiLangString
   return $ ScriptBlock associatedData multiLangString mchar
@@ -99,7 +101,7 @@ contigousBlock = do
       let voiceStrs = [str | Voice str <- asds]
       if null voiceStrs
       then case en mls of
-        (Just (Speaker str), _) -> case words str of
+        (Just (Speaker str), _) -> case T.words str of
           "Asuka"   : _ -> Just Asuka
           "Misaki"  : _ -> Just Misaki
           "Mashiro" : _ -> Just Mashiro
@@ -107,22 +109,22 @@ contigousBlock = do
           _ -> Nothing
         _ -> Nothing
       else 
-        if "ASUKA"        `isPrefixOf` head voiceStrs then Just Asuka
-        else if "MISAKI"  `isPrefixOf` head voiceStrs then Just Misaki
-        else if "MASHIRO" `isPrefixOf` head voiceStrs then Just Mashiro
-        else if "RIKA"    `isPrefixOf` head voiceStrs then Just Rika
+        if "ASUKA"        `T.isPrefixOf` head voiceStrs then Just Asuka
+        else if "MISAKI"  `T.isPrefixOf` head voiceStrs then Just Misaki
+        else if "MASHIRO" `T.isPrefixOf` head voiceStrs then Just Mashiro
+        else if "RIKA"    `T.isPrefixOf` head voiceStrs then Just Rika
         else Nothing
 
-spacesOrTabular :: ParserF Char String
-spacesOrTabular = MP.itemsIn [' ', '\t']
+spacesOrTabular :: Parser Char String
+spacesOrTabular = some $ MP.itemIn [' ', '\t']
 
-associatedDataParser :: ParserF Line AssociatedData
-associatedDataParser = lineShape $ foldr1 (<>) 
-  [ string "voice0" >> Voice <$> (spacesOrTabular >> many item)
-  , string "scene"  >> Scene <$> (spacesOrTabular >> many item)
-  , string "bgm0"   >> BGM   <$> (spacesOrTabular >> many item)
-  , string "title"  >> Title <$> (spacesOrTabular >> many item)
-  , Other <$> itemsNotIn [specialSymbol]
+associatedDataParser :: Parser Line AssociatedData
+associatedDataParser = lineShape $ foldr1 (<|>) 
+  [ string "voice0" >> Voice <$> (spacesOrTabular >> some' item)
+  , string "scene"  >> Scene <$> (spacesOrTabular >> some' item)
+  , string "bgm0"   >> BGM   <$> (spacesOrTabular >> some' item)
+  , string "title"  >> Title <$> (spacesOrTabular >> some' item)
+  , Other . pack <$> itemsNotIn [specialSymbol]
   ]
 
 specialSymbol :: Char
@@ -131,17 +133,17 @@ specialSymbol = '␂'  -- this is a special symbol that marks the start of every
 speakerBrackets = ('【', '】')
 contentBrackets = ('「', '」')
 
-multiLangStringParser :: ParserF Line MultiLangString
+multiLangStringParser :: Parser Line MultiLangString
 multiLangStringParser = lineShape $ MultiLangString
   <$> singleLangParser
   <*> singleLangParser
   <*> singleLangParser
   <*> singleLangParser
 
-singleLangParser :: ParserF Char (Maybe Speaker, String)
+singleLangParser :: Parser Char (Maybe Speaker, Text)
 singleLangParser = do
   MP.just specialSymbol
   name <- tryMaybe $ insideBrackets speakerBrackets <* MP.just '：'
-  str <- insideBrackets contentBrackets <> MP.itemsNotIn [specialSymbol]
-  return (Speaker <$> name, str)
+  str <- insideBrackets contentBrackets <|> MP.itemsNotIn [specialSymbol]
+  return (Speaker . T.pack <$> name, T.pack str)
 

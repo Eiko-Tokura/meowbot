@@ -1,8 +1,8 @@
 module Command.User where
 
 import Command
-import MonParserF (ParserF(..))
-import qualified MonParserF as MP
+import MeowBot.Parser (Parser, (<|>))
+import qualified MeowBot.Parser as MP
 import Control.Monad.IOe
 import MeowBot.BotStructure
 import MeowBot.CommandRule
@@ -23,7 +23,7 @@ commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   userParser' <- lift $ commandParserTransformByBotName userParser
-  um <- pureMaybe $ MP.mRunParserF userParser' msg
+  um <- pureMaybe $ MP.runParser userParser' msg
   other <- lift get
   let sd = savedData other
   let (actions, sd') = case um of
@@ -51,27 +51,26 @@ commandUser = BotCommand User $ botT $ do
           RuleManagement List _                -> "规则列表：" ++ "\n[ " ++ intercalate "\n, " (show <$> commandRules (savedData other_data)) ++ "\n]"
           _ -> "user_id / group_id parameter cannot be empty o.o"
 
-userParser :: ParserF Char UserManagement
+userParser :: Parser Char UserManagement
 userParser = 
   (MP.headCommand "user" >> MP.spaces >>
     UserManagement <$> actionParser <*> (MP.spaces *> userGroupParser) <*> (MP.spaces0 >> MP.canBeEmpty (UserId <$> idParser)))
-  <>
+  <|>
   (MP.headCommand "group" >> MP.spaces >>
     GroupManagement <$> actionParser <*> (MP.spaces *> groupGroupParser) <*> (MP.spaces0 >> MP.canBeEmpty (GroupId <$> idParser)))
-  <>
+  <|>
   (MP.headCommand "rule" >> MP.spaces >>
     RuleManagement <$> actionParser <*> (MP.spaces0 >> MP.canBeEmpty ruleParser))
-  where actionParser = foldr1 (<>) [ MP.string "add" >> return Add
+  where actionParser = foldr1 (<|>) [ MP.string "add" >> return Add
                                    , MP.string "remove" >> return Remove
                                    , MP.string "list" >> return List 
                                    ]
-        userGroupParser = foldr1 (<>) [ MP.string "admin" >> return Admin
+        userGroupParser = foldr1 (<|>) [ MP.string "admin" >> return Admin
                                       , MP.string "allowed" >> return Allowed 
                                       , CustomUserGroup <$> MP.word
                                       ]
-        groupGroupParser = mconcat [ MP.string "allowed" >> return AllowedGroup
-                                   , CustomGroupGroup <$> MP.word 
-                                   ]
+        groupGroupParser = (MP.string "allowed" >> return AllowedGroup)
+                                   <|> ( CustomGroupGroup <$> MP.word )
         idParser = read <$> (do d <- MP.digits; if length d > 12 then MP.zero else return d)
         ruleParser = MP.parseByRead
 

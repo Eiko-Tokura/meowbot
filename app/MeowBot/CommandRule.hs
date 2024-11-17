@@ -2,9 +2,10 @@
 module MeowBot.CommandRule where
 
 import Data.Aeson
+import Control.DeepSeq
 
-newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num) via Int
-newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num) via Int
+newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
+newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 
 data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String deriving (Show, Eq, Ord, Read)
 data GroupGroup = AllowedGroup | CustomGroupGroup String deriving (Show, Eq, Ord, Read)

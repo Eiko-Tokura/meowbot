@@ -6,10 +6,10 @@ module Command.Retract
 import Command
 import MeowBot.BotStructure
 import MeowBot.CQCode
-import MonParserF as MP
+import MeowBot.Parser as MP
 
-import Data.List
 import Data.Maybe
+import qualified Data.Text as T
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
@@ -26,13 +26,13 @@ import Control.Monad.Trans.ReaderState
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> ask)
-  (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
-  (msg1, cid1, uid1, mid1) <- MaybeT $ getEssentialContentAtN 2 <$> ask
+  (msg, _, uid, mid) <- MaybeT $ getEssentialContent <$> ask
+  (msg1, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> ask
   pureMaybe $ listToMaybe $ catMaybes
     [ do
         props   <- listToMaybe [ props | CQOther "mface" props <- cqs ]
         summary <- lookup "summary" props
-        if any (`isInfixOf` summary) ["哭哭", "呜呜"]
+        if any (`T.isInfixOf` summary) ["哭哭", "呜呜"]
           then return [BARetractMsg mid] else return []
     , do
         props <- listToMaybe [ props | CQOther "image" props <- cqs ]
@@ -48,15 +48,15 @@ commandRetract = BotCommand Retract $ botT $ do
     , do -- managing the bahavior of another bot
         boolToMaybe $ uid `elem` chinoBotIds
         listToMaybe . catMaybes $ 
-          [ void $ mRunParserF 
+          [ void $ runParser 
             ( string "bid:" >> int @Integer >> 
-              spaceOrEnter  >> string "捡到来自" >> many item
+              spaceOrEnter  >> string "捡到来自" >> some item
             ) msg
-          , boolToMaybe ( "渣男" `isInfixOf` msg)
+          , boolToMaybe ( "渣男" `T.isInfixOf` msg)
           ]
         return [BARetractMsg mid]
     , do
-        boolToMaybe $ any (`isInfixOf` msg1) ["上号", "网抑云", "到点了"]
+        boolToMaybe $ any (`T.isInfixOf` msg1) ["上号", "网抑云", "到点了"]
         boolToMaybe $ uid `elem` chinoBotIds
         return [BARetractMsg mid]
     , do

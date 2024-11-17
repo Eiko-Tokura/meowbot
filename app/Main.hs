@@ -15,6 +15,8 @@ import Command.Poll
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 
+import Control.Parallel.Strategies
+
 import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
@@ -32,7 +34,8 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans
 import Control.Monad
 
-import GHC.Conc (forkIO)
+-- import GHC.Conc (forkIO)
+-- import GHC.Debug.Stub
 
 import Debug.Trace
 
@@ -53,6 +56,10 @@ traceModeWith flag ls f a
   | flag `elem` ls = trace (f a) a
   | otherwise      = a
 
+-- | The main function of the bot.
+--  It will parse the command line arguments and start the bot.
+--  runs a debuger on port 2077
+--withGhcDebugTCP "127.0.0.1" 2077 $ 
 main :: IO ()
 main = do
   args <- getArgs
@@ -114,16 +121,16 @@ botSingleLoop mods mode conn = do
     Right cqmsg -> case eventType cqmsg of
       HeartBeat -> return ()
       Response -> do
-        modify $ updateAllDataByMessage cqmsg
+        modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
         lift $ putStrLn "<- response."
       PrivateMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ updateAllDataByMessage   cqmsg'
+        modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
       GroupMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ updateAllDataByMessage   cqmsg'
+        modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
       UnknownMessage -> return ()

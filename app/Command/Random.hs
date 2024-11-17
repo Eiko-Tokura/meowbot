@@ -4,7 +4,7 @@ module Command.Random where
 import Command
 import MeowBot.BotStructure
 import Probability.Foundation
-import MonParserF as MP
+import MeowBot.Parser as MP
 import qualified Data.Text as T
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Trans.Maybe
@@ -40,7 +40,7 @@ commandRandom :: BotCommand --ReaderStateT WholeChat OtherData IO [BotAction]
 commandRandom = BotCommand Random $ botT $ do
   (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   randomParser' <- lift $ commandParserTransformByBotName randomParser
-  query <- MaybeT $ return $ MP.mRunParserF randomParser' msg
+  query <- MaybeT $ return $ MP.runParser randomParser' msg
   do
     result <- sampleQuery query
     return [baSendToChatId cid $ T.pack $ display result]
@@ -48,12 +48,12 @@ commandRandom = BotCommand Random $ botT $ do
     display (Left str) = str
     display (Right (Left i)) = show i ++ " :: Int"
     display (Right (Right d)) = show d ++ " :: Double"
-    randomParser :: ParserF Char RandomQuery
-    randomParser = foldr1 (<>) 
+    randomParser :: Parser Char RandomQuery
+    randomParser = foldr1 (<|>) 
       [ do
           headCommand "random"
           commandSeparator
-          foldr1 (<>)
+          foldr1 (<|>)
             [ string "uniform"     >> commandSeparator >> (fmap Distribution . Uniform     <$> (float <* spaces) <*> float)
             , string "normal"      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
             , string "exponential" >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)
@@ -61,12 +61,12 @@ commandRandom = BotCommand Random $ botT $ do
             , string "binomial"    >> commandSeparator >> (fmap Distribution . Binomial    <$> positiveInt <* spaces <*> positiveFloat)
             , string "geometric"   >> commandSeparator >> (     Distribution . Geometric   <$> positiveFloat)
             , string "beta"        >> commandSeparator >> (fmap Distribution . Beta        <$> (positiveFloat <* spaces) <*> positiveFloat)
-            , string "choose" >> (ChooseFromList <$> many (commandSeparator >> word))
-            , string "custom" >> (CustomDistribution <$> many ((,) <$> (commandSeparator >> positiveFloat) <*> (commandSeparator >> word)))
+            , string "choose" >> (ChooseFromList <$> some (commandSeparator >> word))
+            , string "custom" >> (CustomDistribution <$> some ((,) <$> (commandSeparator >> positiveFloat) <*> (commandSeparator >> word)))
             ]
       , do
           headCommand "choose"
-          ChooseFromList <$> many (commandSeparator >> word)
+          ChooseFromList <$> some (commandSeparator >> word)
       ]
 
 helpRandom :: T.Text

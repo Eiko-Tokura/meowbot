@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, ImpredicativeTypes #-}
 module Command 
   ( BotCommand(..), CommandId(..)
   , doBotCommands
@@ -19,19 +19,21 @@ import Control.Monad.Trans.State hiding (get)
 import Control.Monad.Trans.ReaderState as RS
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
-import qualified MonParserF as MP
+import qualified MeowBot.Parser as MP
+import MeowBot.Parser (tshow)
 
-commandParserTransformByBotName :: Monad m => MP.ParserF Char a -> ReaderStateT WholeChat OtherData m (MP.ParserF Char a)
+commandParserTransformByBotName :: (Monad m) => MP.Parser Char a -> ReaderStateT WholeChat OtherData m (MP.Parser Char a)
 commandParserTransformByBotName cp = do
-  botname <- nameOfBot . botModules <$> get
+  botname <- nameOfBot . botModules <$> get 
   return $ case botname of
-    Just bn -> MP.string bn >> MP.try0 MP.commandSeparator >> cp
+    Just bn -> MP.string bn >> MP.opt_ MP.commandSeparator >> cp
     Nothing -> cp
+{-# INLINE commandParserTransformByBotName #-}
 
-restrictNumber :: Int -> [String] -> [String]
+restrictNumber :: Int -> [Text] -> [Text]
 restrictNumber _ [] = ["什么也没找到 o.o"]
-restrictNumber n xs =  [show i ++ " " ++ x | (i, x) <- zip [1 :: Int ..] $ take n xs]
-                    ++ ["(显示了前" ++ show (min n (length xs)) ++ "/" ++ show (length xs) ++ "条)" | length xs > n]
+restrictNumber n xs =  [tshow i <> " " <> x | (i, x) <- zip [1 :: Int ..] $ take n xs]
+                    <> ["(显示了前" <> tshow (min n (length xs)) <> "/" <> tshow (length xs) <> "条)" | length xs > n]
 
 botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStateT WholeChat OtherData m [a]
 botT = fmap (fromMaybe []) . runMaybeT

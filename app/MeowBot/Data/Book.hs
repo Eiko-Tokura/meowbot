@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingVia #-}
 module MeowBot.Data.Book where
 import Data.Coerce
-import Control.Lens
+import Data.Text (Text)
 
 newtype PageNumber = PageNumber Int deriving (Show, Eq, Ord, Read) via Int
 newtype AbsolutePageNumber = AbsolutePageNumber Int deriving (Show, Eq, Ord, Read) via Int 
@@ -13,7 +13,7 @@ offsetPageNumber offset pn = AbsolutePageNumber (coerce pn + coerce offset)
 reverseOffsetPageNumber :: PageNumberOffset -> AbsolutePageNumber -> PageNumber
 reverseOffsetPageNumber offset apn = PageNumber (coerce apn - coerce offset)
 
-type BookName = String
+type BookName = Text
 -- we use a new naming convention that, a data field start with the data itself, using _ to indicate that it is a data field function, differentialting from ordinary functions.
 
 data Book = Book
@@ -31,11 +31,11 @@ data BookPage = BookPage
 
 data PageType = Cover | Foreword | Menu | Chapter | Exercise | MarkedAs String deriving (Show, Eq, Ord, Read)
 
-newtype BookTag = BookTag { useBookTag :: String } deriving (Show, Eq, Ord, Read) via String 
+newtype BookTag = BookTag { useBookTag :: Text } deriving (Show, Eq, Ord, Read) via Text 
 
 data BookInfo = BookInfo
-  { bookInfo_author           :: Maybe String
+  { bookInfo_author           :: Maybe Text
   , bookInfo_pageNumberOffset :: Maybe PageNumberOffset
   , bookInfo_tags             :: [BookTag]
-  , bookInfo_uploader         :: String
+  , bookInfo_uploader         :: Text
   } deriving (Show, Eq, Ord, Read)

@@ -1,18 +1,28 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE BlockArguments #-}
 module MeowBot.CQCode where
 
-import Data.List (intercalate)
+import Control.DeepSeq
+import GHC.Generics
+import Data.Text (Text, pack)
+import qualified Data.Text as T
 
 data CQCode 
   = CQAt Int 
   | CQReply Int 
-  | CQRecord String
-  | CQImage String
-  | CQOther String [(String, String)]
-  deriving (Show, Read, Eq)
+  | CQRecord Text
+  | CQImage Text
+  | CQOther Text [(Text, Text)]
+  deriving (Show, Read, Eq, Generic, NFData)
 
-embedCQCode :: CQCode -> String
-embedCQCode (CQAt qq)     = "[CQ:at,qq=" ++ show qq ++ "]"
-embedCQCode (CQReply id)  = "[CQ:reply,id=" ++ show id ++ "]"
-embedCQCode (CQImage str) = "[CQ:image,file=file://" ++ str ++ "]"
-embedCQCode (CQRecord str)= "[CQ:record,file=file://" ++ str ++ "]"
-embedCQCode (CQOther str list) = "[CQ:" ++ str ++ intercalate "," [ key ++ "=" ++ val | (key, val) <- list] ++ "]"
+embedCQCode :: CQCode -> Text
+embedCQCode (CQAt qq)     = "[CQ:at,qq=" <> pack (show qq) <> "]"
+embedCQCode (CQReply id)  = "[CQ:reply,id=" <> pack (show id) <> "]"
+embedCQCode (CQImage str) = "[CQ:image,file=file://" <> str <> "]"
+embedCQCode (CQRecord str)= "[CQ:record,file=file://" <> str <> "]"
+embedCQCode (CQOther str list) = "[CQ:" <> str <> T.intercalate "," [ key <> "=" <> val | (key, val) <- list] <> "]"

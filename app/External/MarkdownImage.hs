@@ -15,14 +15,15 @@ import Control.Exception (try, SomeException)
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
-import MonParserF
+import MeowBot.Parser
+import Data.Text.IO as T
 
 -- | write markdown text to a temp file in md/{unix-time}.md based on the current unix time, return the file path.
-writeMarkdownToTempFile :: String -> ExceptT SomeException IO (FilePathFor Rel File Markdown)
+writeMarkdownToTempFile :: Text -> ExceptT SomeException IO (FilePathFor Rel File Markdown)
 writeMarkdownToTempFile markdownString = do
     unixTime <- lift getCurrentTime
     let timeString = formatTime defaultTimeLocale "%s" unixTime
-    ExceptT $ try $ writeFile (useAnyPath $ tempInputFile timeString) markdownString
+    ExceptT $ try $ T.writeFile (useAnyPath $ tempInputFile timeString) markdownString
     return $ tempInputFile timeString
     where tempInputFile fn = mdPath </> relFile (fn ++ ".md")
           mdPath = "md"
@@ -54,12 +55,12 @@ pdfToImageWithPageNumber pdf = do
     return [ (readPageNumber . useRelPath . takeBaseName $ imagepath, pdfImageDirectory pdf </> imagepath) | imagepath <- imagepaths ]
   where pdfImageDirectory :: FilePathFor anyPathType File PDF -> FilePathFor Rel Directory Image
         pdfImageDirectory pdf = imageDir </> changeUsage (takeBaseName pdf)
-        readPageNumber = fromMaybe (error "page number un-readable") . mRunParserF (string "page_" *> positiveInt <* string ".png")
+        readPageNumber = fromMaybe (error "page number un-readable") . runParser (string "page_" *> positiveInt <* string ".png")
         imageDir = "images"
 
 pdfToImage :: FilePathFor anyRef File PDF -> ExceptT SomeException IO [FilePathFor Rel File Image] 
 pdfToImage = fmap (fmap snd) . pdfToImageWithPageNumber
 
 -- | Input a markdown string, output a sorted list of absolute file paths of images generated
-markdownToImage :: String -> ExceptT SomeException IO [FilePathFor Abs File Image]
+markdownToImage :: Text -> ExceptT SomeException IO [FilePathFor Abs File Image]
 markdownToImage = writeMarkdownToTempFile >=> markdownToPdf >=> pdfToImage >=> toAbsoluteFilePaths >=> (return . sort)

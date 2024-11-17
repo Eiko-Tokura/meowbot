@@ -3,10 +3,14 @@ module Data.Additional where
 
 import Data.Typeable
 import Data.Maybe
+import Control.DeepSeq
 
 class Typeable a => IsAdditionalData a
 
-data AdditionalData = forall a. (Typeable a, Show a, Eq a, IsAdditionalData a) => AdditionalData a 
+data AdditionalData = forall a. (Typeable a, Show a, Eq a, IsAdditionalData a) => AdditionalData a
+
+instance NFData AdditionalData where
+  rnf (AdditionalData a) = let !_ = a in ()
 
 instance Show AdditionalData where
   show (AdditionalData a) = show a

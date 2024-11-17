@@ -5,8 +5,8 @@ module Command.SetSysMessage
   ) where
 
 import Command
-import MonParserF ((<+>))
-import qualified MonParserF as MP
+import MeowBot.Parser ((|+|), (<|>), tshow)
+import qualified MeowBot.Parser as MP
 import MeowBot.BotStructure
 import qualified Data.Text as T
 import Data.Bifunctor
@@ -20,7 +20,7 @@ commandSetSysMessage :: BotCommand
 commandSetSysMessage = BotCommand System $ botT $ do
   ess@(msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
   sysMsgParser' <- lift $ commandParserTransformByBotName sysMsgParser
-  msys <- pureMaybe $ MP.mRunParserF sysMsgParser' msg
+  msys <- pureMaybe $ MP.runParser sysMsgParser' msg
   other_data <- lift get
   let sd = savedData other_data
   --pureMaybe $ checkIfIsGroupNeedBeAllowedUsers sd (cid, uid)
@@ -33,14 +33,14 @@ commandSetSysMessage = BotCommand System $ botT $ do
         Nothing -> onlyState $ sendToChatId ess "系统消息已返回默认owo!"
     Right temp -> lift $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
-      onlyState $ sendToChatId ess $ "系统温度已设置为" ++ show temp ++ " owo!"
+      onlyState $ sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
   where
     sysMsgParser = 
       ( do
         MP.headCommand "system"
         MP.commandSeparator
-        (MP.string "set" >> MP.commandSeparator >> Just <$> MP.many MP.item) <> (MP.string "unset" >> return Nothing)
-      ) <+> (MP.headCommand "temperature" >> MP.commandSeparator >> MP.positiveFloat)
+        (MP.string "set" >> MP.commandSeparator >> Just <$> MP.some MP.item) <|> (MP.string "unset" >> return Nothing)
+      ) |+| (MP.headCommand "temperature" >> MP.commandSeparator >> MP.positiveFloat)
 
 updateSysSetting :: Either (Maybe Message) Double -> ChatId -> [(ChatId, ChatSetting)] -> [(ChatId, ChatSetting)]
 updateSysSetting (Left msys) cid [] = [(cid, ChatSetting msys Nothing)]
