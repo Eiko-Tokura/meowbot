@@ -16,8 +16,8 @@ class Stream sb b | sb -> b where
   {-# MINIMAL uncons #-}
 
   flatten :: sb -> [[b]]
-  flatten x | null (uncons x) = []
-  flatten x = uncons x >>= \(b, sb') -> fmap (b:) (flatten sb')
+  flatten x | null (uncons x) = [[]]
+  flatten x = uncons x >>= \(b, sb') -> map (b:) (flatten sb')
   {-# INLINE flatten #-}
 
 instance Stream Text Char where
