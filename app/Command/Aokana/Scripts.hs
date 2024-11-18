@@ -1,8 +1,7 @@
-{-# LANGUAGE TemplateHaskell, TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Command.Aokana.Scripts where
 
 import MeowBot.Parser as MP
-import Parser.Definition 
 import Control.Monad
 import qualified Data.Text as T
 
@@ -90,7 +89,7 @@ contigousBlock :: (Stream s Line) => Parser s Line ScriptBlock
 contigousBlock = do
   some (comments <|> emptyLine)
   associatedData <- MP.some associatedDataParser 
-  multiLangString <- MP.tryMaybe multiLangStringParser
+  multiLangString <- MP.optMaybe multiLangStringParser
   let mchar = determineCharacter associatedData multiLangString
   return $ ScriptBlock associatedData multiLangString mchar
   where
@@ -143,7 +142,7 @@ multiLangStringParser = lineShape $ MultiLangString
 singleLangParser :: (Chars sb) => Parser sb Char (Maybe Speaker, Text)
 singleLangParser = do
   MP.just specialSymbol
-  name <- tryMaybe $ insideBrackets speakerBrackets <* MP.just '：'
+  name <- optional $ insideBrackets speakerBrackets <* MP.just '：'
   str <- insideBrackets contentBrackets <|> MP.itemsNotIn [specialSymbol]
   return (Speaker . T.pack <$> name, T.pack str)
 

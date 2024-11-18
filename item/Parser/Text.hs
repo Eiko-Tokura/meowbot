@@ -3,6 +3,7 @@
 module Parser.Text where
 
 import Parser.Definition
+import Parser.Char
 import Control.Monad.Item
 import Control.Applicative
 import Data.Text (Text)
@@ -21,7 +22,7 @@ word' = T.pack <$> word
 -- | Parse a word that is not a flag, i.e. a word that does not start with a dash.
 nonFlagWord :: Chars sb => Parser sb Char String
 nonFlagWord = insideBrackets ('\'', '\'')
-      <|> insideBrackets ('"', '"') 
+      <|> insideBrackets ('"', '"')
       <|> some (itemNotIn [' ', '-'])
 
 nonFlagWord' :: Chars sb => Parser sb Char Text

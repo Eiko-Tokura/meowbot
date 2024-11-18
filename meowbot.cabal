@@ -46,19 +46,20 @@ extra-source-files: CHANGELOG.md
 
 library item
 
-    exposed-modules: Parser.Run
-                   , Parser.Text
-                   , Control.Monad.Item
+    exposed-modules: Control.Monad.Item
+                   , Parser.Char
                    , Parser.Definition
+                   , Parser.Run
                    , Parser.Template
+                   , Parser.Text
     
-    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all     -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=1000 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog 
+    ghc-options: -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all     -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=1000 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog -j8
 
-    build-depends:    base  >=4.7 && <5
-                    , mtl
-                    , transformers
-                    , text
-                    , template-haskell
+    build-depends: base  >=4.7 && <5
+                 , mtl
+                 , transformers
+                 , text
+                 , template-haskell
 
     hs-source-dirs:   item
 
@@ -69,34 +70,34 @@ executable meowbot
     -- .hs or .lhs file containing the Main module.
     main-is:          Main.hs
 
-    ghc-options:    -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F1 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=1000 -finfo-table-map -fdistinct-constructor-tables -eventlog -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
+    ghc-options: -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F1 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=1000 -finfo-table-map -fdistinct-constructor-tables -eventlog -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all -j8
 
     -- Modules included in this executable, other than Main.
     other-modules: Command
-                 , Command.User
+                 , Command.Aokana
+                 , Command.Aokana.Scripts
                  , Command.Cat
                  , Command.Help
                  , Command.Md
+                 , Command.Poll
                  , Command.Random
                  , Command.Retract
-                 , Command.Study
                  , Command.SetSysMessage
-                 , Command.Aokana
-                 , Command.Aokana.Scripts
-                 , Command.Poll
-                 , Control.Monad.Trans.ReaderState
-                 , Control.Monad.MaybeHints
+                 , Command.Study
+                 , Command.User
                  , Control.Monad.IOe
+                 , Control.Monad.MaybeHints
+                 , Control.Monad.Trans.ReaderState
+                 , Data.Additional
+                 , Data.FilePathFor
                  , External.ChatAPI
                  , External.MarkdownImage
+                 , MeowBot.BotStructure
                  , MeowBot.CQCode
                  , MeowBot.CommandRule
-                 , MeowBot.BotStructure
                  , MeowBot.Data.Book
-                 , MeowBot.Parser
                  , MeowBot.MetaMessage
-                 , Data.FilePathFor
-                 , Data.Additional
+                 , MeowBot.Parser
                  , Probability.Foundation
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -104,30 +105,29 @@ executable meowbot
     -- Other library packages from which modules are imported.
     --  build-depends:    base ^>=4.16.4.0
     build-depends: base >=4.7 && <5
-               , aeson
-               , bytestring
-               , text
-               , wuss
-               , websockets
-               , http-client
-               , http-client-tls
-               , http-types
-               , containers
-               , transformers
-               , time
-               , mtl
-               , deepseq
-               , parallel
-               , process
-               --, persistent
-               , directory
-               , filepath
-               , random
-               , lens
-               , safe
-               , ghc-debug-stub
-               , item
-               --, ChatAPI
+                 , aeson
+                 , bytestring
+                 , containers
+                 , deepseq
+                 , directory
+                 , filepath
+                 , ghc-debug-stub
+                 , http-client
+                 , http-client-tls
+                 , http-types
+                 , item
+                 , lens
+                 , mtl
+                 , parallel
+                 , process
+                 , random
+                 , safe
+                 , text
+                 , time
+                 , transformers
+                 , websockets
+                 , wuss
+                 --, persistent
     -- Directories containing source files.
     hs-source-dirs:   app
 

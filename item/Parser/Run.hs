@@ -2,14 +2,17 @@
 module Parser.Run 
   ( module Control.Monad.Item
   , module Control.Applicative
+  , module Parser.Char
   , module Parser.Text
   , module Parser.Template
-  , runParser
+  , runParser, runParserFull
   , Parser
+  , Stream
   ) where
 
-import Control.Monad.Item
 import Control.Applicative
-import Parser.Text
-import Parser.Definition
+import Control.Monad.Item
+import Parser.Char
+import Parser.Definition (Stream, runParser, runParserFull, Parser) -- not fully exported
 import Parser.Template
+import Parser.Text

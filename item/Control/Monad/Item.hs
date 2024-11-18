@@ -14,6 +14,7 @@ import Data.Maybe
 class Monad m => MonadItem i m | m -> i where
   getItem :: m i
 
+-- | The idea of MonadTry instead of optional is that, we expect try action to not modify the state in parsers, i.e. they do not eat.
 class Monad m => MonadTry m where
   tryMaybe :: m a -> m (Maybe a)
   {-# MINIMAL tryMaybe #-}
@@ -81,15 +82,25 @@ satisfy cond = require cond getItem
 {-# INLINE satisfy #-}
 
 itemIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
-itemIn is = satisfy (`elem` is)
+itemIn is = satisfy (`elemE` is)
 {-# INLINE itemIn #-}
+
+elemE :: Eq a => a -> [a] -> Bool
+elemE = elem
+{-# INLINE[1] elemE #-}
+{-# RULES "expand elemE" forall a x. elemE a [x] = a == x #-}
+{-# RULES "expand elemE" forall a x xs. elemE a (x:xs) = a == x || elemE a xs #-}
+
+notElemE :: Eq a => a -> [a] -> Bool
+notElemE = (not .) . elemE
+{-# INLINE notElemE #-}
 
 itemsIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 itemsIn = some . itemIn
 {-# INLINE itemsIn #-}
 
 itemNotIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
-itemNotIn is = satisfy (`notElem` is)
+itemNotIn is = satisfy (`notElemE` is)
 {-# INLINE itemNotIn #-}
 
 itemsNotIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
@@ -97,7 +108,7 @@ itemsNotIn = some . itemNotIn
 {-# INLINE itemsNotIn #-}
 
 noneOf :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
-noneOf is = satisfy (`notElem` is)
+noneOf is = satisfy (`notElemE` is)
 {-# INLINE noneOf #-}
 
 just :: (MonadZero m, MonadItem i m, Eq i) => i -> m i
@@ -122,6 +133,12 @@ infixr 5 <:>
 (|+|) p q = fmap Left p <|> fmap Right q
 infixr 3 |+|
 {-# INLINE (|+|) #-}
+
+-- | type sum, but prefer the **right side** as default and return Right r
+(+|) :: Alternative m => m e -> m a -> m (Either e a)
+(+|) e a = fmap Right a <|> fmap Left e
+infixr 3 +|
+{-# INLINE (+|) #-}
 
 -- | Identical to `optional`
 optMaybe :: Alternative m => m a -> m (Maybe a)
@@ -149,56 +166,6 @@ manyTill pt p = do
   if end then return [] else p <:> manyTill pt p
 {-# INLINE manyTill #-}
 
-digit :: (MonadZero m, MonadItem Char m) => m Char
-digit = itemIn ['0'..'9']
-{-# INLINE digit #-}
-
-digits :: (MonadZero m, Alternative m, MonadItem Char m) => m String
-digits = some digit
-{-# INLINE digits #-}
-
-space :: (MonadZero m, MonadItem Char m) => m Char
-space = itemIn [' ', '\t']
-{-# INLINE space #-}
-
-spaces :: (MonadZero m, Alternative m, MonadItem Char m) => m String
-spaces = some space
-{-# INLINE spaces #-}
-
-spaces0 :: (MonadZero m, Alternative m, MonadItem Char m) => m String
-spaces0 = many space
-{-# INLINE spaces0 #-}
-
--- | Non-negative integer
-nint :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => m i
-nint = read <$> some digit
-{-# INLINE nint #-}
-
--- | Integer, possibly negative
-int :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => m i
-int = read <$> (some digit <|> just '-' <:> some digit)
-{-# INLINE int #-}
-
--- | Integer in the range [a, b]
-intRange :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => i -> i -> m i
-intRange a b = require (\i -> a <= i && i <= b) int
-{-# INLINE intRange #-}
-
-float :: forall a m. (MonadZero m, Alternative m, MonadTry m, MonadItem Char m, Floating a, Read a) => m a
-float = do
-  part1 <- (just '-' <:> digits) <|> digits 
-  mpart2 <- tryMaybe (just '.' <:> digits)
-  case mpart2 of
-    Nothing    -> return $ read part1
-    Just part2 -> return $ read $ part1 ++ part2
-
-spaceOrEnter :: (MonadZero m, MonadItem Char m) => m Char
-spaceOrEnter = itemIn [' ', '\t', '\n', '\r']
-{-# INLINE spaceOrEnter #-}
-
-positiveFloat :: forall a m. (MonadZero m, Alternative m, MonadTry m, MonadItem Char m, Floating a, Ord a, Read a) => m a
-positiveFloat = require (>0) float
-
 intercalateBy :: (Alternative m) => m sep -> m a -> m [a]
 intercalateBy sep p = p <:> many (sep *> p)
 {-# INLINE intercalateBy #-}
@@ -208,5 +175,55 @@ intercalateBy0 sep p = intercalateBy sep p <|> pure []
 {-# INLINE intercalateBy0 #-}
 
 insideBrackets :: (MonadZero m, Alternative m, MonadItem i m, Eq i) => (i, i) -> m [i]
-insideBrackets (l, r) = just l *> some getItem <* just r
+insideBrackets (l, r) = just l *> many getItem <* just r
 {-# INLINE insideBrackets #-}
+
+--------------------------------------------------------------------------------
+
+{-
+htmlCodes :: (Chars sb) => Parser sb Char Char
+htmlCodes = asumE
+  [ $(stringQ_ "&amp;") >> pure '&'
+  , $(stringQ_ "&#44;") >> pure ','
+  , $(stringQ_ "&#91;") >> pure '['
+  , $(stringQ_ "&#93;") >> pure ']'
+  ]
+
+Let's think about what will this thing expand to:
+
+htmlCodes 
+  = asumE
+    [ just '&' >> just 'a' >> just 'm' >> just 'p' >> just ';' >> pure '&'
+    , just '&' >> just '#' >> just '4' >> just '4' >> just ';' >> pure ','
+    , just '&' >> just '#' >> just '9' >> just '1' >> just ';' >> pure '['
+    , just '&' >> just '#' >> just '9' >> just '3' >> just ';' >> pure ']'
+    ]
+  =     (just '&' >> just 'a' >> just 'm' >> just 'p' >> just ';' >> pure '&')
+    <|> (just '&' >> just '#' >> just '4' >> just '4' >> just ';' >> pure ',')
+    <|> (just '&' >> just '#' >> just '9' >> just '1' >> just ';' >> pure '[')
+    <|> (just '&' >> just '#' >> just '9' >> just '3' >> just ';' >> pure ']')
+-}
+
+-- -- | A protected version of `>>` that is used to optimize with <|>
+-- (%>>) :: Monad m => m a -> m b -> m b
+-- (%>>) = (>>)
+-- infixr 1 %>>
+-- {-# INLINE[1] (%>>) #-}
+
+-- eta :: Applicative f => a -> f a
+-- eta = pure
+-- {-# INLINE[1] eta #-}
+-- 
+-- {-# RULES "Factor common path/%>>" forall x y z. (x %>> y) <|> (x %>> z) = x %>> (y <|> z) #-}
+-- {-# RULES "Factor common path/%>>" forall x y z. (just x %>> y) <|> (just x %>> z) = just x %>> (y <|> z) #-}
+-- {-# RULES "Factor common path/%>>" forall x y z. (y %>> just x) <|> (z %>> just x) = (y <|> z) %>> just x #-}
+-- 
+-- {-# RULES "Factor common path/<:>" forall f x y z. (f x <:> y) <|> (f x <:> z) = f x <:> (y <|> z) #-}
+-- {-# RULES "Factor common path/<:>" forall x y z. (just x <:> y) <|> (just x <:> z) = just x <:> (y <|> z) #-}
+-- {-# RULES "Factor common path/<:>" forall x y z. (eta x <:> y) <|> (eta x <:> z) = eta x <:> (y <|> z) #-}
+-- {-# RULES "Factor common path/<:>" forall x y z. (y <:> just x) <|> (z <:> just x) = (y <|> z) <:> just x #-}
+-- {-# RULES "Factor common path/<:>" forall x y z. (y <:> eta x) <|> (z <:> eta x) = (y <|> z) <:> eta x #-}
+-- 
+-- ruleTest :: (Alternative m, MonadZero m, MonadItem Char m) => m Char
+-- ruleTest = (just 'a' %>> just 'b' %>> just 'c') <|> (just 'a' %>> just 'c' %>> just 'c')
+-- 
