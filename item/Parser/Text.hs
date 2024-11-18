@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
-{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies, ConstraintKinds #-}
 module Parser.Text where
 
 import Parser.Definition
