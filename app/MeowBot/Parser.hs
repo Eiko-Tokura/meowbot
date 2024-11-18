@@ -64,27 +64,27 @@ flattenTree (Node a children) = a : concatMap flattenTree children
 item :: (MonadItem i m) => m i
 item = getItem
 
-htmlCode :: String -> Char -> Parser Char Char
+htmlCode :: (Chars sb) => String -> Char -> Parser sb Char Char
 htmlCode code char = string code >> return char
 
-htmlCodes :: Parser Char Char
-htmlCodes = foldr1 (<|>)
+htmlCodes :: (Chars sb) => Parser sb Char Char
+htmlCodes = asumE
   [ htmlCode "&amp;" '&'
   , htmlCode "&#91;" '['
   , htmlCode "&#93;" ']'
   , htmlCode "&#44;" ','
   ]
 
-htmlDecode :: Parser Char String
+htmlDecode :: (Chars sb) => Parser sb Char String
 htmlDecode = many $ htmlCodes <|> getItem
 
-cqother :: Text -> Parser Char CQCode
+cqother :: (Chars sb) => Text -> Parser sb Char CQCode
 cqother str = CQOther str <$> intercalateBy (itemIn ",;") 
   ((,) <$> some' (htmlCodes <|> itemNotIn "=")   <* just '='
        <*> many' (htmlCodes <|> itemNotIn ",;]")
   )
 
-cqcodeExceptFace :: Parser Char CQCode
+cqcodeExceptFace :: (Chars sb) => Parser sb Char CQCode
 cqcodeExceptFace = do
   $(stringQ "[CQ:")
   cqtype :: Text <- some' $ itemNotIn ","
@@ -96,7 +96,7 @@ cqcodeExceptFace = do
     str     -> cqother str
   <* just ']'
 
-cqmsg :: Parser Char MetaMessage
+cqmsg :: (Chars sb) => Parser sb Char MetaMessage
 cqmsg = do
   leither <- many $ cqcodeExceptFace |+| getItem
   return MetaMessage
@@ -107,7 +107,7 @@ cqmsg = do
     , additionalData = []
     }
 
-positiveInt :: (Integral i, Read i) => Parser Char i
+positiveInt :: (Chars sb, Integral i, Read i) => Parser sb Char i
 positiveInt = require (>0) nint
 
 end :: forall i m. (MonadZero m, MonadTry m, MonadItem i m) => m ()
@@ -115,19 +115,19 @@ end = do
   hasItem <- tryBool (getItem @i)
   when hasItem zero
 
-commandSeparator :: Parser Char String
+commandSeparator :: (Chars sb) => Parser sb Char String
 commandSeparator = some $ itemIn " \t\n"
 
-commandSeparator2 :: Parser Char (Either Char [String])
-commandSeparator2 = itemIn ['～', '~', ',', '，', '!', '！', '?', '？'] |+| many (foldr1 (<|>) $ string <$> ["\r\n", "\r", "\n", " "])
+commandSeparator2 :: (Chars sb) => Parser sb Char (Either Char [String])
+commandSeparator2 = itemIn ['～', '~', ',', '，', '!', '！', '?', '？'] |+| some (asumE $ string <$> ["\r\n", "\r", "\n", " "])
 
-headCommand :: String -> Parser Char String
+headCommand :: (Chars sb) => String -> Parser sb Char String
 headCommand cmd = spaces0 >> just ':' <|> just '：' >> string cmd
  
-canBeEmpty :: forall b a. Parser b a -> Parser b (Maybe a)
+canBeEmpty :: forall sb b a. (Stream sb b) => Parser sb b a -> Parser sb b (Maybe a)
 canBeEmpty p = fromRight Nothing <$> (end @b |+| (Just <$> p))
 
-parseByRead :: Read a => Parser Char a
+parseByRead :: (Chars sb) => Read a => Parser sb Char a
 parseByRead = do
   str <- many item
   case reads str of

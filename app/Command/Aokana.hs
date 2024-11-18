@@ -12,7 +12,7 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
-import MeowBot.Parser (Parser, (<|>))
+import MeowBot.Parser (Parser, (<|>), Chars)
 import qualified MeowBot.Parser as MP
 
 import External.ChatAPI (Message(..), ChatSetting(..))
@@ -40,21 +40,21 @@ voiceExtension = ".mp3"
 scriptRelPath :: FilePath
 scriptRelPath = "scripts"
 
-aokanaParser :: Parser Char [AokanaQuery]
+aokanaParser :: (Chars sb) => Parser sb Char [AokanaQuery]
 aokanaParser = do
   _ <- MP.headCommand "aokana"
-  MP.some $ foldr1 (<|>) $ (MP.commandSeparator >>) <$>
+  MP.some $ MP.asumE $ (MP.commandSeparator >>) <$>
     [ queryCharacter
     , queryKeyword
     , $(MP.stringQ "-list") >> return List
     ]
   where
-    queryCharacter = foldr1 (<|>) 
-                [ $(MP.stringQ "-asuka")   >> return (Character Asuka)
-                , $(MP.stringQ "-misaki")  >> return (Character Misaki)
-                , $(MP.stringQ "-mashiro") >> return (Character Mashiro)
-                , $(MP.stringQ "-rika")    >> return (Character Rika)
-                ]
+    queryCharacter = MP.asumE
+                     [ $(MP.stringQ "-asuka")   >> return (Character Asuka)
+                     , $(MP.stringQ "-misaki")  >> return (Character Misaki)
+                     , $(MP.stringQ "-mashiro") >> return (Character Mashiro)
+                     , $(MP.stringQ "-rika")    >> return (Character Rika)
+                     ]
     queryKeyword = Keyword <$> MP.nonFlagWord'
 
 searchScripts :: [AokanaQuery] -> [ScriptBlock] -> [ScriptBlock]
@@ -114,7 +114,7 @@ getAllVoices = do
   let voicePath = cd </> aokanaRelPath </> voiceRelPath
   return (MP.runParser (aokanaVoiceFileParser voicePath) `mapMaybe` voiceFiles)
   where
-    aokanaVoiceFileParser :: FilePath -> Parser Char (AokanaCharacter, String, FilePath)
+    aokanaVoiceFileParser :: (Chars sb) => FilePath -> Parser sb Char (AokanaCharacter, String, FilePath)
     aokanaVoiceFileParser vdir = do
       (characterStr, character) <- 
                     ($(MP.stringQ "asuka")   >> return ("asuka", Asuka))

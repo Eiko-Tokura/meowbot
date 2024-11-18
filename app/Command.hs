@@ -22,7 +22,7 @@ import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser (tshow)
 
-commandParserTransformByBotName :: (Monad m) => MP.Parser Char a -> ReaderStateT WholeChat OtherData m (MP.Parser Char a)
+commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> ReaderStateT WholeChat OtherData m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
   botname <- nameOfBot . botModules <$> get 
   return $ case botname of

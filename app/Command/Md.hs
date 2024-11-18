@@ -7,7 +7,7 @@ import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
 import MeowBot.BotStructure
 import MeowBot.CQCode
-import MeowBot.Parser (Parser, tshow)
+import MeowBot.Parser (Parser, tshow, Chars)
 import qualified MeowBot.Parser as MP
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -29,7 +29,7 @@ commandMd = BotCommand Md $ do
         Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
         Just (Right fps) -> return [baSendToChatId cid (T.concat $ [embedCQCode $ CQImage $ T.pack $ useAbsPath outPath | outPath <- fps])]
   where 
-    mdParser :: Parser Char Text
+    mdParser :: (Chars sb) => Parser sb Char Text
     mdParser = do
       MP.headCommand "md"
       MP.commandSeparator

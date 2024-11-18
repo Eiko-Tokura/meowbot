@@ -12,6 +12,7 @@ import Data.Typeable
 import qualified Data.Text as T
 import MeowBot.Parser 
 import MeowBot.BotStructure
+import Parser.Definition (Stream)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Debug.Trace
@@ -44,11 +45,11 @@ data PollCommand
   | ViewPoll   PollId
   | ListPoll
 
-pollParser :: Parser Char PollCommand 
+pollParser :: (Chars sb) => Parser sb Char PollCommand 
 pollParser = do
   headCommand "poll"
   commandSeparator
-  foldr1 (<|>)
+  asumE
     [ createPollParser
     , voteParser
     , proposeParser
@@ -69,7 +70,7 @@ pollParser = do
     viewPollParser   = $(stringQ "view")    >> commandSeparator >> ViewPoll   <$> int
     listPollParser   = $(stringQ "list")    >> return ListPoll
 
-pollTreeParser :: Parser CQMessage PollCommand
+pollTreeParser :: (Stream s CQMessage) => Parser s CQMessage PollCommand
 pollTreeParser = do
   self <- satisfy $ \cqm -> eventType cqm == SelfMessage && (not . null $ getAdditionalDataType @_ @PollId cqm)
   let pollId = head . getAdditionalDataType @_ @PollId $ self

@@ -52,7 +52,7 @@ commandUser = BotCommand User $ botT $ do
           RuleManagement List _                -> "规则列表：" ++ "\n[ " ++ intercalate "\n, " (show <$> commandRules (savedData other_data)) ++ "\n]"
           _ -> "user_id / group_id parameter cannot be empty o.o"
 
-userParser :: Parser Char UserManagement
+userParser :: (MP.Chars sb) => Parser sb Char UserManagement
 userParser = 
   (MP.headCommand "user" >> MP.spaces >>
     UserManagement <$> actionParser <*> (MP.spaces *> userGroupParser) <*> (MP.spaces0 >> MP.canBeEmpty (UserId <$> idParser)))
@@ -62,14 +62,14 @@ userParser =
   <|>
   (MP.headCommand "rule" >> MP.spaces >>
     RuleManagement <$> actionParser <*> (MP.spaces0 >> MP.canBeEmpty ruleParser))
-  where actionParser = foldr1 (<|>) [ $(MP.stringQ "add") >> return Add
-                                    , $(MP.stringQ "remove") >> return Remove
-                                    , $(MP.stringQ "list") >> return List 
-                                    ]
-        userGroupParser = foldr1 (<|>) [ $(MP.stringQ "admin") >> return Admin
-                                      , $(MP.stringQ "allowed") >> return Allowed 
-                                      , CustomUserGroup <$> MP.word
-                                      ]
+  where actionParser = MP.asumE [ $(MP.stringQ "add") >> return Add
+                                , $(MP.stringQ "remove") >> return Remove
+                                , $(MP.stringQ "list") >> return List 
+                                ]
+        userGroupParser = MP.asumE [ $(MP.stringQ "admin") >> return Admin
+                                   , $(MP.stringQ "allowed") >> return Allowed 
+                                   , CustomUserGroup <$> MP.word
+                                   ]
         groupGroupParser = ($(MP.stringQ "allowed") >> return AllowedGroup)
                                    <|> ( CustomGroupGroup <$> MP.word )
         idParser = read <$> (do d <- MP.digits; if length d > 12 then MP.zero else return d)

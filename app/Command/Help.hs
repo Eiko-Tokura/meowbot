@@ -26,7 +26,7 @@ commandHelp = BotCommand Help $ botT $ do
     helpParser botName = do
       MP.headCommand "help"
       MP.spaces0
-      mParam <- MP.tryMaybe . foldr1 (<|>) $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
+      mParam <- MP.tryMaybe . MP.asumE $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
         Nothing  -> return . pack . concat $ 

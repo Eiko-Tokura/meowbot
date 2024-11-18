@@ -97,11 +97,11 @@ helpStudy = T.unlines
   , "pageType : menu/content/exercise/cover/foreword/<any string>"
   ]
 
-ePageNumber :: Parser Char (Either PageNumber AbsolutePageNumber)
+ePageNumber :: (Chars sb) => Parser sb Char (Either PageNumber AbsolutePageNumber)
 ePageNumber = (PageNumber <$> int) |+| (AbsolutePageNumber <$> (just '[' *> int <* just ']'))
 
-pageTypeP :: Parser Char PageType
-pageTypeP = foldr1 (<|>)
+pageTypeP :: (Chars sb) => Parser sb Char PageType
+pageTypeP = MP.asumE
   [ $(stringQ "menu")     >> return Menu
   , $(stringQ "chapter")  >> return Chapter
   , $(stringQ "exercise") >> return Exercise
@@ -110,8 +110,8 @@ pageTypeP = foldr1 (<|>)
   -- , MarkedAs <$> word
   ]
 
-studyParser :: Parser Char StudyQuery
-studyParser = headCommand "study" >> commandSeparator >> foldr1 (<|>)
+studyParser :: (Chars sb) => Parser sb Char StudyQuery
+studyParser = headCommand "study" >> commandSeparator >> MP.asumE
   [ $(stringQ "search") >> 
       SearchBook <$> many (commandSeparator >> (Keyword <$> word'))
   , $(stringQ "read") >> commandSeparator >> 
@@ -327,8 +327,8 @@ commandBook = BotCommand BookMan $ botT $ do
           lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
           return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
   where
-    bookParser :: Parser Char BookManagement
-    bookParser = headCommand "book" >> commandSeparator >> foldr1 (<|>)
+    bookParser :: (Chars sb) => Parser sb Char BookManagement
+    bookParser = headCommand "book" >> commandSeparator >> asumE
       --[ $(stringQ "upload") >> commandSeparator >> Upload <$> word <*> (commandSeparator >> AbsPath <$> word)
       [ $(stringQ "delete") >> commandSeparator >> Delete <$> word'
       , $(stringQ "localmake") >> commandSeparator >> LocalMakeBook <$> word' <*> (commandSeparator >> RelPath <$> word)

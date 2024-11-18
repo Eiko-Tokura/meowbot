@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}
 module Command.Cat where
 
 import Command
@@ -8,7 +8,8 @@ import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import External.ChatAPI 
-import MeowBot.Parser (Parser)
+import MeowBot.Parser (Parser, Chars)
+import Parser.Definition (Stream)
 import qualified MeowBot.Parser as MP
 import Control.Monad.IOe
 
@@ -17,8 +18,6 @@ import Control.Applicative
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
-
-import Debug.Trace
 
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
@@ -41,7 +40,7 @@ commandCat = BotCommand Cat $ botT $ do
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
-catParser :: BotName -> ChatSetting -> Parser Char (ChatParams, String) 
+catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String) 
 catParser (Just botname) msys = do
   MP.spaces0
   parseMeowMeow
@@ -71,14 +70,14 @@ catParser Nothing msys = do
       str <- MP.some MP.item
       return (ChatParams GPT3 False msys, str)
 
-replyCatParser :: BotName -> ChatSetting -> Parser Char (ChatParams, String)
+replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String)
 replyCatParser name msys = catParser name msys <|> ( do
   MP.spaces0
   str <- MP.some MP.item
   return (ChatParams GPT3 False msys, str)
   )
 
-treeCatParser :: BotName -> ChatSetting -> Int -> Parser CQMessage [(ChatParams, Message)]
+treeCatParser :: (Stream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
 treeCatParser name msys mid = do
   elist  <- Right <$> 
     --   ( do
@@ -112,7 +111,7 @@ treeCatParser name msys mid = do
           return [ (params, Message { role = "user" , content = T.pack metaUMsg })
                  , (params, Message { role = "assistant", content = extractMetaMessage amsg})
                  ]
-        ) :: Parser CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
+        ) :: Parser _ CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
     
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of

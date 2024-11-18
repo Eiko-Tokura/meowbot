@@ -48,12 +48,12 @@ commandRandom = BotCommand Random $ botT $ do
     display (Left str) = str
     display (Right (Left i)) = show i ++ " :: Int"
     display (Right (Right d)) = show d ++ " :: Double"
-    randomParser :: Parser Char RandomQuery
-    randomParser = foldr1 (<|>) 
+    randomParser :: (Chars sb) => Parser sb Char RandomQuery
+    randomParser = MP.asumE 
       [ do
           headCommand "random"
           commandSeparator
-          foldr1 (<|>)
+          MP.asumE
             [ $(stringQ "uniform")     >> commandSeparator >> (fmap Distribution . Uniform     <$> (float <* spaces) <*> float)
             , $(stringQ "normal")      >> commandSeparator >> (fmap Distribution . Normal      <$> (float <* spaces) <*> positiveFloat)
             , $(stringQ "exponential") >> commandSeparator >> (     Distribution . Exponential <$> positiveFloat)

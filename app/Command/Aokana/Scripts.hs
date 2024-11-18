@@ -1,7 +1,8 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, TemplateHaskell, OverloadedStrings #-}
 module Command.Aokana.Scripts where
 
 import MeowBot.Parser as MP
+import Parser.Definition 
 import Control.Monad
 import qualified Data.Text as T
 
@@ -62,10 +63,10 @@ lines' = map Line . lines
 unlines' :: [Line] -> String
 unlines' = unlines . map unLine
 
-lineShape :: Parser Char a -> Parser Line a
+lineShape :: (Stream sl Line) => Parser String Char a -> Parser sl Line a
 lineShape p = maybe MP.zero return . MP.runParser p . unLine =<< MP.getItem
 
-comments :: Parser Line ()
+comments :: (Stream sl Line) => Parser sl Line ()
 comments = lineShape $ do
   MP.spaces0
   $(MP.stringQ "//")
@@ -74,7 +75,7 @@ comments = lineShape $ do
 simplify :: (MultiLangString -> (a, Text)) -> ScriptBlock -> Text
 simplify f block = maybe "" (snd . f) $ scriptContent block
 
-emptyLine :: Parser Line ()
+emptyLine :: (Stream s Line) => Parser s Line ()
 emptyLine = lineShape $ do
   MP.spaces0
   MP.end
@@ -82,10 +83,10 @@ emptyLine = lineShape $ do
 paragraphToScript :: String -> Maybe [ScriptBlock]
 paragraphToScript = MP.runParser parseSingleScriptFile . lines'
 
-parseSingleScriptFile :: Parser Line [ScriptBlock]
+parseSingleScriptFile :: (Stream s Line) => Parser s Line [ScriptBlock]
 parseSingleScriptFile = MP.some contigousBlock
 
-contigousBlock :: Parser Line ScriptBlock
+contigousBlock :: (Stream s Line) => Parser s Line ScriptBlock
 contigousBlock = do
   some (comments <|> emptyLine)
   associatedData <- MP.some associatedDataParser 
@@ -114,11 +115,11 @@ contigousBlock = do
         else if "RIKA"    `T.isPrefixOf` head voiceStrs then Just Rika
         else Nothing
 
-spacesOrTabular :: Parser Char String
+spacesOrTabular :: (Chars sb) => Parser sb Char String
 spacesOrTabular = some $ MP.itemIn [' ', '\t']
 
-associatedDataParser :: Parser Line AssociatedData
-associatedDataParser = lineShape $ foldr1 (<|>) 
+associatedDataParser :: (Stream s Line) => Parser s Line AssociatedData
+associatedDataParser = lineShape $ MP.asumE 
   [ $(stringQ "voice0") >> Voice <$> (spacesOrTabular >> some' item)
   , $(stringQ "scene")  >> Scene <$> (spacesOrTabular >> some' item)
   , $(stringQ "bgm0")   >> BGM   <$> (spacesOrTabular >> some' item)
@@ -132,14 +133,14 @@ specialSymbol = '␂'  -- this is a special symbol that marks the start of every
 speakerBrackets = ('【', '】')
 contentBrackets = ('「', '」')
 
-multiLangStringParser :: Parser Line MultiLangString
+multiLangStringParser :: (Stream s Line) => Parser s Line MultiLangString
 multiLangStringParser = lineShape $ MultiLangString
   <$> singleLangParser
   <*> singleLangParser
   <*> singleLangParser
   <*> singleLangParser
 
-singleLangParser :: Parser Char (Maybe Speaker, Text)
+singleLangParser :: (Chars sb) => Parser sb Char (Maybe Speaker, Text)
 singleLangParser = do
   MP.just specialSymbol
   name <- tryMaybe $ insideBrackets speakerBrackets <* MP.just '：'

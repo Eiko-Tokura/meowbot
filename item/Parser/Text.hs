@@ -8,22 +8,23 @@ import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Text as T
 
+type Chars sb = Stream sb Char
 -- | Parse a non-empty word, which is a continuous string of characters that are not spaces, or a string inside a pair of quotes.
-word :: Parser Char String
+word :: Chars sb => Parser sb Char String
 word =   insideBrackets ('\'', '\'') 
      <|> insideBrackets ('"', '"') 
      <|> some (itemNot ' ')
 
-word' :: Parser Char Text
+word' :: Chars sb => Parser sb Char Text
 word' = T.pack <$> word
 
 -- | Parse a word that is not a flag, i.e. a word that does not start with a dash.
-nonFlagWord :: Parser Char String
+nonFlagWord :: Chars sb => Parser sb Char String
 nonFlagWord = insideBrackets ('\'', '\'')
       <|> insideBrackets ('"', '"') 
       <|> some (itemNotIn [' ', '-'])
 
-nonFlagWord' :: Parser Char Text
+nonFlagWord' :: Chars sb => Parser sb Char Text
 nonFlagWord' = T.pack <$> nonFlagWord
 
 class (Stream sb b) => Packable sb b where
