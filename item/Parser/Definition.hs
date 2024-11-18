@@ -27,20 +27,12 @@ instance Stream Text Char where
   {-# INLINE flatten #-}
 
 instance Stream [a] a where
+  {-# SPECIALIZE instance Stream [Char] Char #-}
   uncons [] = []
   uncons (x:xs) = pure (x, xs)
   {-# INLINE uncons #-}
   flatten = pure
   {-# INLINE flatten #-}
-
--- instance (MonadZero m) => MonadItem b (ParserT b m) where
---   {-# SPECIALIZE instance MonadItem Char (ParserT Char Maybe) #-}
---   getItem = ParserT $ do
---     sb <- get
---     case uncons sb of
---       [] -> zero
---       ((c, sb'):_) -> put sb' >> return c
---   {-# INLINE getItem #-}
 
 -- | The Parser transformer type, here
 --
