@@ -1,5 +1,5 @@
 -- | Make running the parser easier by exporting the necessary functions.
-module Parser.Run 
+module Parser.Run
   ( module Control.Monad.Item
   , module Control.Applicative
   , module Parser.Char

@@ -1,4 +1,4 @@
-module Control.Monad.IOe 
+module Control.Monad.IOe
   (
     ioMToIOe, mToE, mIf
   ) where

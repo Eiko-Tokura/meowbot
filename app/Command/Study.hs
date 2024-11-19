@@ -36,7 +36,7 @@ import External.MarkdownImage
 
 -- we want to implement the following functions, implement according to the order below:
 --
--- 1. there is a list of books, book data 
+-- 1. there is a list of books, book data
 -- books are pdf files, they will be converted to images and available to be accessed by commands
 --
 -- 2. users are allowed to upload books by commands
@@ -52,9 +52,9 @@ newtype PageInsideType = PageInsideType Int deriving Show
 type (<+>) = Either
 infixr 6 <+>
 
-data StudyQuery 
+data StudyQuery
   = SearchBook [SearchQuery]
-  | ReadBook BookName 
+  | ReadBook BookName
       (   ( PageType
           , [ PageInsideType <+> PageNumber <+> AbsolutePageNumber ]
           )
@@ -63,8 +63,8 @@ data StudyQuery
   | InfoEdit BookName Action (Maybe BookInfoType)
   deriving Show
 -- next plan: write a type level combinator for parser
--- in that way the studyParser will be expressed as 
--- type StudyParser 
+-- in that way the studyParser will be expressed as
+-- type StudyParser
 --    =    HeadCommand "study" :-: [SearchQuery]
 --    :<>: HeadCommand "read"  :-: Word BookName :-: (PageNumber <+> AbsolutePageNumber)
 
@@ -76,10 +76,10 @@ data BookManagement
 
 data Action = Set | Remove | Show deriving Show
 
-data BookInfoType 
+data BookInfoType
   = Author Text
-  | Offset PageNumberOffset 
-  | Tags [BookTag] 
+  | Offset PageNumberOffset
+  | Tags [BookTag]
   | PageTypeInfo [PageNumber <+> AbsolutePageNumber] (Maybe PageType)
   deriving Show
 
@@ -112,27 +112,27 @@ pageTypeP = MP.asumE
 
 studyParser :: (Chars sb) => Parser sb Char StudyQuery
 studyParser = headCommand "study" >> commandSeparator >> MP.asumE
-  [ $(stringQ "search") >> 
+  [ $(stringQ "search") >>
       SearchBook <$> many (commandSeparator >> (Keyword <$> word'))
-  , $(stringQ "read") >> commandSeparator >> 
+  , $(stringQ "read") >> commandSeparator >>
       ReadBook <$> word'
-               <*> ( ((,) <$> (commandSeparator >> pageTypeP) 
+               <*> ( ((,) <$> (commandSeparator >> pageTypeP)
                           <*> many (commandSeparator >> (just '+' *> (PageInsideType <$> positiveInt) |+| ePageNumber)))
                    |+| many (commandSeparator >> ePageNumber)
                    )
   , $(stringQ "info") >> commandSeparator >>
-      InfoEdit <$> word' 
+      InfoEdit <$> word'
                <*> (commandSeparator
                    >> ($(stringQ "set") <|> $(stringQ "add") >> return Set)
                    <|> ($(stringQ "remove") >> return Remove)
                    <|> ($(stringQ "show")   >> return Show)
                    )
-               <*> (commandSeparator 
+               <*> (commandSeparator
                    >> ($(stringQ "author") >> canBeEmpty (commandSeparator >> (Author <$> word')))
                    <|> ($(stringQ "offset") >> canBeEmpty (commandSeparator >> (Offset . PageNumberOffset <$> int)))
                    <|> ($(stringQ "tags")   >> canBeEmpty (commandSeparator >> (Tags <$> intercalateBy0 commandSeparator (BookTag <$> word'))))
                    <|> ($(stringQ "pagetype") >> canBeEmpty (commandSeparator >> PageTypeInfo <$> intercalateBy0 commandSeparator ePageNumber
-                          <*> canBeEmpty 
+                          <*> canBeEmpty
                               ( commandSeparator
                               >> ($(stringQ "menu")     >> return Menu)
                               <|> ($(stringQ "exercise") >> return Exercise)
@@ -157,7 +157,7 @@ commandStudy = BotCommand Study $ botT $ do
   other_data <- lift get
   let allBooks = books $ savedData other_data
   case query of
-    SearchBook searchQs     -> 
+    SearchBook searchQs     ->
       let searchResult = searchBooks searchQs allBooks
       in return [ baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
 
@@ -169,21 +169,21 @@ commandStudy = BotCommand Study $ botT $ do
       if null pagesToView then do
         randomPage <- uniformElemS $ book_pages match
         let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
-        return 
+        return
           [ baSendToChatId cid $ T.intercalate "\n"
             [ book_name match
             , tshow (coerce @_ @Int $ reverseOffsetPageNumber offset (page_absoluteNumber randomPage)) <> ", " <> tshow (coerce @_ @Int $ page_absoluteNumber randomPage) <> "/" <> tshow (length $ book_pages match)
             , embedCQCode $ CQImage $ T.pack $ page_imagePath randomPage
             ]
           ]
-      else 
+      else
         return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . pack . page_imagePath) pagesToView ]
 
     ReadBook bookname (Left (pageType, pages')) -> do
       match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           pagesOfGivenType = [ page | page <- book_pages match, page_type page == Just pageType ]
-          absPageNumbersToView = 
+          absPageNumbersToView =
             if null pages' then map page_absoluteNumber pagesOfGivenType -- if no pages are given, view all pages of the given type
             else mapMaybe ((fmap page_absoluteNumber . atMay pagesOfGivenType . coerce) `either` ((Just . offsetPageNumber offset) `either` Just)) pages'  :: [AbsolutePageNumber]
           pagesToView = [ page | page <- book_pages match, page_absoluteNumber page `elem` absPageNumbersToView ]
@@ -200,11 +200,11 @@ commandStudy = BotCommand Study $ botT $ do
           newPages = case infoType of
             PageTypeInfo pages pageType -> [ if page_absoluteNumber page `elem` map (either (offsetPageNumber offset) id) pages then page { page_type = pageType } else page | page <- book_pages match ]
             _ -> book_pages match
-          newBooks = [ if book == match 
-                       then book { book_info = newInfo 
+          newBooks = [ if book == match
+                       then book { book_info = newInfo
                                  , book_pages = newPages
-                                 } 
-                       else book 
+                                 }
+                       else book
                      | book <- allBooks ]
       lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
@@ -219,13 +219,13 @@ commandStudy = BotCommand Study $ botT $ do
             _ -> book_info match
           newPages = case infoType of
             PageTypeInfo pages (Just pageType) -> -- removing a given pageType on given pages
-              [ if page_absoluteNumber page `elem` map (either (offsetPageNumber offset) id) pages 
+              [ if page_absoluteNumber page `elem` map (either (offsetPageNumber offset) id) pages
                    && page_type page == Just pageType
-                then page { page_type = Nothing } else page | page <- book_pages match 
+                then page { page_type = Nothing } else page | page <- book_pages match
               ]
             _ -> book_pages match
-          newBooks = [ if book == match 
-                       then book { book_info = newInfo 
+          newBooks = [ if book == match
+                       then book { book_info = newInfo
                                  , book_pages = newPages
                                  }
                        else book
@@ -248,7 +248,7 @@ commandStudy = BotCommand Study $ botT $ do
     _ -> return [ baSendToChatId cid "o.o?" ]
 
 searchBooks :: [SearchQuery] -> [Book] -> [Book]
-searchBooks sq books = 
+searchBooks sq books =
   [ book | book <- books
          , let bookinfo = book_info book
          , all (\(Keyword kw) -> any ((T.toLower kw `T.isInfixOf`) . T.toLower) $ catMaybes
@@ -260,7 +260,7 @@ searchBooks sq books =
 
 simplifiedListing :: Book -> Text
 simplifiedListing book = T.unwords $ catMaybes
-     [ Just $ book_name book 
+     [ Just $ book_name book
      , (<> ")") . ("(" <> ) <$> bookInfo_author (book_info book)
      ]
 

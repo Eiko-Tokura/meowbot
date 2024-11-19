@@ -4,7 +4,7 @@ import Data.Coerce
 import Data.Text (Text)
 
 newtype PageNumber = PageNumber Int deriving (Show, Eq, Ord, Read) via Int
-newtype AbsolutePageNumber = AbsolutePageNumber Int deriving (Show, Eq, Ord, Read) via Int 
+newtype AbsolutePageNumber = AbsolutePageNumber Int deriving (Show, Eq, Ord, Read) via Int
 newtype PageNumberOffset = PageNumberOffset Int deriving (Show, Eq, Ord, Read, Num) via Int
 
 offsetPageNumber :: PageNumberOffset -> PageNumber -> AbsolutePageNumber
@@ -31,7 +31,7 @@ data BookPage = BookPage
 
 data PageType = Cover | Foreword | Menu | Chapter | Exercise | MarkedAs String deriving (Show, Eq, Ord, Read)
 
-newtype BookTag = BookTag { useBookTag :: Text } deriving (Show, Eq, Ord, Read) via Text 
+newtype BookTag = BookTag { useBookTag :: Text } deriving (Show, Eq, Ord, Read) via Text
 
 data BookInfo = BookInfo
   { bookInfo_author           :: Maybe Text

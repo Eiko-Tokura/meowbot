@@ -7,7 +7,7 @@ import Command.Aokana
 import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import External.ChatAPI 
+import External.ChatAPI
 import MeowBot.Parser (Parser, Chars)
 import Parser.Definition (Stream)
 import qualified MeowBot.Parser as MP
@@ -25,7 +25,7 @@ commandCat = BotCommand Cat $ botT $ do
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
-  let msys = ChatSetting 
+  let msys = ChatSetting
                ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botModules other_data))
                (systemTemp =<< lookup cid (chatSettings sd))
   -- looking for custom system message
@@ -40,7 +40,7 @@ commandCat = BotCommand Cat $ botT $ do
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
-catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String) 
+catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String)
 catParser (Just botname) msys = do
   MP.spaces0
   parseMeowMeow
@@ -50,7 +50,7 @@ catParser (Just botname) msys = do
       MP.commandSeparator2
       str <- MP.some MP.item
       return (ChatParams GPT3 False msys, str)
-catParser Nothing msys = do 
+catParser Nothing msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
   where
@@ -79,16 +79,16 @@ replyCatParser name msys = catParser name msys <|> ( do
 
 treeCatParser :: (Stream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
 treeCatParser name msys mid = do
-  elist  <- Right <$> 
+  elist  <- Right <$>
     --   ( do
     --     firstUMsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage] ) -- will be dropped
     --     firstAMsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
     --     case ( do
     --             MP.runParser aokanaParser (extractMetaMessage firstUMsg)  -- the first user input should be an aokana command
-    --             meta <- metaMessage firstAMsg                              
+    --             meta <- metaMessage firstAMsg
     --             return $ MP.withChatSetting meta -- there might be modified system message
     --          ) of
-    --       Just msys' -> 
+    --       Just msys' ->
     --         do
     --           innerList <- MP.many
     --             (do
@@ -104,24 +104,24 @@ treeCatParser name msys mid = do
     --       Nothing -> MP.zero
     -- )
     -- MP.|+|
-      MP.many (do 
+      MP.many (do
           umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
           amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-          let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg) 
+          let (params, metaUMsg) = fromMaybe (ChatParams GPT3 False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg)
           return [ (params, Message { role = "user" , content = T.pack metaUMsg })
                  , (params, Message { role = "assistant", content = extractMetaMessage amsg})
                  ]
         ) :: Parser _ CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
-    
+
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of
     Right list ->
       case MP.runParser (if null list then catParser name msys else replyCatParser name msys) (extractMetaMessage lastMsg) of
-            Just (params, metaLast) -> return $ concat list ++ 
+            Just (params, metaLast) -> return $ concat list ++
                 [ (params, Message { role = "user", content = T.pack metaLast}) ]
             _ -> MP.zero
     Left (msys', list) -> case MP.runParser (replyCatParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage lastMsg) of
-            Just (params, metaLast) -> return $ concat list ++ 
+            Just (params, metaLast) -> return $ concat list ++
                 [ (params, Message { role = "user", content = T.pack metaLast}) ]
             _ -> MP.zero
   where extractMetaMessage CQMessage{metaMessage = Nothing} = ""

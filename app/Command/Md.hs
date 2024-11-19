@@ -2,7 +2,7 @@
 module Command.Md where
 
 import Command
-import Data.Bifunctor 
+import Data.Bifunctor
 import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
 import MeowBot.BotStructure
@@ -28,20 +28,20 @@ commandMd = BotCommand Md $ do
         Nothing -> return []
         Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
         Just (Right fps) -> return [baSendToChatId cid (T.concat $ [embedCQCode $ CQImage $ T.pack $ useAbsPath outPath | outPath <- fps])]
-  where 
+  where
     mdParser :: (Chars sb) => Parser sb Char Text
     mdParser = do
       MP.headCommand "md"
       MP.commandSeparator
       MP.some' MP.item
-    
+
 
 turnMdCQCode :: Text -> ExceptT Text IO Text
-turnMdCQCode md = fmap 
-  (\fps -> T.concat [embedCQCode (CQImage filepath) | filepath <- fps]) $ 
-    ExceptT $ 
-      first ((<> "\n Showing the original message: " <> md) . ("Error o.o occurred while rendering markdown pictures o.o " <>) . tshow) <$> 
-        runExceptT 
+turnMdCQCode md = fmap
+  (\fps -> T.concat [embedCQCode (CQImage filepath) | filepath <- fps]) $
+    ExceptT $
+      first ((<> "\n Showing the original message: " <> md) . ("Error o.o occurred while rendering markdown pictures o.o " <>) . tshow) <$>
+        runExceptT
           (map (T.pack . useAnyPath) <$> markdownToImage md)
 
 

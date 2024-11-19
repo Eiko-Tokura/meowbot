@@ -52,25 +52,25 @@ newtype IdentityFlag = UseName String deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
 traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
-traceModeWith flag ls f a 
+traceModeWith flag ls f a
   | flag `elem` ls = trace (f a) a
   | otherwise      = a
 
 -- | The main function of the bot.
 --  It will parse the command line arguments and start the bot.
 --  runs a debuger on port 2077
---withGhcDebugTCP "127.0.0.1" 2077 $ 
+--withGhcDebugTCP "127.0.0.1" 2077 $
 main :: IO ()
 main = do
   args <- getArgs
-  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ] 
-      runFlags 
-        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (tail args) (tail $ tail args) ] 
+  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ]
+      runFlags
+        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
         ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
       identityFlags
         =  [ UseName name | ("--name", name) <- zip args (tail args) ]
       commandIds
-        =  if "--all-commands" `elem` args 
+        =  if "--all-commands" `elem` args
            then []
            else [ read cmd | ("--command", cmd) <- zip args (tail args) ]
       mGlobalSysMsg
@@ -147,9 +147,9 @@ initialData mods = do
       let msavedData = read savedData
       AllData [] . OtherData 0 [] msavedData mods [] <$> getAllScripts
     else do
-      putStrLn "No saved data file found, starting with empty data! owo" 
+      putStrLn "No saved data file found, starting with empty data! owo"
       AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) mods [] <$> getAllScripts
-  where 
+  where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]
     initialRules =

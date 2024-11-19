@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, DataKinds, OverloadedStrings #-}
-module External.MarkdownImage 
+module External.MarkdownImage
   ( markdownToImage
   , pdfToImage
   , pdfToImageWithPageNumber
@@ -32,7 +32,7 @@ writeMarkdownToTempFile markdownString = do
 markdownToPdf :: FilePathFor anyPathType File Markdown -> ExceptT SomeException IO (FilePathFor Rel File PDF)
 markdownToPdf md = do
   checkMkdir outputDir
-  ExceptT $ try $ callProcess "pandoc" 
+  ExceptT $ try $ callProcess "pandoc"
     ["--pdf-engine=xelatex"
     , "-V", "CJKmainfont=Noto Sans CJK JP"
     , "-V", "geometry:margin=0.5in"
@@ -58,7 +58,7 @@ pdfToImageWithPageNumber pdf = do
         readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stringQ "page_") *> positiveInt <* $(stringQ ".png"))
         imageDir = "images"
 
-pdfToImage :: FilePathFor anyRef File PDF -> ExceptT SomeException IO [FilePathFor Rel File Image] 
+pdfToImage :: FilePathFor anyRef File PDF -> ExceptT SomeException IO [FilePathFor Rel File Image]
 pdfToImage = fmap (fmap snd) . pdfToImageWithPageNumber
 
 -- | Input a markdown string, output a sorted list of absolute file paths of images generated

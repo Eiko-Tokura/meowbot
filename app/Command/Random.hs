@@ -10,7 +10,7 @@ import Control.Monad.Trans.ReaderState
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans
 
-data RandomQuery 
+data RandomQuery
   = Distribution DistributionFamily
   | ChooseFromList [String]
   | CustomDistribution [(Double, String)]
@@ -49,7 +49,7 @@ commandRandom = BotCommand Random $ botT $ do
     display (Right (Left i)) = show i ++ " :: Int"
     display (Right (Right d)) = show d ++ " :: Double"
     randomParser :: (Chars sb) => Parser sb Char RandomQuery
-    randomParser = MP.asumE 
+    randomParser = MP.asumE
       [ do
           headCommand "random"
           commandSeparator

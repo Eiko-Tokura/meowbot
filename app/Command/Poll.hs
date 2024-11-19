@@ -10,7 +10,7 @@ import Data.Additional
 import Data.Maybe
 import Data.Typeable
 import qualified Data.Text as T
-import MeowBot.Parser 
+import MeowBot.Parser
 import MeowBot.BotStructure
 import Parser.Definition (Stream)
 import qualified Data.Set as S
@@ -30,7 +30,7 @@ data PollData = PollData
   } deriving (Show, Eq, Typeable, IsAdditionalData)
 
 pollStatistics :: PollData -> [(Int, Text, Int)]
-pollStatistics poll = 
+pollStatistics poll =
   let optionVotes = M.fromListWith (+) [ (optionId, 1) | optionId <- concatMap S.toList $ M.elems $ pollVotes poll ]
   in [ (optionId, option, M.findWithDefault 0 optionId optionVotes) | (optionId, option) <- M.toList $ pollOptions poll ]
 
@@ -38,14 +38,14 @@ instance IsAdditionalData (M.Map PollId PollData)
 
 data PollEnv = PollGlobal | PollPrivate
 
-data PollCommand 
+data PollCommand
   = CreatePoll PollEnv Text [Text] -- ^ title, options
   | Vote       PollId  [Int]    -- ^ pollId, optionId
   | Propose    PollId  Text   -- ^ pollId, option
   | ViewPoll   PollId
   | ListPoll
 
-pollParser :: (Chars sb) => Parser sb Char PollCommand 
+pollParser :: (Chars sb) => Parser sb Char PollCommand
 pollParser = do
   headCommand "poll"
   commandSeparator
@@ -57,12 +57,12 @@ pollParser = do
     , listPollParser
     ]
   where
-    createPollParser = $(stringQ "create")  >> commandSeparator >> 
-      CreatePoll 
-        <$> 
+    createPollParser = $(stringQ "create")  >> commandSeparator >>
+      CreatePoll
+        <$>
           ( ($(stringQ "global") >> commandSeparator >> return PollGlobal)
             <|> return PollPrivate
-          ) 
+          )
         <*> word'
         <*> some (commandSeparator >> word')
     voteParser       = $(stringQ "vote")    >> commandSeparator >> Vote       <$> int <*> some (commandSeparator >> int)
@@ -76,10 +76,10 @@ pollTreeParser = do
   let pollId = head . getAdditionalDataType @_ @PollId $ self
   umsg <- satisfy $ (`elem` [GroupMessage, PrivateMessage]) . eventType
   maybe zero return $ runParser (replyPollParser pollId) (maybe "" onlyMessage $ metaMessage umsg)
-  where 
-    replyPollParser pollId 
-      = spaces0 
-      >>    (Vote pollId <$> intercalateBy commandSeparator int) 
+  where
+    replyPollParser pollId
+      = spaces0
+      >>    (Vote pollId <$> intercalateBy commandSeparator int)
         <|> ($(stringQ "propose") >> commandSeparator >> Propose pollId <$> some' item)
 
 commandPoll :: BotCommand
@@ -112,10 +112,10 @@ doPollCommand (_, cid, _, _) (CreatePoll env title options) = do
       env' = case env of
         PollGlobal -> Nothing
         PollPrivate -> Just cid
-      newPollMap = traceShowId $ 
-        M.insert 
-          newPollId 
-          (PollData newPollId env' title (M.fromList $ zip [0..] options) M.empty) 
+      newPollMap = traceShowId $
+        M.insert
+          newPollId
+          (PollData newPollId env' title (M.fromList $ zip [0..] options) M.empty)
           pollMap
   modify . modifyAdditionalDataType $ const $ Just newPollMap
   baSendToChatIdFull cid Nothing [AdditionalData newPollId] [] $ T.intercalate "\n" $
@@ -123,7 +123,7 @@ doPollCommand (_, cid, _, _) (CreatePoll env title options) = do
     , "Poll ID: " <> tshow newPollId
     , "Title: " <> title
     ] ++ [ tshow i <> ". " <> option | (i, option) <- zip [0..] options ]
-    ++ 
+    ++
     [ "---"
     ] ++
     [ "投票:回复此消息选项编号（空格分隔）"

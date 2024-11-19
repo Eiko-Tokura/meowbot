@@ -1,10 +1,9 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
-module MeowBot.BotStructure 
+module MeowBot.BotStructure
   ( BotCommand(..), BotModules(..), CommandValue
   , GroupId(..), UserId(..), ChatId(..), Chat, MessageId, BotName
   , BotAction(..), ChatRoom, WholeChat, AllData(..), OtherData(..), SavedData(..)
@@ -21,7 +20,7 @@ module MeowBot.BotStructure
   , EssentialContent
   , cqmsgToEssentialContent
   , getEssentialContent, getEssentialContentAtN, sendIOeToChatId, sendToChatId, baSendToChatId, baSendToChatIdFull
-  , getFirstTree, getNewMsg, getNewMsgN
+  , getFirstTree, getNewMsg, getNewMsgN, getTimeLine
   , mT
 
   , rseqWholeChat
@@ -39,14 +38,14 @@ import Control.Monad.Trans.ReaderState as RST
 import Command.Aokana.Scripts
 import Data.Coerce
 import Data.Maybe (fromMaybe, listToMaybe)
-import Data.Text (Text, pack, unpack) 
-import Data.Ord (comparing)
-import Data.List (maximumBy)
+import Data.Text (Text, pack, unpack)
+import Data.Ord (comparing, Down(..))
+import Data.List (maximumBy, sortOn)
 import Data.Aeson (object, FromJSON(..), ToJSON, toJSON, withObject, (.=), withText)
 import Data.Aeson.Types (Parser, (.:?))
 import Data.Additional
 import GHC.Generics (Generic)
-import External.ChatAPI 
+import External.ChatAPI
 import MeowBot.Parser (MetaMessage(..), cqmsg, Tree(..), flattenTree)
 import qualified MeowBot.Parser as MP
 import Debug.Trace
@@ -95,7 +94,7 @@ type CommandValue = ReaderStateT WholeChat OtherData IO [BotAction]
 data BotCommand = BotCommand
   { identifier :: CommandId
   , command    :: CommandValue
-  } 
+  }
 
 data BotModules = BotModules
   { canUseGroupCommands   :: [CommandId]
@@ -162,7 +161,7 @@ instance FromJSON Role where
     "member" -> return RMember
     _ -> return RUnknown
 
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing 
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -176,12 +175,12 @@ instance FromJSON ResponseData where
 
 instance FromJSON CQMessage where
   parseJSON = withObject "CQMessage" $ \obj -> do
-    postType <- obj .:? "post_type" :: Parser (Maybe Text)
-    messageType <- obj .:? "message_type" :: Parser (Maybe Text)
+    postType      <- obj .:? "post_type"       :: Parser (Maybe Text)
+    messageType   <- obj .:? "message_type"    :: Parser (Maybe Text)
     metaEventType <- obj .:? "meta_event_type" :: Parser (Maybe Text)
-    dataObj <- obj .:? "data"
-    message <- obj .:? "raw_message" 
-    strmsg <- obj .:? "raw_message" :: Parser (Maybe Text)
+    dataObj       <- obj .:? "data"
+    message       <- obj .:? "raw_message"
+    strmsg        <- obj .:? "raw_message" :: Parser (Maybe Text)
     let eventType = case (postType, metaEventType, messageType, dataObj) of
           (Just "message", _,  Just "private", _) -> PrivateMessage
           (Just "message", _, Just "group", _) -> GroupMessage
@@ -198,9 +197,9 @@ instance FromJSON CQMessage where
               <*> pure dataObj
               <*> obj .:? "echo"
               <*> pure Nothing
-              <*> pure ( case message of 
+              <*> pure ( case message of
                 Nothing -> Nothing
-                Just _ -> MP.runParser cqmsg $ fromMaybe "" strmsg ) 
+                Just _ -> MP.runParser cqmsg $ fromMaybe "" strmsg )
 
 showCQ :: CQMessage -> String
 showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", messageContent, mcqcodes]
@@ -214,7 +213,7 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", message
         mNonEmpty l    = Just l
 
 -- | if savedData changed, save it to file
-saveData :: AllData -> StateT AllData IO () 
+saveData :: AllData -> StateT AllData IO ()
 saveData prev_data = do
   new_data <- ST.get
   lift $ when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) do
@@ -235,18 +234,18 @@ increaseAbsoluteId = do
   RST.put $ other_data {message_number = mid + 1}
   return $ mid + 1
 
-data SendMessageForm = SendMessageForm 
+data SendMessageForm = SendMessageForm
   { action :: Text
   , params :: Params
   , echo   :: Maybe Text
   } deriving (Generic, Show, ToJSON)
 
-data Params 
-  = PrivateParams 
+data Params
+  = PrivateParams
     { user_id     :: UserId
     , messageText :: Text
-    } 
-  | GroupParams 
+    }
+  | GroupParams
     { group_id    :: GroupId
     , messageText :: Text
     }
@@ -270,17 +269,17 @@ instance ToJSON Params where
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
 updateAllDataByMessage :: CQMessage -> AllData -> AllData
-updateAllDataByMessage cqmsg (AllData whole_chat other_data) = 
+updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
       Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupChat gid) cqmsg)  
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupChat gid) cqmsg)
         other_data
       Nothing -> AllData whole_chat other_data
 
     PrivateMessage -> case userId cqmsg of
       Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateChat uid) cqmsg)  
+        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateChat uid) cqmsg)
         other_data
       Nothing -> AllData whole_chat other_data
 
@@ -291,12 +290,12 @@ updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
     _ -> AllData whole_chat other_data
 
 updateAllDataByResponse :: (ResponseData, Maybe Text) -> AllData -> AllData
-updateAllDataByResponse (rdata, mecho) alldata = 
+updateAllDataByResponse (rdata, mecho) alldata =
   case (message_id rdata, (sent_messages . otherdata) alldata) of
     (Nothing,_) -> alldata
     (_, []) -> alldata
-    (Just mid, sentMessageList) -> 
-      let m0 = fromMaybe (head sentMessageList) $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
+    (Just mid, sentMessageList@(headSentMessageList:_)) ->
+      let m0 = fromMaybe headSentMessageList $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
           ms = filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of
@@ -305,7 +304,7 @@ updateAllDataByResponse (rdata, mecho) alldata =
         _ -> alldata
 
 attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
-attachRule msg1 = 
+attachRule msg1 =
   case do {mtm <- metaMessage msg1; MP.replyTo mtm} of
     Nothing -> Nothing
     Just id -> Just (\m -> case messageId m of
@@ -314,13 +313,13 @@ attachRule msg1 =
 
 updateListByFuncKeyElement :: (Eq k) => [(k, [Tree a])] -> [(k, [Tree a])] -> Maybe (a -> Bool) -> k -> a -> [(k, [Tree a])]
 updateListByFuncKeyElement [] past _ key element = (key, [Node element []]) : reverse past
-updateListByFuncKeyElement (l:ls) past attachTo key element  
+updateListByFuncKeyElement (l:ls) past attachTo key element
   | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : reverse past ++ ls
   | otherwise     = updateListByFuncKeyElement ls (l:past) attachTo key element
-  where (keyl, treel) = l 
+  where (keyl, treel) = l
 
 putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]
-putElementIntoForest attachTo element forest = (`using` evalList rseq) $ take forestSizeForEachChat $ 
+putElementIntoForest attachTo element forest = (`using` evalList rseq) $ take forestSizeForEachChat $
   case attachTo of
     Nothing -> Node element []:forest
     Just f -> let (before, rest) = break (any f . flattenTree) forest
@@ -349,7 +348,7 @@ getNewMsg [] = emptyCQMessage
 getNewMsg wholechat = snd $ largestInTree (fromMaybe 0 . absoluteId) (getFirstTree wholechat)
 
 getFirstTree :: WholeChat -> Tree CQMessage
-getFirstTree wc = 
+getFirstTree wc =
   case wc of
     [] -> Node emptyCQMessage []
     (p:_) -> case p of
@@ -358,7 +357,7 @@ getFirstTree wc =
 
 getNewMsgN :: Int -> WholeChat -> [CQMessage]
 getNewMsgN _ [] = []
-getNewMsgN n wholechat = take n $ concatMap flattenTree $ snd (head wholechat)
+getNewMsgN n (headWholeChat:_) = take n $ concatMap flattenTree $ snd (headWholeChat)
 
 type MessageId = Int
 type EssentialContent = (Text, ChatId, UserId, MessageId)
@@ -373,8 +372,12 @@ getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat
         (!?) (x:_) 0 = Just x
         (!?) (_:xs) n = xs !? (n-1)
 
+-- | get the timeline of the most recent chat
+getTimeLine :: WholeChat -> [CQMessage]
+getTimeLine = sortOn (Down . time) . flattenTree . getFirstTree
+
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
-cqmsgToEssentialContent cqmsg = 
+cqmsgToEssentialContent cqmsg =
   (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
         <*> (case eventType cqmsg of
               GroupMessage -> GroupChat <$> groupId cqmsg
@@ -383,10 +386,10 @@ cqmsgToEssentialContent cqmsg =
             )
         <*> userId cqmsg
         <*> messageId cqmsg
- 
+
 mT :: (Applicative t) => Maybe (t a) -> t (Maybe a)
 mT Nothing = pure Nothing
-mT (Just ioa) = Just <$> ioa 
+mT (Just ioa) = Just <$> ioa
 
 -- | Abstract representation of sending a message to a chat id.
 baSendToChatId :: ChatId -> Text -> BotAction
@@ -405,7 +408,7 @@ sendIOeToChatId (_, cid, _, mid) ioess = do
 
 -- | send message to a chat id, recording the message as reply.
 sendToChatId :: EssentialContent -> Text -> OtherData -> ([BotAction], OtherData)
-sendToChatId (_, cid, _, mid) str other_data = 
+sendToChatId (_, cid, _, mid) str other_data =
   ([baSendToChatId cid str], insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.
@@ -418,9 +421,9 @@ baSendToChatIdFull cid mid adt items str = do
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 insertMyResponseHistory :: ChatId -> MetaMessage -> OtherData -> OtherData
-insertMyResponseHistory (GroupChat gid) meta other_data = 
-  other' { sent_messages = my:sent_messages other_data } where 
-    my = emptyCQMessage 
+insertMyResponseHistory (GroupChat gid) meta other_data =
+  other' { sent_messages = my:sent_messages other_data } where
+    my = emptyCQMessage
       { eventType   = SelfMessage
       , absoluteId  = Just aid
       , groupId     = Just gid
@@ -428,9 +431,9 @@ insertMyResponseHistory (GroupChat gid) meta other_data =
       , echoR       = Just $ pack $ show aid
       }
     (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-insertMyResponseHistory (PrivateChat uid) meta other_data = 
-  other' { sent_messages = my:sent_messages other_data } where 
-    my = emptyCQMessage 
+insertMyResponseHistory (PrivateChat uid) meta other_data =
+  other' { sent_messages = my:sent_messages other_data } where
+    my = emptyCQMessage
       { eventType   = SelfMessage
       , absoluteId  = Just aid
       , userId      = Just $ coerce uid

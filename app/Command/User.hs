@@ -18,7 +18,7 @@ data UserManagement
   | GroupManagement Action GroupGroup (Maybe GroupId)
   | RuleManagement  Action (Maybe CommandRule)
 
-data Action = Add | Remove | List 
+data Action = Add | Remove | List
 
 commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
@@ -53,7 +53,7 @@ commandUser = BotCommand User $ botT $ do
           _ -> "user_id / group_id parameter cannot be empty o.o"
 
 userParser :: (MP.Chars sb) => Parser sb Char UserManagement
-userParser = 
+userParser =
   (MP.headCommand "user" >> MP.spaces >>
     UserManagement <$> actionParser <*> (MP.spaces *> userGroupParser) <*> (MP.spaces0 >> MP.canBeEmpty (UserId <$> idParser)))
   <|>
@@ -64,10 +64,10 @@ userParser =
     RuleManagement <$> actionParser <*> (MP.spaces0 >> MP.canBeEmpty ruleParser))
   where actionParser = MP.asumE [ $(MP.stringQ "add") >> return Add
                                 , $(MP.stringQ "remove") >> return Remove
-                                , $(MP.stringQ "list") >> return List 
+                                , $(MP.stringQ "list") >> return List
                                 ]
         userGroupParser = MP.asumE [ $(MP.stringQ "admin") >> return Admin
-                                   , $(MP.stringQ "allowed") >> return Allowed 
+                                   , $(MP.stringQ "allowed") >> return Allowed
                                    , CustomUserGroup <$> MP.word
                                    ]
         groupGroupParser = ($(MP.stringQ "allowed") >> return AllowedGroup)

@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
 {-# LANGUAGE TemplateHaskell, DerivingStrategies, OverloadedStrings, ScopedTypeVariables, TypeApplications, TypeFamilies, AllowAmbiguousTypes, DeriveAnyClass #-}
-module MeowBot.Parser 
+module MeowBot.Parser
   ( module Parser.Run
   , cqmsg
   , positiveInt
@@ -35,7 +35,7 @@ import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Either(lefts, rights, fromRight)
 import Data.Text (Text)
-import qualified Data.Text as T 
+import qualified Data.Text as T
 
 tshow :: Show a => a -> Text
 tshow = T.pack . show
@@ -85,7 +85,7 @@ htmlDecode = many $ htmlCodes <|> getItem
 {-# INLINE htmlDecode #-}
 
 cqother :: (Chars sb) => Text -> Parser sb Char CQCode
-cqother str = CQOther str <$> intercalateBy ($(itemInQ ",;")) 
+cqother str = CQOther str <$> intercalateBy ($(itemInQ ",;"))
   ((,) <$> some' (htmlCodes <|> itemNot '=')   <* just '='
        <*> many' (htmlCodes <|> $(itemNotInQ ",;]"))
   )
@@ -110,7 +110,7 @@ cqmsg = do
   return MetaMessage
     { onlyMessage = pack $ fromMaybe "" $ runParser htmlDecode $ rights leither
     , cqcodes = lefts leither
-    , replyTo = listToMaybe [id | CQReply id <- lefts leither] 
+    , replyTo = listToMaybe [id | CQReply id <- lefts leither]
     , withChatSetting = Nothing
     , additionalData = []
     }
@@ -131,7 +131,7 @@ commandSeparator2 = $(itemInQ ['～', '~', ',', '，', '!', '！', '?', '？']) 
 headCommand :: (Chars sb) => String -> Parser sb Char String
 headCommand cmd = spaces0 >> just ':' <|> just '：' >> string cmd
 {-# INLINE headCommand #-}
- 
+
 canBeEmpty :: forall sb b a. (Stream sb b) => Parser sb b a -> Parser sb b (Maybe a)
 canBeEmpty p = fromRight Nothing <$> (end @b |+| (Just <$> p))
 {-# INLINE canBeEmpty #-}

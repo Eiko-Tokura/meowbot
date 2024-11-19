@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, TemplateHaskell, OverloadedStrings, GADTs, TypeApplications #-}
-module Command.Retract 
+module Command.Retract
   ( commandRetract
   ) where
 
@@ -46,9 +46,9 @@ commandRetract = BotCommand Retract $ botT $ do
         return [BARetractMsg mid]
     , do -- managing the bahavior of another bot
         guard $ uid `elem` chinoBotIds
-        listToMaybe . catMaybes $ 
-          [ void $ runParser 
-            ( $(stringQ "bid:") >> int @Integer >> 
+        listToMaybe . catMaybes $
+          [ void $ runParser
+            ( $(stringQ "bid:") >> int @Integer >>
               spaceOrEnter  >> $(stringQ "捡到来自") >> some item
             ) msg
           , guard ( "渣男" `T.isInfixOf` msg)
@@ -60,8 +60,8 @@ commandRetract = BotCommand Retract $ botT $ do
         return [BARetractMsg mid]
     , do
         guard $ uid `elem` asllIds
-        guard . not . null 
-          $  [ props | CQOther "image" props <- cqs ] 
+        guard . not . null
+          $  [ props | CQOther "image" props <- cqs ]
           <> [ props | CQOther "json" props <- cqs ]
         return [BARetractMsg mid]
     ]

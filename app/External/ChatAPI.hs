@@ -3,8 +3,8 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass #-}
 {-# LANGUAGE TypeApplications #-}
 
-module External.ChatAPI 
-  ( 
+module External.ChatAPI
+  (
     simpleChat, Message(..), messageChat, ChatModel(..), ChatParams(..), ChatSetting(..), chatSettingMaybeWrapper
   ) where
 
@@ -25,7 +25,7 @@ import GHC.Generics (Generic)
 import Control.DeepSeq
 
 data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
-data ChatParams  = ChatParams 
+data ChatParams  = ChatParams
   { chatModel     :: ChatModel
   , markDown      :: Bool
   , chatSetting   :: ChatSetting
@@ -68,7 +68,7 @@ instance FromJSON ChatCompletionResponse where
     <*> v .: "choices"
     <*> v .: "usage"
 
-instance FromJSON Choice 
+instance FromJSON Choice
 instance FromJSON Message
 
 apiKeyFile :: FilePath
@@ -89,13 +89,13 @@ promptMessage prompt = Message "user" (pack prompt)
 generateRequestBody :: ChatParams -> [Message] -> ByteString
 generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
   ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (systemTemp mset))
-  where sysMessage = if md then Message 
+  where sysMessage = if md then Message
                           "system"
                           "You are a endearing catgirl assistant named '喵喵'. \
                           \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'.  \
-                          \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. Do not use \\( \\) or \\[ \\] for formulas."  
-                        else fromMaybe (Message 
-                          "system" 
+                          \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. Do not use \\( \\) or \\[ \\] for formulas."
+                        else fromMaybe (Message
+                          "system"
                           "You are the endearing catgirl assistant named '喵喵'. You adore using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
                           ) (systemMessage mset)
         strModel = case model of

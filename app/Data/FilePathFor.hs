@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, FlexibleInstances, DataKinds, LambdaCase, TypeFamilies, DerivingVia, StandaloneDeriving, MultiParamTypeClasses, ScopedTypeVariables #-}
-module Data.FilePathFor 
+module Data.FilePathFor
   ( ComposablePath(..)
   , toAbsoluteFilePath, toAbsoluteFilePaths
   , toAbsPath, toAbsPaths
@@ -29,8 +29,8 @@ data PathType = Directory | File
 -- mixing file path with directory path
 -- mixing absolute path with relative path
 -- mixing paths of different purpose
-data 
-  FilePathFor 
+data
+  FilePathFor
     (pr :: PathRef)  -- ^ the path reference type, either relative or absolute
     (pt :: PathType) -- ^ the path type, either directory or file
     a                -- ^ the type of the file, used to enhance type-safety
@@ -51,7 +51,7 @@ relDir  :: String -> FilePathFor Rel Directory a
 relDir  = RelPath
 
 instance IsString (FilePathFor Rel t a) where
-  fromString = RelPath 
+  fromString = RelPath
 instance IsString (FilePathFor Abs t a) where
   fromString = AbsPath
 
@@ -142,7 +142,7 @@ toAbsoluteFilePaths relFps = do
 
 -- | Convert any filepath to an absolute path, if it is already an absolute path, it will be returned as is
 toAbsPath :: (MonadIO m) => FilePathFor r t a -> m (FilePathFor Abs t a)
-toAbsPath (AbsPath s) = return $ AbsPath s 
+toAbsPath (AbsPath s) = return $ AbsPath s
 toAbsPath (RelPath s) = (</> RelPath s) <$> getCurrentDirectory
 {-# INLINE toAbsPath #-}
 

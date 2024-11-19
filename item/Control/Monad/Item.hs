@@ -197,7 +197,7 @@ htmlCodes = asumE
 
 Let's think about what will this thing expand to:
 
-htmlCodes 
+htmlCodes
   = asumE
     [ just '&' >> just 'a' >> just 'm' >> just 'p' >> just ';' >> pure '&'
     , just '&' >> just '#' >> just '4' >> just '4' >> just ';' >> pure ','
@@ -219,17 +219,17 @@ htmlCodes
 -- eta :: Applicative f => a -> f a
 -- eta = pure
 -- {-# INLINE[1] eta #-}
--- 
+--
 -- {-# RULES "Factor common path/%>>" forall x y z. (x %>> y) <|> (x %>> z) = x %>> (y <|> z) #-}
 -- {-# RULES "Factor common path/%>>" forall x y z. (just x %>> y) <|> (just x %>> z) = just x %>> (y <|> z) #-}
 -- {-# RULES "Factor common path/%>>" forall x y z. (y %>> just x) <|> (z %>> just x) = (y <|> z) %>> just x #-}
--- 
+--
 -- {-# RULES "Factor common path/<:>" forall f x y z. (f x <:> y) <|> (f x <:> z) = f x <:> (y <|> z) #-}
 -- {-# RULES "Factor common path/<:>" forall x y z. (just x <:> y) <|> (just x <:> z) = just x <:> (y <|> z) #-}
 -- {-# RULES "Factor common path/<:>" forall x y z. (eta x <:> y) <|> (eta x <:> z) = eta x <:> (y <|> z) #-}
 -- {-# RULES "Factor common path/<:>" forall x y z. (y <:> just x) <|> (z <:> just x) = (y <|> z) <:> just x #-}
 -- {-# RULES "Factor common path/<:>" forall x y z. (y <:> eta x) <|> (z <:> eta x) = (y <|> z) <:> eta x #-}
--- 
+--
 -- ruleTest :: (Alternative m, MonadZero m, MonadItem Char m) => m Char
 -- ruleTest = (just 'a' %>> just 'b' %>> just 'c') <|> (just 'a' %>> just 'c' %>> just 'c')
--- 
+--

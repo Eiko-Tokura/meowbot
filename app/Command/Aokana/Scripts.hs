@@ -30,7 +30,7 @@ data MultiLangString = MultiLangString
   } deriving (Show, Eq)
 
 getMultiLangString :: MultiLangString -> Maybe Text -- concat all the strings
-getMultiLangString (MultiLangString (_, en) (_, jp) (_, zh) (_, tr)) = 
+getMultiLangString (MultiLangString (_, en) (_, jp) (_, zh) (_, tr)) =
   let strs = [en, jp, zh, tr]
   in case filter (not . T.null) strs of
     [] -> Nothing
@@ -82,7 +82,7 @@ emptyLine = lineShape $ do
 
 evalScripts :: Strategy [ScriptBlock]
 evalScripts ls = evalList evalScriptBlock ls
-  where evalScriptBlock (ScriptBlock asds mls ac) = 
+  where evalScriptBlock (ScriptBlock asds mls ac) =
           ScriptBlock <$> evalList rseq asds <*> rseq mls <*> rseq ac
 
 paragraphToScript :: String -> Maybe [ScriptBlock]
@@ -102,7 +102,7 @@ contigousBlock = do
     -- if asds contains a Voice str term, determine the character by the string completely. If not, consider reading the en part of mls to determine.
     determineCharacter :: [AssociatedData] -> Maybe MultiLangString -> Maybe AokanaCharacter
     determineCharacter _ Nothing = Nothing
-    determineCharacter asds (Just mls) = do 
+    determineCharacter asds (Just mls) = do
       let voiceStrs = [str | Voice str <- asds]
       if null voiceStrs
       then case en mls of
@@ -113,7 +113,7 @@ contigousBlock = do
           "Rika"    : _ -> Just Rika
           _ -> Nothing
         _ -> Nothing
-      else 
+      else
         if "ASUKA"        `T.isPrefixOf` head voiceStrs then Just Asuka
         else if "MISAKI"  `T.isPrefixOf` head voiceStrs then Just Misaki
         else if "MASHIRO" `T.isPrefixOf` head voiceStrs then Just Mashiro
@@ -124,7 +124,7 @@ spacesOrTabular :: (Chars sb) => Parser sb Char String
 spacesOrTabular = some $ MP.itemIn [' ', '\t']
 
 associatedDataParser :: (Stream s Line) => Parser s Line AssociatedData
-associatedDataParser = lineShape $ MP.asumE 
+associatedDataParser = lineShape $ MP.asumE
   [ $(stringQ "voice0") >> Voice <$> (spacesOrTabular >> some' item)
   , $(stringQ "scene")  >> Scene <$> (spacesOrTabular >> some' item)
   , $(stringQ "bgm0")   >> BGM   <$> (spacesOrTabular >> some' item)

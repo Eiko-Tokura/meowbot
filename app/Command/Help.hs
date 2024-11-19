@@ -29,7 +29,7 @@ commandHelp = BotCommand Help $ botT $ do
       mParam <- MP.tryMaybe . MP.asumE $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
         Just str -> return $ fromMaybe "" $ lookup str helpList
-        Nothing  -> return . pack . concat $ 
+        Nothing  -> return . pack . concat $
           [ "你好，这里是" ++ fromMaybe "Eiko的喵喵" botName ++ "~目前支持的命令："
           , concatMap (("\n:" ++ ) . fst) helpList
           , "\n可以使用 :help <command>如:help cat来查看详细命令的帮助。"

@@ -12,9 +12,9 @@ import GHC.Generics
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 
-data CQCode 
-  = CQAt Int 
-  | CQReply Int 
+data CQCode
+  = CQAt Int
+  | CQReply Int
   | CQRecord Text
   | CQImage Text
   | CQOther Text [(Text, Text)]

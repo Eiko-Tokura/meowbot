@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
-module Command.SetSysMessage 
+module Command.SetSysMessage
   (
     commandSetSysMessage
   ) where
@@ -35,7 +35,7 @@ commandSetSysMessage = BotCommand System $ botT $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
       onlyState $ sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
   where
-    sysMsgParser = 
+    sysMsgParser =
       ( do
         MP.headCommand "system"
         MP.commandSeparator

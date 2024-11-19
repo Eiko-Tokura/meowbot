@@ -6,10 +6,10 @@ import MeowBot.CQCode
 import External.ChatAPI (ChatSetting(..))
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
-import Data.Additional 
+import Data.Additional
 import Data.Text (Text)
 
-data MetaMessage = MetaMessage 
+data MetaMessage = MetaMessage
   { onlyMessage :: Text
   , cqcodes :: [CQCode]
   , replyTo :: Maybe Int

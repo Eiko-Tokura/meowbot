@@ -13,23 +13,23 @@ data GroupGroup = AllowedGroup | CustomGroupGroup String deriving (Show, Eq, Ord
 data CommandRule = Allow UserObject CommandObject | Deny UserObject CommandObject
   deriving (Show, Eq, Ord, Read)
 
-data UserObject 
+data UserObject
   = AllUserAndGroups
   | AllUsers
   | AllGroups
   | UGroup UserGroup
   | GGroup GroupGroup
-  | SingleUser UserId 
+  | SingleUser UserId
   | SingleGroup GroupId
   | SubtractUserObject UserObject UserObject
   | ExceptUserObject UserObject
   deriving (Show, Eq, Ord, Read)
 
-data CommandObject 
-  = AllCommands 
-  | CGroup [CommandId] 
+data CommandObject
+  = AllCommands
+  | CGroup [CommandId]
   | SingleCommand CommandId
-  | SubtractCommand CommandObject CommandObject 
+  | SubtractCommand CommandObject CommandObject
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
 

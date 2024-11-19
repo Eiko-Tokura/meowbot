@@ -35,7 +35,7 @@ type PDF p a = a -> p
 type Weight p a = a -> p
 type LogLikelihood p a = a -> p
 data SampledPDF r p a = SampledPDF {pdf :: PDF p a, sample :: r a}
-type DiscreteList p a  = [(p, a)] 
+type DiscreteList p a  = [(p, a)]
 
 --data (Ord a) => Dist a = ByFunction { pdf :: a -> Probability } | ByMap { mass :: M.Map a Probability }
 --data (Ord p) => DAG = DAG { points :: [p], parent :: M.Map p [p], children :: M.Map p [p], input :: M.Map p ([a] -> Dist a) }
@@ -76,7 +76,7 @@ type DiscreteList p a  = [(p, a)]
 -- readFromFile :: Might s IOErr
 -- doComputation :: Might s ComputationErr
 -- the varioius errors will be handled in the monad
--- 
+--
 -- f = runMight $ do
 --  ioErr <- readFromFile
 --  computationErr <- doComputation
@@ -91,12 +91,12 @@ type DiscreteList p a  = [(p, a)]
 -- It can be useful in situations where your operations have a high chance of failure but you want to continue and rescue as much as possible.
 --
 -- for example you can have a computation program that updates a vector, where a lot of places can have error (array out of bound, divide by zero, NaN, etc)
--- 
+--
 
 type Sample a = State StdGen a
 
 runSample :: State s a -> s -> a
-runSample = evalState 
+runSample = evalState
 
 liftSIO :: Sample a -> IO a
 liftSIO sampler = evalState sampler <$> initStdGen
@@ -148,8 +148,8 @@ instance {-# OVERLAPPABLE #-} (Monad m, MonadIO m) => MonadUniform m where
   {-# INLINE getUniformRs #-}
 
 instance MonadInterleave IO where
-  interleaveRandom = unsafeInterleaveIO 
-  interleaveSplitRandom = unsafeInterleaveIO 
+  interleaveRandom = unsafeInterleaveIO
+  interleaveSplitRandom = unsafeInterleaveIO
   {-# INLINE interleaveRandom #-}
   {-# INLINE interleaveSplitRandom #-}
 
@@ -164,7 +164,7 @@ discreteSamplingByList :: (MonadUniform m, UniformFloat p, Ord p) => DiscreteLis
 discreteSamplingByList dlist = do
   u <- getUniformR (0, 1)
   return $ subtractUntil dlist u
-  where 
+  where
     subtractUntil [(_, k)] _ = k -- the last one will be used if the sum of probabilities is less than one
     subtractUntil ((p, k):rest) u
           | p > u     = k
@@ -176,8 +176,8 @@ normalizeDistLogList list = normalizeDistList . map (\(p, y) -> (exp(p - maximum
 
 normalizeDistList :: (UniformFloat p) => DiscreteList p a -> DiscreteList p a
 normalizeDistList list = map (\(p, y) -> (p / sumprob list, y)) list
-  where sumprob = sum . map fst 
- 
+  where sumprob = sum . map fst
+
 uniformElemS :: (MonadUniform m) => [a] -> m a
 uniformElemS list = discreteSamplingByList . map ((1::Double) / len, ) $ list
   where len = fromIntegral $ length list
@@ -199,7 +199,7 @@ rejectionSampling base@(SampledPDF basePDF baseSample) m pdf = do
   if u < q then return x else rejectionSampling base m pdf
 
 rejectionSamplingByListAndBound :: (MonadUniform r, UniformFloat k, Ord k) => [k] -> k -> PDF k k -> r k
-rejectionSamplingByListAndBound seq_a = rejectionSampling helper 
+rejectionSamplingByListAndBound seq_a = rejectionSampling helper
   where
     helper = SampledPDF (collectUntil seq_a (0::Int) 0) (geometric_a 0 seq_a)
     collectUntil (x:xs) k sum t
@@ -213,7 +213,7 @@ rejectionSamplingByListAndBound seq_a = rejectionSampling helper
         _ -> geometric_a (sum+x) xs
     geometric_a _ [] = error "geometric_a : empty list"
 
--- Take q, and PDF gamma, computes E(phi(x)) as W^i phi(X^i) where W^i = w^i / (sum w^i). 
+-- Take q, and PDF gamma, computes E(phi(x)) as W^i phi(X^i) where W^i = w^i / (sum w^i).
 -- Here this function just returns (x, w)
 importanceSample1 :: (MonadUniform m, UniformFloat k) => SampledPDF m k a -> PDF k a -> m (a, k)
 importanceSample1 base@(SampledPDF q sample_q) gamma = do
@@ -221,13 +221,13 @@ importanceSample1 base@(SampledPDF q sample_q) gamma = do
   return (x, gamma x / q x)
 
 constS :: (MonadUniform m) => a -> m a
-constS = return 
+constS = return
 {-# INLINE constS #-}
 
 type Mu k = k
 type Sigma k = k
 normal :: (MonadUniform m, UniformFloat k, Ord k) => Mu k -> Sigma k -> m k
-normal mu sigma = fmap ((+mu).(*sigma)) $ liftM2 (*) signS $ rejectionSamplingByListAndBound seq_a bound (\t -> exp(- (t^(2::Int) / 2)) * sqrt(2 / pi)) 
+normal mu sigma = fmap ((+mu).(*sigma)) $ liftM2 (*) signS $ rejectionSamplingByListAndBound seq_a bound (\t -> exp(- (t^(2::Int) / 2)) * sqrt(2 / pi))
   where
     seq_a = [0.62 / sqrt(fromIntegral n) | n <- [(1::Int)..]]
     bound = 4.3
@@ -236,7 +236,7 @@ normalPlus mu sigma = do
   x <- normal mu sigma
   if x <= 0 && mu > 0 then normalPlus mu sigma else return x
 
-normalBound (a, b) mu sigma = 
+normalBound (a, b) mu sigma =
   do
     x <- normal mu sigma
     if x <= a || x >= b then normalBound (a, b) mu sigma else return x
@@ -267,12 +267,12 @@ gammaS alpha beta
           v = (1+c*x)^3
       if v <= 0 then
         gammaS alpha beta
-      else do 
+      else do
           u <- getUniformR (0, 1)
-          if u < 1 - 0.0331 * x^(4::Int) then 
+          if u < 1 - 0.0331 * x^(4::Int) then
             return $ d*v
           else
-            if log(u) < 0.5*x^(2::Int) + d*(1-v+(log v)) then 
+            if log(u) < 0.5*x^(2::Int) + d*(1-v+(log v)) then
               return $ d*v
             else
               gammaS alpha beta
@@ -303,7 +303,7 @@ binomList = iterate nextRow [1]
     nextRow row = zipWith (+) (0 : row) (row ++ [0])
 
 binomMapBound :: Int
-binomMapBound = 20 
+binomMapBound = 20
 
 binomMap :: SM.Map (Int, Int) Int
 binomMap = SM.fromList [((n, r), binomList !! n !! r ) | n <- [0..binomMapBound], r <- [0..n]]
@@ -311,16 +311,16 @@ binomMap = SM.fromList [((n, r), binomList !! n !! r ) | n <- [0..binomMapBound]
 var [] = 0
 var list = sumxsq / (n-1) - sumx^2 / (n*(n-1))
   where sumxsq = sum $ map (^2) list
-        sumx = sum list 
+        sumx = sum list
         n = fromIntegral $ length list
 
 logistic :: (Floating p) => p -> p
 logistic x =  log(x/(1-x)) --if x <= 0 || x >= 1 then -9999 else log(x/(1-x))
 
-dlogistic :: Fractional a => a -> a 
+dlogistic :: Fractional a => a -> a
 dlogistic x = 1/x + 1/(1-x)
 
-invLogistic :: Floating a => a -> a 
+invLogistic :: Floating a => a -> a
 invLogistic x = 1/(1+exp(-x))
 
 logLikelihoodLogisticInBound :: (Floating p, Eq p) => p -> p -> p -> p
@@ -346,7 +346,7 @@ likelihoodLogisticInBound a b x = exp(-((logistic x - m)^2/s^2))
         lb = logistic b
 
 logisticNormal :: (MonadUniform m, UniformFloat p, Ord p) => p -> p -> m p
-logisticNormal mean variance = 
+logisticNormal mean variance =
   if mean == 0 || variance == 0 then return mean
   else do
     let lx = logistic mean

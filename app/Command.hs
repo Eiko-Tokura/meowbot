@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings, ImpredicativeTypes #-}
-module Command 
+module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
   , botT
@@ -24,7 +24,7 @@ import MeowBot.Parser (tshow)
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> ReaderStateT WholeChat OtherData m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
-  botname <- nameOfBot . botModules <$> get 
+  botname <- nameOfBot . botModules <$> get
   return $ case botname of
     Just bn -> MP.string bn >> MP.opt_ MP.commandSeparator >> cp
     Nothing -> cp
@@ -39,7 +39,7 @@ botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStat
 botT = fmap (fromMaybe []) . runMaybeT
 
 doBotAction :: Connection -> BotAction -> ReaderStateT WholeChat OtherData IO ()
-doBotAction conn (BASendPrivate uid txt) = RS.get >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number 
+doBotAction conn (BASendPrivate uid txt) = RS.get >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)  = RS.get >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)  = lift $ deleteMsg conn mid
 
@@ -66,10 +66,10 @@ permissionCheck botCommand = botT $ do
   if checkCommandRule sd (identifier botCommand) cid uid
   then lift $ command botCommand
   else return []
-  where 
+  where
     checkCommandRule :: SavedData -> CommandId -> ChatId -> UserId -> Bool
     checkCommandRule sd cmdId cid uid = allowedAtLeastOnce && notDenied
-      where 
+      where
         allowedAtLeastOnce = not $ null $
           [() | Allow uobj cobj <- rules
               , inUserObject ugs uid uobj
@@ -97,7 +97,7 @@ permissionCheck botCommand = botT $ do
         ggs = groupGroups sd
 
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
-doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO () 
+doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO ()
 doBotCommands conn commands = globalize wholechat otherdata AllData $ do
   actions <- permissionCheck `mapM` commands
   doBotAction conn `mapM_` concat actions

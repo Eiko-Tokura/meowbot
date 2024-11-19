@@ -12,8 +12,8 @@ import qualified Data.Text as T
 type Chars sb = Stream sb Char
 -- | Parse a non-empty word, which is a continuous string of characters that are not spaces, or a string inside a pair of quotes.
 word :: Chars sb => Parser sb Char String
-word =   insideBrackets ('\'', '\'') 
-     <|> insideBrackets ('"', '"') 
+word =   insideBrackets ('\'', '\'')
+     <|> insideBrackets ('"', '"')
      <|> some (itemNot ' ')
 
 word' :: Chars sb => Parser sb Char Text
@@ -29,7 +29,7 @@ nonFlagWord' :: Chars sb => Parser sb Char Text
 nonFlagWord' = T.pack <$> nonFlagWord
 
 class (Stream sb b) => Packable sb b where
-  pack :: [b] -> sb 
+  pack :: [b] -> sb
 
 instance Packable String Char where
   pack = id
@@ -44,7 +44,7 @@ string' s = string (head $ flatten s) >> return s
 {-# INLINE string' #-}
 
 some' :: (Packable sb i, Alternative m, MonadItem i m) => m i -> m sb
-some' p = pack <$> some p 
+some' p = pack <$> some p
 {-# INLINE some' #-}
 
 many' :: (Packable sb i, Alternative m, MonadItem i m) => m i -> m sb
