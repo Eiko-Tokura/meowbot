@@ -4,6 +4,7 @@ module Command.Aokana.Scripts where
 import MeowBot.Parser as MP
 import Control.Monad
 import qualified Data.Text as T
+import Control.Parallel.Strategies
 
 -- read and parse scripts
 newtype Speaker = Speaker Text deriving (Show, Eq)
@@ -36,18 +37,18 @@ getMultiLangString (MultiLangString (_, en) (_, jp) (_, zh) (_, tr)) =
     xs -> Just $ T.intercalate "\n" xs
 
 data AssociatedData
-  = Voice Text
-  | Scene Text
-  | BGM   Text
-  | Title Text
-  | Other Text
-  | Episode Text
+  = Voice !Text
+  | Scene !Text
+  | BGM   !Text
+  | Title !Text
+  | Other !Text
+  | Episode !Text
   deriving (Show, Eq)
 
 data ScriptBlock = ScriptBlock
-  { associatedData  :: [AssociatedData]
-  , scriptContent   :: Maybe MultiLangString
-  , scriptCharacter :: Maybe AokanaCharacter
+  { associatedData  :: ![AssociatedData]
+  , scriptContent   :: !(Maybe MultiLangString)
+  , scriptCharacter :: !(Maybe AokanaCharacter)
   } deriving (Show, Eq)
 
 scriptBlockToSpeaker :: ScriptBlock -> Maybe Speaker
@@ -76,11 +77,16 @@ simplify f block = maybe "" (snd . f) $ scriptContent block
 
 emptyLine :: (Stream s Line) => Parser s Line ()
 emptyLine = lineShape $ do
-  MP.spaces0
+  many $(MP.itemInQ [' ', '\t', '\r'])
   MP.end
 
+evalScripts :: Strategy [ScriptBlock]
+evalScripts ls = evalList evalScriptBlock ls
+  where evalScriptBlock (ScriptBlock asds mls ac) = 
+          ScriptBlock <$> evalList rseq asds <*> rseq mls <*> rseq ac
+
 paragraphToScript :: String -> Maybe [ScriptBlock]
-paragraphToScript = MP.runParser parseSingleScriptFile . lines'
+paragraphToScript = fmap (`using` evalScripts) . MP.runParser parseSingleScriptFile . lines'
 
 parseSingleScriptFile :: (Stream s Line) => Parser s Line [ScriptBlock]
 parseSingleScriptFile = MP.some contigousBlock
@@ -88,7 +94,7 @@ parseSingleScriptFile = MP.some contigousBlock
 contigousBlock :: (Stream s Line) => Parser s Line ScriptBlock
 contigousBlock = do
   some (comments <|> emptyLine)
-  associatedData <- MP.some associatedDataParser 
+  associatedData  <- MP.many associatedDataParser
   multiLangString <- MP.optMaybe multiLangStringParser
   let mchar = determineCharacter associatedData multiLangString
   return $ ScriptBlock associatedData multiLangString mchar

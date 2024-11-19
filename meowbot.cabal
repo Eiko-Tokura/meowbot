@@ -44,6 +44,8 @@ maintainer:         754829466@qq.com
 -- Extra files to be distributed with the package, such as examples or a README.
 extra-source-files: CHANGELOG.md
 
+tested-with: GHC == 9.2.8, GHC == 9.10.1
+
 library item
 
     exposed-modules: Control.Monad.Item
@@ -111,7 +113,6 @@ executable meowbot
                  , deepseq
                  , directory
                  , filepath
-                 , ghc-debug-stub
                  , http-client
                  , http-client-tls
                  , http-types

@@ -120,12 +120,6 @@ positiveInt :: (Chars sb, Integral i, Read i) => Parser sb Char i
 positiveInt = require (>0) nint
 {-# INLINE positiveInt #-}
 
-end :: forall i m. (MonadZero m, MonadTry m, MonadItem i m) => m ()
-end = do
-  hasItem <- tryBool (getItem @i)
-  when hasItem zero
-{-# INLINE end #-}
-
 commandSeparator :: (Chars sb) => Parser sb Char String
 commandSeparator = fmap concat . some $ asumE $ string <$> ["\r\n", "\r", "\n", " "]
 {-# INLINE commandSeparator #-}

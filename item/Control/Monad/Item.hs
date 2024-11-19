@@ -73,6 +73,12 @@ instance MonadIsZero m => MonadTry (StateT s m) where
     if success then Just <$> lift res else return Nothing
   {-# INLINE tryMaybe #-}
 
+end :: forall i m. (MonadZero m, MonadTry m, MonadItem i m) => m ()
+end = do
+  hasItem <- tryBool (getItem @i)
+  when hasItem zero
+{-# INLINE end #-}
+
 require :: MonadZero m => (i -> Bool) -> m i -> m i
 require cond = (>>= \i -> if cond i then return i else zero)
 {-# INLINE require #-}
@@ -140,13 +146,13 @@ infixr 3 |+|
 infixr 3 +|
 {-# INLINE (+|) #-}
 
--- | Identical to `optional`
+-- | identical to `optional`
 optMaybe :: Alternative m => m a -> m (Maybe a)
 optMaybe p = fmap Just p <|> pure Nothing
 {-# INLINE optMaybe #-}
 
 optBool :: Alternative m => m a -> m Bool
-optBool = fmap isJust . optional
+optBool = fmap isJust . optMaybe
 {-# INLINE optBool #-}
 
 opt_ :: Alternative m => m a -> m ()
