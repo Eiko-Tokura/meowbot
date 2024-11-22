@@ -12,7 +12,6 @@ import Data.Typeable
 import qualified Data.Text as T
 import MeowBot.Parser
 import MeowBot.BotStructure
-import Parser.Definition (Stream)
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Debug.Trace

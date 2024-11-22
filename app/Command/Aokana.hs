@@ -79,15 +79,15 @@ commandAokana = BotCommand Aokana $ botT $ do
   lift $ sendResults cid mid results hasVoice queries
   where
     sendResults cid mid results hasVoice queries
-      | null results        = return [baSendToChatId cid "啥也没有找到！o.o"]
+      | [] <- results       = return [baSendToChatId cid "啥也没有找到！o.o"]
       | List `elem` queries = return [baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ simplify zh <$> results]
-      | null hasVoice       = return [baSendToChatId cid $ ("这段话没有语音owo\n" <>) $ simplify zh $ head results]
-      | otherwise           = do
+      | [] <- hasVoice      = return [baSendToChatId cid $ ("这段话没有语音owo\n" <>) $ simplify zh $ head results] -- safe because results is not empty
+      | otherwise          = do
           ranBlock <- lift $ (hasVoice !!) <$> getUniformR (0, length hasVoice - 1)
           cd <- lift getCurrentDirectory
 
           other_data <- get
-          let voice = head [v | Voice v <- associatedData ranBlock]
+          let voice = head [v | Voice v <- associatedData ranBlock] -- safe because hasVoice is not empty
               simplifiedBlock = T.intercalate "\n"
                                   [ simplify jp ranBlock
                                   , simplify zh ranBlock

@@ -104,21 +104,21 @@ contigousBlock = do
     determineCharacter _ Nothing = Nothing
     determineCharacter asds (Just mls) = do
       let voiceStrs = [str | Voice str <- asds]
-      if null voiceStrs
-      then case en mls of
-        (Just (Speaker str), _) -> case T.words str of
-          "Asuka"   : _ -> Just Asuka
-          "Misaki"  : _ -> Just Misaki
-          "Mashiro" : _ -> Just Mashiro
-          "Rika"    : _ -> Just Rika
-          _ -> Nothing
-        _ -> Nothing
-      else
-        if "ASUKA"        `T.isPrefixOf` head voiceStrs then Just Asuka
-        else if "MISAKI"  `T.isPrefixOf` head voiceStrs then Just Misaki
-        else if "MASHIRO" `T.isPrefixOf` head voiceStrs then Just Mashiro
-        else if "RIKA"    `T.isPrefixOf` head voiceStrs then Just Rika
-        else Nothing
+      case voiceStrs of
+        [] -> case en mls of
+           (Just (Speaker str), _) -> case T.words str of
+             "Asuka"   : _ -> Just Asuka
+             "Misaki"  : _ -> Just Misaki
+             "Mashiro" : _ -> Just Mashiro
+             "Rika"    : _ -> Just Rika
+             _ -> Nothing
+           _ -> Nothing
+        (headVoiceStrs:_) ->
+          if "ASUKA"        `T.isPrefixOf` headVoiceStrs then Just Asuka
+          else if "MISAKI"  `T.isPrefixOf` headVoiceStrs then Just Misaki
+          else if "MASHIRO" `T.isPrefixOf` headVoiceStrs then Just Mashiro
+          else if "RIKA"    `T.isPrefixOf` headVoiceStrs then Just Rika
+          else Nothing
 
 spacesOrTabular :: (Chars sb) => Parser sb Char String
 spacesOrTabular = some $ MP.itemIn [' ', '\t']

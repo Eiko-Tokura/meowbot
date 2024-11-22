@@ -3,7 +3,6 @@ module Command.Cat where
 
 import Command
 import Command.Md
-import Command.Aokana
 import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
@@ -77,7 +76,7 @@ replyCatParser name msys = catParser name msys <|> ( do
   return (ChatParams GPT3 False msys, str)
   )
 
-treeCatParser :: (Stream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
+treeCatParser :: forall s. (Stream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
 treeCatParser name msys mid = do
   elist  <- Right <$>
     --   ( do
@@ -111,7 +110,7 @@ treeCatParser name msys mid = do
           return [ (params, Message { role = "user" , content = T.pack metaUMsg })
                  , (params, Message { role = "assistant", content = extractMetaMessage amsg})
                  ]
-        ) :: Parser _ CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
+        ) :: Parser s CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
 
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of

@@ -9,7 +9,6 @@ import MeowBot.BotStructure
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, pack)
 import qualified MeowBot.Parser as MP
-import Control.Applicative
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
