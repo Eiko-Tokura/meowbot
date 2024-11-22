@@ -216,7 +216,7 @@ rejectionSamplingByListAndBound seq_a = rejectionSampling helper
 -- Take q, and PDF gamma, computes E(phi(x)) as W^i phi(X^i) where W^i = w^i / (sum w^i).
 -- Here this function just returns (x, w)
 importanceSample1 :: (MonadUniform m, UniformFloat k) => SampledPDF m k a -> PDF k a -> m (a, k)
-importanceSample1 base@(SampledPDF q sample_q) gamma = do
+importanceSample1 (SampledPDF q sample_q) gamma = do
   x <- sample_q
   return (x, gamma x / q x)
 
@@ -264,7 +264,7 @@ gammaS alpha beta
       x <- normal 0 1
       let d = alpha - 1/3
           c = 1/sqrt(9*d)
-          v = (1+c*x)^3
+          v = (1+c*x)^(3::Int)
       if v <= 0 then
         gammaS alpha beta
       else do
@@ -309,8 +309,8 @@ binomMap :: SM.Map (Int, Int) Int
 binomMap = SM.fromList [((n, r), binomList !! n !! r ) | n <- [0..binomMapBound], r <- [0..n]]
 
 var [] = 0
-var list = sumxsq / (n-1) - sumx^2 / (n*(n-1))
-  where sumxsq = sum $ map (^2) list
+var list = sumxsq / (n-1) - sumx^(2::Int) / (n*(n-1))
+  where sumxsq = sum $ map (^(2::Int)) list
         sumx = sum list
         n = fromIntegral $ length list
 
@@ -324,22 +324,22 @@ invLogistic :: Floating a => a -> a
 invLogistic x = 1/(1+exp(-x))
 
 logLikelihoodLogisticInBound :: (Floating p, Eq p) => p -> p -> p -> p
-logLikelihoodLogisticInBound 0 b 0 = 0
-logLikelihoodLogisticInBound a 1 1 = 0
-logLikelihoodLogisticInBound a b 0 = -999
-logLikelihoodLogisticInBound a b 1 = -999
-logLikelihoodLogisticInBound a b x = -((logistic x - m)^2/s^2)
+logLikelihoodLogisticInBound 0 _ 0 = 0
+logLikelihoodLogisticInBound _ 1 1 = 0
+logLikelihoodLogisticInBound _ _ 0 = -999
+logLikelihoodLogisticInBound _ _ 1 = -999
+logLikelihoodLogisticInBound a b x = -((logistic x - m)^(2::Int)/s^(2::Int))
   where m = (la + lb)/2
         s = (lb - la)/3.92
         la = logistic a
         lb = logistic b
 
 likelihoodLogisticInBound :: (Floating p, Eq p) => p -> p -> p -> p
-likelihoodLogisticInBound 0 b 0 = 1
-likelihoodLogisticInBound a 1 1 = 1
-likelihoodLogisticInBound a b 0 = 0
-likelihoodLogisticInBound a b 1 = 0
-likelihoodLogisticInBound a b x = exp(-((logistic x - m)^2/s^2))
+likelihoodLogisticInBound 0 _ 0 = 1
+likelihoodLogisticInBound _ 1 1 = 1
+likelihoodLogisticInBound _ _ 0 = 0
+likelihoodLogisticInBound _ _ 1 = 0
+likelihoodLogisticInBound a b x = exp(-((logistic x - m)^(2::Int)/s^(2::Int)))
   where m = (la + lb)/2
         s = (lb - la)/3.92
         la = logistic a

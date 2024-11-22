@@ -65,7 +65,7 @@ pollParser = do
         <*> word'
         <*> some (commandSeparator >> word')
     voteParser       = $(stringQ "vote")    >> commandSeparator >> Vote       <$> int <*> some (commandSeparator >> int)
-    proposeParser    = $(stringQ "propose") >> commandSeparator >> Propose    <$> int <*> word'
+    proposeParser    = $(stringQ "propose") >> commandSeparator >> Propose    <$> int <*> (commandSeparator >> some' item)
     viewPollParser   = $(stringQ "view")    >> commandSeparator >> ViewPoll   <$> int
     listPollParser   = $(stringQ "list")    >> return ListPoll
 

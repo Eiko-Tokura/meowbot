@@ -180,8 +180,8 @@ intercalateBy0 :: (Alternative m) => m sep -> m a -> m [a]
 intercalateBy0 sep p = intercalateBy sep p <|> pure []
 {-# INLINE intercalateBy0 #-}
 
-insideBrackets :: (MonadZero m, Alternative m, MonadItem i m, Eq i) => (i, i) -> m [i]
-insideBrackets (l, r) = just l *> many getItem <* just r
+insideBrackets :: (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i) => (i, i) -> m [i]
+insideBrackets (l, r) = just l *> manyTill (just r) getItem <* just r
 {-# INLINE insideBrackets #-}
 
 --------------------------------------------------------------------------------

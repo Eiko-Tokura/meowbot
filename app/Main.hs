@@ -65,16 +65,16 @@ main = do
   args <- getArgs
   let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ]
       runFlags
-        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
-        ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (tail args) (tail $ tail args) ]
+        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (drop 1 args) (drop 2 args) ]
+        ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (drop 1 args) (drop 2 args) ]
       identityFlags
-        =  [ UseName name | ("--name", name) <- zip args (tail args) ]
+        =  [ UseName name | ("--name", name) <- zip args (drop 1 args) ]
       commandIds
         =  if "--all-commands" `elem` args
            then []
-           else [ read cmd | ("--command", cmd) <- zip args (tail args) ]
+           else [ read cmd | ("--command", cmd) <- zip args (drop 1 args) ]
       mGlobalSysMsg
-        =  listToMaybe [ sysMsg | ("--sys-msg", sysMsg) <- zip args (tail args) ]
+        =  listToMaybe [ sysMsg | ("--sys-msg", sysMsg) <- zip args (drop 1 args) ]
   putStrLn "Meow~ Here comes the MeowBot! owo"
   putStrLn $ "Running mode: "   ++ show mode
   putStrLn $ "Running flags: "  ++ show runFlags

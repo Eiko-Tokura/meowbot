@@ -124,8 +124,8 @@ fetchChatCompletionResponse apiKey model msg = do
 displayResponse :: ChatCompletionResponse -> Text
 displayResponse inp = let chos = choices inp in
   case chos of
-    [] -> ""
-    _ -> (content . message . head) chos
+    []         -> ""
+    headChos:_ -> (content . message) headChos
 
 readApiKeyFile = ExceptT . fmap (bimap ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) (T.pack . head . lines)) . try @SomeException $ readFile apiKeyFile
 

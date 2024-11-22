@@ -10,7 +10,7 @@ module MeowBot.Parser
   , cqcodeExceptFace
   , cqother
   , htmlCodes
-  , end, item
+  , item
   , commandSeparator, commandSeparator2
   , headCommand
   , canBeEmpty
@@ -29,7 +29,6 @@ import Parser.Definition
 import MeowBot.CQCode
 import MeowBot.MetaMessage
 import External.ChatAPI (ChatSetting(..))
-import Control.Monad (when)
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe)
