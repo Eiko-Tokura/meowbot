@@ -23,7 +23,6 @@ import System.IO (stdout, stderr)
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
 import Data.Maybe (listToMaybe)
-import Data.Text (unpack)
 import Data.Aeson (eitherDecode)
 import Data.Coerce (coerce)
 import qualified Data.Text.Encoding as TE
@@ -122,15 +121,18 @@ botSingleLoop mods mode conn = do
       HeartBeat -> return ()
       Response -> do
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
+        updateSavedAdditionalData 
         lift $ putStrLn "<- response."
       PrivateMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
+        updateSavedAdditionalData
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
       GroupMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
+        updateSavedAdditionalData
         lift $ putStrLn $ "<- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
       UnknownMessage -> return ()
@@ -148,7 +150,7 @@ initialData mods = do
       AllData [] . OtherData 0 [] msavedData mods [] <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo"
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks) mods [] <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] <$> getAllScripts
   where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]
