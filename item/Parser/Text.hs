@@ -29,36 +29,36 @@ nonFlagWord' :: Chars sb => Parser sb Char Text
 nonFlagWord' = T.pack <$> nonFlagWord
 
 class (Stream sb b) => Packable sb b where
-  pack :: [b] -> sb
+  packable :: [b] -> sb
 
 instance Packable String Char where
-  pack = id
-  {-# INLINE pack #-}
+  packable = id
+  {-# INLINE packable #-}
 
 instance Packable Text Char where
-  pack = T.pack
-  {-# INLINE pack #-}
+  packable = T.pack
+  {-# INLINE packable #-}
 
 string' :: (Packable sb i, MonadZero m, MonadItem i m, Eq i) => sb -> m sb
 string' s = string (head $ flatten s) >> return s
 {-# INLINE string' #-}
 
 some' :: (Packable sb i, Alternative m, MonadItem i m) => m i -> m sb
-some' p = pack <$> some p
+some' p = packable <$> some p
 {-# INLINE some' #-}
 
 many' :: (Packable sb i, Alternative m, MonadItem i m) => m i -> m sb
-many' p = pack <$> many p
+many' p = packable <$> many p
 {-# INLINE many' #-}
 
 someTill' :: (Packable sb i, MonadZero m, MonadTry m, MonadItem i m, Eq i) => m t -> m i -> m sb
-someTill' p end = pack <$> someTill p end
+someTill' p end = packable <$> someTill p end
 {-# INLINE someTill' #-}
 
 manyTill' :: (Packable sb i, MonadTry m, MonadItem i m) => m t -> m i -> m sb
-manyTill' p end = pack <$> manyTill p end
+manyTill' p end = packable <$> manyTill p end
 {-# INLINE manyTill' #-}
 
 digits' :: (Packable sb Char, MonadZero m, Alternative m, MonadItem Char m) => m sb
-digits' = pack <$> digits
+digits' = packable <$> digits
 {-# INLINE digits' #-}

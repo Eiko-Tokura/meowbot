@@ -29,4 +29,3 @@ asumE = asum
 {-# INLINE[1] asumE #-}
 {-# RULES "expand asumE" forall x.    asumE [x] = x #-}
 {-# RULES "expand asumE" forall x xs. asumE (x:xs) = x <|> asumE xs #-}
-
