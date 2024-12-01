@@ -9,7 +9,7 @@ import MeowBot.Data
 
 newtype PollId = PollId Int deriving (Show, Read, Num, Real, Enum, Integral, Eq, Ord, Typeable) via Int
 
-instance IsAdditionalData PollId
+instance IsAdditionalData PollId -- ^ this data need to be attached to a message
 
 data PollData = PollData
   { pollId      :: PollId
@@ -21,8 +21,11 @@ data PollData = PollData
 
 pollStatistics :: PollData -> [(Int, Text, Int)]
 pollStatistics poll =
-  let optionVotes = M.fromListWith (+) [ (optionId, 1) | optionId <- concatMap S.toList $ M.elems $ pollVotes poll ]
-  in [ (optionId, option, M.findWithDefault 0 optionId optionVotes) | (optionId, option) <- M.toList $ pollOptions poll ]
+  let optionVotes = M.fromListWith (+)
+        [ (optionId, 1)
+        | optionId <- concatMap S.toList $ M.elems $ pollVotes poll ]
+  in [ (optionId, option, M.findWithDefault 0 optionId optionVotes)
+     | (optionId, option) <- M.toList $ pollOptions poll ]
 
-instance IsAdditionalData (M.Map PollId PollData)
+instance IsAdditionalData (M.Map PollId PollData) -- ^ data is stored as a map
 

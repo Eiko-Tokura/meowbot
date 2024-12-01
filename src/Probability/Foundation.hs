@@ -255,14 +255,14 @@ binom :: (Integral int, MonadUniform m, UniformFloat p, Ord p) => int -> Probabi
 binom n p = discreteSamplingByList (zipWith ($) [\b -> (fromIntegral b * p^k * (1-p)^(fromIntegral n-k), k) | k <- [0..n]] $ binomList !! fromIntegral n)
 
 geometry :: (MonadUniform m, UniformFloat p, RealFrac p, Ord p) => p -> m Integer
-geometry p 
+geometry p
   | p >= 0.001 = discreteSamplingByList [(p*(1-p)^(k-1), k) | k <- [1..]]
   | otherwise = do
     x <- normal (1/p) (sqrt (1-p)/p)
     if x < 1 then geometry p else return $ round x
 
 poisson :: (MonadUniform m, UniformFloat p, RealFrac p, Ord p) => p -> m Integer
-poisson lambda 
+poisson lambda
   | lambda >= 0 && lambda <= 10000 = discreteSamplingByList poissonList
   | lambda > 10000 = do
     x <- normal lambda (sqrt lambda)

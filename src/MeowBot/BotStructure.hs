@@ -13,7 +13,7 @@ module MeowBot.BotStructure
   , MetaMessageItem(..)
   , saveData, savedDataPath
   , gIncreaseAbsoluteId, increaseAbsoluteId
-  , updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, updateSavedAdditionalData 
+  , updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, updateSavedAdditionalData
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
 
@@ -82,7 +82,7 @@ updateSavedAdditionalData = do
       rd = runningData od
       sd' = sd {savedAdditional = coerce filterSavedAdditional rd}
   ST.put ad { otherdata = od { savedData = sd' } }
-      
+
 type CommandValue = ReaderStateT WholeChat OtherData IO [BotAction]
 -- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
 -- CommandValue is a monadic value of the monad (ReaderStateT WholeChat OtherData IO)

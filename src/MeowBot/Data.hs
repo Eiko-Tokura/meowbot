@@ -1,11 +1,11 @@
 {-# LANGUAGE LambdaCase, DerivingStrategies, DeriveAnyClass, OverloadedStrings, DerivingVia #-}
-module MeowBot.Data 
+module MeowBot.Data
   ( module MeowBot.MetaMessage
   , UserId(..), GroupId(..), ChatId(..)
   , Chat, ChatRoom
   , WholeChat--, AllData(..), OtherData(..)
   --, SavedData(..)
-  
+
   , CQMessage(..), CQEventType(..)
   , Sender(..), Role(..), ResponseData(..)
 
@@ -14,7 +14,7 @@ module MeowBot.Data
   , BotModules(..)
   --, CommandValue
   , EssentialContent
-  
+
   , Text, pack, unpack
 
   , showCQ, cqmsgToEssentialContent, emptyCQMessage

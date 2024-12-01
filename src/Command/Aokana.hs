@@ -1,7 +1,6 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, BlockArguments, TypeApplications #-}
 module Command.Aokana where
 
-import MeowBot.BotStructure
 import Command
 import Command.Aokana.Scripts
 
@@ -12,11 +11,12 @@ import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
+import MeowBot.CQCode
+import MeowBot.BotStructure
 import MeowBot.Parser (Parser, (<|>), Chars)
 import qualified MeowBot.Parser as MP
 
 import External.ChatAPI (Message(..), ChatSetting(..))
-import MeowBot.CQCode
 
 import Data.Either
 import Data.Maybe

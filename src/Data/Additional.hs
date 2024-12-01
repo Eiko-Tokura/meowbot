@@ -7,7 +7,7 @@ import Control.DeepSeq
 
 class Typeable a => IsAdditionalData a
 
-data AdditionalData 
+data AdditionalData
   = forall a. (Typeable a, Show a, Eq a, IsAdditionalData a)         => AdditionalData a
   | forall a. (Typeable a, Show a, Eq a, IsAdditionalData a, Read a) => AdditionalDataSaved a
 
@@ -26,7 +26,7 @@ instance Eq AdditionalData where
 
 -- | Filter out all saved data
 filterSavedAdditional :: [AdditionalData] -> [AdditionalData]
-filterSavedAdditional = filter 
+filterSavedAdditional = filter
   (\case
     AdditionalDataSaved _ -> True
     _ -> False
