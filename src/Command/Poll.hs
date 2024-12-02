@@ -23,6 +23,7 @@ data PollCommand
   | Vote       PollId  [Int]    -- ^ pollId, optionId
   | Propose    PollId  Text   -- ^ pollId, option
   | ViewPoll   PollId
+  | DeletePoll PollId
   | ListPoll
 
 pollParser :: (Chars sb) => Parser sb Char PollCommand
@@ -34,6 +35,7 @@ pollParser = do
     , voteParser
     , proposeParser
     , viewPollParser
+    , deletePollParser
     , listPollParser
     ]
   where
@@ -48,6 +50,7 @@ pollParser = do
     voteParser       = $(stringQ "vote")    >> commandSeparator >> Vote       <$> int <*> some (commandSeparator >> int)
     proposeParser    = $(stringQ "propose") >> commandSeparator >> Propose    <$> int <*> (commandSeparator >> some' item)
     viewPollParser   = $(stringQ "view")    >> commandSeparator >> ViewPoll   <$> int
+    deletePollParser = $(stringQ "delete")  >> commandSeparator >> DeletePoll <$> int
     listPollParser   = $(stringQ "list")    >> return ListPoll
 
 pollTreeParser :: (Stream s CQMessage) => Parser s CQMessage PollCommand
@@ -88,7 +91,7 @@ getPollMap = do
 doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> ReaderStateT r OtherData m [BotAction]
 doPollCommand (_, cid, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
-  let newPollId = PollId $ M.size pollMap
+  let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list
       env' = case env of
         PollGlobal -> Nothing
         PollPrivate -> Just cid
@@ -147,6 +150,16 @@ doPollCommand (_, cid, _, _) ListPoll = do
   pollMap <- getPollMap
   let pollStrs = [ tshow pid <> ". " <> pollTitle poll | (pid, poll) <- M.toList pollMap, readablePoll cid poll ]
   return [baSendToChatId cid $ "Polls:\n" <> T.intercalate "\n" pollStrs]
+doPollCommand (_, cid, _, _) (DeletePoll pid) = do
+  pollMap <- getPollMap
+  case M.lookup pid pollMap of
+    Nothing -> return [baSendToChatId cid "Poll not found o.o!"]
+    Just poll -> if readablePoll cid poll
+      then do
+        let newMap = M.delete pid pollMap
+        modify . modifyAdditionalDataSavedType $ const $ Just newMap
+        return [baSendToChatId cid "Poll deleted! owo"]
+      else return [baSendToChatId cid "Poll not visible o.o!"]
 
 readablePoll :: ChatId -> PollData -> Bool
 readablePoll cid poll = case pollEnv poll of

@@ -147,7 +147,7 @@ initialData mods = do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 [] msavedData mods [] <$> getAllScripts
+      AllData [] . OtherData 0 [] msavedData mods (coerce $ savedAdditional msavedData) <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo"
       AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] <$> getAllScripts
