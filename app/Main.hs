@@ -103,31 +103,30 @@ main = do
 botClient :: BotModules -> RunningMode -> ClientApp ()
 botClient mods mode connection = do
   putStrLn "Connected to go-cqhttp WebSocket server."
-  initialData mods >>= botLoop mods mode connection
+  initialData mods >>= void . runStateT (botLoop Nothing mods mode connection)
 
 botServer :: BotModules -> RunningMode -> PendingConnection -> IO ()
 botServer mods mode connection = do
   conn <- acceptRequest connection
   putStrLn "As server, connected to go-cqhttp WebSocket client."
-  initialData mods >>= botLoop mods mode conn
-
-botLoop :: BotModules -> RunningMode -> Connection -> AllData -> IO never_returns
-botLoop mods mode conn allData = runStateT (botSingleLoop mods mode conn) allData >>= botLoop mods mode conn . snd
+  initialData mods >>= void . runStateT (botLoop Nothing mods mode conn)
 
 -- | consider changing the model to allow some concurrency
-botSingleLoop :: BotModules -> RunningMode -> Connection -> StateT AllData IO ()
-botSingleLoop mods mode conn = do
-  asyncBotActions <- gets (asyncActions . otherdata)
-  asyncMsgText    <- lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn
+botLoop :: Maybe (Async Text) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
+botLoop reuseAsyncMsgText mods mode conn = do
+  asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn) return reuseAsyncMsgText
+  asyncActionList <- gets (asyncActions . otherdata)
+  asyncBotActions <- lift $ async (waitAny (S.toList asyncActionList))
   prevData        <- get
-  result <- lift $ 
-    if   null asyncBotActions 
+  result <- lift $
+    if   null asyncActionList
     then Left <$> wait asyncMsgText
-    else async (waitAny (S.toList asyncBotActions)) >>= waitEitherCancel asyncMsgText
-  case result of
-    Left  msgText                         -> handleMessage mods mode conn msgText
-    Right (completedAsync, meowBotAction) -> handleCompletedAsync conn completedAsync meowBotAction
+    else waitEither asyncMsgText asyncBotActions
+  newAsyncMsg <- case result of
+    Left  msgText                         -> handleMessage mods mode conn msgText >> lift (cancel asyncBotActions >> return Nothing)
+    Right (completedAsync, meowBotAction) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
   saveData prevData
+  botLoop newAsyncMsg mods mode conn
 
 -- | deregister the completed async action and do the bot action
 handleCompletedAsync :: Connection -> Async (Meow [BotAction]) -> Meow [BotAction] -> StateT AllData IO ()
