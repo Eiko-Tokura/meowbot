@@ -34,7 +34,8 @@ commandCat = BotCommand Cat $ botT $ do
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
-  lift $ (if md then sendIOeToChatIdMd else sendIOeToChatId) (msg, cid, uid, mid) ioEChatResponse
+  asyncAction <- liftIO $ (if md then sendIOeToChatIdMdAsync else sendIOeToChatIdAsync) (msg, cid, uid, mid) ioEChatResponse
+  return $ pure $ BAAsync $ asyncAction
   where checkAllowedCatUsers _  GPT3 anybody = return anybody
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p

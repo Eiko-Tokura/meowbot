@@ -113,6 +113,7 @@ library meowbot-lib
     --  build-depends:    base ^>=4.16.4.0
     build-depends: base >=4.7 && <5
                  , aeson
+                 , async
                  , bytestring
                  , containers
                  , deepseq
@@ -152,6 +153,7 @@ executable meowbot
     build-depends: base
                  , meowbot-lib
                  , aeson
+                 , async
                  , bytestring
                  , containers
                  , deepseq

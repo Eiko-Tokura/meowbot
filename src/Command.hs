@@ -2,6 +2,7 @@
 module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
+  , doBotAction
   , botT
   , restrictNumber
   , commandParserTransformByBotName
@@ -10,6 +11,7 @@ module Command
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 import Data.Aeson (encode)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Network.WebSockets (Connection, sendTextData)
 
@@ -37,10 +39,13 @@ restrictNumber n xs =  [tshow i <> " " <> x | (i, x) <- zip [1 :: Int ..] $ take
 botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStateT WholeChat OtherData m [a]
 botT = fmap (fromMaybe []) . runMaybeT
 
+-- | Execute a BotAction, if it is a BAAsync, then put it into the asyncActions instead of waiting for it
 doBotAction :: Connection -> BotAction -> ReaderStateT WholeChat OtherData IO ()
 doBotAction conn (BASendPrivate uid txt) = RS.get >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
-doBotAction conn (BASendGroup gid txt)  = RS.get >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
-doBotAction conn (BARetractMsg mid)  = lift $ deleteMsg conn mid
+doBotAction conn (BASendGroup gid txt)   = RS.get >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
+doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
+doBotAction _    (BAAsync act)      = RS.modify $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
+doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
 
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> IO ()
 sendPrivate conn uid text mecho = do
@@ -96,6 +101,7 @@ permissionCheck botCommand = botT $ do
         ggs = groupGroups sd
 
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
+-- if there are any async bot actions, put them into the asyncActions instead of waiting for them
 doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO ()
 doBotCommands conn commands = globalize wholechat otherdata AllData $ do
   actions <- permissionCheck `mapM` commands

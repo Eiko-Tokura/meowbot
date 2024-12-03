@@ -57,3 +57,15 @@ sendIOeToChatIdMd (_, cid, _, mid) ioess = do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
    where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
 
+sendIOeToChatIdMdAsync :: EssentialContent -> ExceptT Text IO Text -> IO (Async (Meow [BotAction]))
+--OtherData -> IO ([BotAction], OtherData)
+sendIOeToChatIdMdAsync (_, cid, _, mid) ioess = async $ do
+  ess <- runExceptT ioe_ess
+  case ess of
+    Right (str, mdcq) -> return $ do
+      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      return [ baSendToChatId cid mdcq ]
+    Left err -> return $ do
+      return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
+   where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
+

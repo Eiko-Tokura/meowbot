@@ -16,6 +16,7 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 
 import Control.Parallel.Strategies
+import Control.Concurrent.Async
 
 import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
@@ -25,10 +26,12 @@ import System.Environment (getArgs)
 import Data.Maybe (listToMaybe)
 import Data.Aeson (eitherDecode)
 import Data.Coerce (coerce)
+import qualified Data.Set as S
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
 import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest)
 
+import Control.Monad.Trans.ReaderState(globalize)
 import Control.Monad.Trans.State
 import Control.Monad.Trans
 import Control.Monad
@@ -57,8 +60,10 @@ traceModeWith flag ls f a
 
 -- | The main function of the bot.
 --  It will parse the command line arguments and start the bot.
---  runs a debuger on port 2077
---withGhcDebugTCP "127.0.0.1" 2077 $
+--
+--  you can run a debuger on port 2077
+--  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
+--
 main :: IO ()
 main = do
   args <- getArgs
@@ -109,10 +114,35 @@ botServer mods mode connection = do
 botLoop :: BotModules -> RunningMode -> Connection -> AllData -> IO never_returns
 botLoop mods mode conn allData = runStateT (botSingleLoop mods mode conn) allData >>= botLoop mods mode conn . snd
 
+-- | consider changing the model to allow some concurrency
 botSingleLoop :: BotModules -> RunningMode -> Connection -> StateT AllData IO ()
 botSingleLoop mods mode conn = do
-  msgText <- lift $ traceModeWith DebugJson mode unpack <$> receiveData conn
-  preData <- get
+  asyncBotActions <- gets (asyncActions . otherdata)
+  asyncMsgText    <- lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn
+  prevData        <- get
+  result <- lift $ 
+    if   null asyncBotActions 
+    then Left <$> wait asyncMsgText
+    else async (waitAny (S.toList asyncBotActions)) >>= waitEitherCancel asyncMsgText
+  case result of
+    Left  msgText                         -> handleMessage mods mode conn msgText
+    Right (completedAsync, meowBotAction) -> handleCompletedAsync conn completedAsync meowBotAction
+  saveData prevData
+
+-- | deregister the completed async action and do the bot action
+handleCompletedAsync :: Connection -> Async (Meow [BotAction]) -> Meow [BotAction] -> StateT AllData IO ()
+handleCompletedAsync conn completedAsync meowBotAction = do
+  -- | remove the completed async action from the set
+  newAsyncSet <- gets (S.delete completedAsync . asyncActions . otherdata)
+  modify $ \ad -> ad { otherdata = (otherdata ad) { asyncActions = newAsyncSet } }
+  -- | do the bot action in the Meow monad
+  globalize wholechat otherdata AllData $ meowBotAction >>= mapM_ (doBotAction conn)
+  -- | update the saved data if needed
+  updateSavedAdditionalData
+
+-- | handle the message from the server
+handleMessage :: BotModules -> RunningMode -> Connection -> Text -> StateT AllData IO ()
+handleMessage mods mode conn msgText = do
   let strText = unpack msgText
       eCQmsg  = eitherDecode ((BL.fromStrict . TE.encodeUtf8) msgText) :: Either String CQMessage
   case traceModeWith DebugCQMessage mode show eCQmsg of
@@ -137,7 +167,6 @@ botSingleLoop mods mode conn = do
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
       UnknownMessage -> return ()
       _ -> return ()
-  saveData preData
 
 initialData :: BotModules -> IO AllData
 initialData mods = do
@@ -147,10 +176,10 @@ initialData mods = do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 [] msavedData mods (coerce $ savedAdditional msavedData) <$> getAllScripts
+      AllData [] . OtherData 0 [] msavedData mods (coerce $ savedAdditional msavedData) S.empty <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo"
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] <$> getAllScripts
+      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] S.empty <$> getAllScripts
   where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]

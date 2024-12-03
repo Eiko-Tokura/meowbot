@@ -10,7 +10,6 @@ module MeowBot.Data
   , Sender(..), Role(..), ResponseData(..)
 
   , BotName
-  , BotAction(..) --,BotCommand(..)
   , BotModules(..)
   --, CommandValue
   , EssentialContent
@@ -40,18 +39,6 @@ type Chat = [MP.Tree CQMessage]
 type ChatRoom = (ChatId, Chat)
 
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
-
-data BotAction
-  = BASendPrivate
-    UserId       -- ^ the user to send to
-    Text         -- ^ Text, the message to send
-  | BASendGroup
-    GroupId      -- ^ the group chat to send to
-    Text         -- ^ Text, the message to send
-  | BARetractMsg
-    MessageId    -- ^ MessageId, the message to delete (retract)
-  deriving Show
-
 type BotName = Maybe String
 
 data BotModules = BotModules

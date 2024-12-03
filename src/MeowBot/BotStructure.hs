@@ -5,6 +5,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module MeowBot.BotStructure
   ( module MeowBot.Data
+  , Meow
   , BotCommand(..), BotModules(..), CommandValue
   , GroupId(..), UserId(..), ChatId(..)
   , BotAction(..), AllData(..), OtherData(..), SavedData(..), Saved(..)
@@ -17,16 +18,23 @@ module MeowBot.BotStructure
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
 
-  , getEssentialContent, getEssentialContentAtN, sendIOeToChatId, sendToChatId, baSendToChatId, baSendToChatIdFull
-  , getFirstTree, getNewMsg, getNewMsgN, getTimeLine
+  , getEssentialContent, getEssentialContentAtN
+  , sendIOeToChatId, sendToChatId
+  , sendIOeToChatIdAsync
+  , baSendToChatId, baSendToChatIdFull
+  , getFirstTree, getNewMsg, getNewMsgN
+  , getTimeLine, getTimeLineCid
   , mT
 
   , rseqWholeChat
+
+  , Async, async
   ) where
 
 import MeowBot.CommandRule
 import MeowBot.Data
 import Control.Parallel.Strategies
+import Control.Concurrent.Async (Async, asyncThreadId, async)
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.State as ST
@@ -37,6 +45,7 @@ import Data.Coerce
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Ord (comparing, Down(..))
 import Data.List (maximumBy, sortOn)
+import qualified Data.Set as S
 import Data.Aeson (object, ToJSON, toJSON, (.=))
 import Data.Additional
 import Data.Additional.Saved
@@ -46,10 +55,31 @@ import MeowBot.Parser (ChatSetting(..))
 import qualified MeowBot.Parser as MP
 import MeowBot.Data.Book
 import Debug.Trace
+--import Database.Persist -- implement proper database later
 
---import Database.Persist
+data BotAction
+  = BASendPrivate
+      UserId     -- ^ the user to send to
+      Text       -- ^ Text, the message to send
+  | BASendGroup
+      GroupId    -- ^ the group chat to send to
+      Text       -- ^ Text, the message to send
+  | BARetractMsg
+      MessageId  -- ^ MessageId, the message to delete (retract)
+  | BAAsync
+      (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
+  | BAPureAsync
+      (Async [BotAction]) -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
 
-forestSizeForEachChat = 200
+type Meow a = ReaderStateT WholeChat OtherData IO a 
+-- ^ the monad that the bot runs in
+-- running in this monad it is necessary to block other threads from modifying the data.
+-- so avoid running long blocking operations in this monad, use async and staged actions instead.
+
+instance Show (Async (Meow [BotAction])) where
+  show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
+
+forestSizeForEachChat = 256 -- ^ controls how many trees to keep in each chat room
 
 data AllData = AllData
   { wholechat :: WholeChat
@@ -58,12 +88,13 @@ data AllData = AllData
 
 data OtherData = OtherData -- In the future one can add course data.. etc
   { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
-  , sent_messages :: ![CQMessage]
-  , savedData     :: !SavedData
-  , botModules    :: !BotModules
-  , runningData   :: ![AdditionalData] -- ^ additional data that is running, not saved.
-  , aokana        :: [ScriptBlock]
-  } deriving (Show)
+  , sent_messages  :: ![CQMessage]
+  , savedData      :: !SavedData
+  , botModules     :: !BotModules
+  , runningData    :: ![AdditionalData]  -- ^ additional data that is running, not saved.
+  , asyncActions   :: !(S.Set (Async (Meow [BotAction]))) -- ^ actions that are running asynchronously
+  , aokana         :: [ScriptBlock]
+  } deriving Show
 
 data SavedData = SavedData
   { chatSettings    :: [(ChatId, ChatSetting)]
@@ -83,9 +114,9 @@ updateSavedAdditionalData = do
       sd' = sd {savedAdditional = coerce filterSavedAdditional rd}
   ST.put ad { otherdata = od { savedData = sd' } }
 
-type CommandValue = ReaderStateT WholeChat OtherData IO [BotAction]
+type CommandValue = Meow [BotAction]
 -- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
--- CommandValue is a monadic value of the monad (ReaderStateT WholeChat OtherData IO)
+-- CommandValue is a monadic value of the monad (Meow)
 
 data BotCommand = BotCommand
   { identifier :: CommandId
@@ -260,9 +291,16 @@ getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat
         (!?) (x:_) 0 = Just x
         (!?) (_:xs) n = xs !? (n-1)
 
--- | get the timeline of the most recent chat
+-- | get the timeline of the most recent chat, i.e. sort the chat room of the most recent message by time.
 getTimeLine :: WholeChat -> [CQMessage]
-getTimeLine = sortOn (Down . time) . flattenTree . getFirstTree
+getTimeLine ((_, forest):_) = sortOn (Down . time) $ concatMap flattenTree forest
+getTimeLine [] = []
+
+-- | Get the timeline of a chat id.
+getTimeLineCid :: ChatId -> WholeChat -> [CQMessage]
+getTimeLineCid cid wc = case lookup cid wc of
+  Just forest -> sortOn (Down . time) . concatMap flattenTree $ forest
+  Nothing -> []
 
 mT :: (Applicative t) => Maybe (t a) -> t (Maybe a)
 mT Nothing = pure Nothing
@@ -282,6 +320,15 @@ sendIOeToChatId (_, cid, _, mid) ioess = do
       RST.modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
+
+sendIOeToChatIdAsync :: EssentialContent -> ExceptT Text IO Text -> IO (Async (Meow [BotAction]))
+sendIOeToChatIdAsync (_, cid, _, mid) ioess = async $ do
+  ess <- runExceptT ioess
+  case ess of
+    Right str -> return $ do
+      RST.modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      return [ baSendToChatId cid str ]
+    Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 -- | send message to a chat id, recording the message as reply.
 sendToChatId :: EssentialContent -> Text -> OtherData -> ([BotAction], OtherData)
