@@ -67,7 +67,7 @@ pollTreeParser = do
 
 commandPoll :: BotCommand
 commandPoll = BotCommand Poll $ botT $ do
-  ess@(str, _, _, _) <- MaybeT $ getEssentialContent <$> ask
+  ess@(str, _, _, _, _) <- MaybeT $ getEssentialContent <$> ask
   tree <- lift $ getFirstTree <$> ask
   pollParser' <- lift $ commandParserTransformByBotName pollParser
   case (runParser pollParser' str, runParser pollTreeParser tree) of
@@ -89,7 +89,7 @@ getPollMap = do
       return emptyMap
 
 doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> ReaderStateT r OtherData m [BotAction]
-doPollCommand (_, cid, _, _) (CreatePoll env title options) = do
+doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list
       env' = case env of
@@ -112,7 +112,7 @@ doPollCommand (_, cid, _, _) (CreatePoll env title options) = do
     [ "投票:回复此消息选项编号（空格分隔）"
     , "提议新选项:回复此消息propose <option>"
     ]
-doPollCommand (_, cid, uid, _) (Vote pid optionIds) = do
+doPollCommand (_, cid, uid, _, _) (Vote pid optionIds) = do
   pollMap <- getPollMap
   case M.lookup pid pollMap of
     Nothing -> return [baSendToChatId cid "Poll not found o.o!"]
@@ -126,7 +126,7 @@ doPollCommand (_, cid, uid, _) (Vote pid optionIds) = do
       -- let statsStrs = intercalate "\n" [ option ++ ": " ++ show votes | (option, votes) <- pollStatistics poll ]
       return [baSendToChatId cid $ "记下来了！>w<" <> hint]
       else return [baSendToChatId cid "Poll not visible o.o!"]
-doPollCommand (_, cid, _, _) (Propose pid option) = do
+doPollCommand (_, cid, _, _, _) (Propose pid option) = do
   pollMap <- getPollMap
   case M.lookup pid pollMap of
     Nothing -> return [baSendToChatId cid "Poll not found o.o!"]
@@ -137,7 +137,7 @@ doPollCommand (_, cid, _, _) (Propose pid option) = do
         modify . modifyAdditionalDataSavedType $ const $ Just newMap
         return [baSendToChatId cid "Option proposed! owo"]
       else return [baSendToChatId cid "Poll not visible o.o!"]
-doPollCommand (_, cid, _, _) (ViewPoll pid) = do
+doPollCommand (_, cid, _, _, _) (ViewPoll pid) = do
   pollMap <- getPollMap
   case M.lookup pid pollMap of
     Nothing -> return [baSendToChatId cid "Poll not found o.o!"]
@@ -146,11 +146,11 @@ doPollCommand (_, cid, _, _) (ViewPoll pid) = do
         let statsStrs = T.intercalate "\n" [ tshow oid <> ". " <> option <> ": " <> tshow votes | (oid, option, votes) <- pollStatistics poll ]
         baSendToChatIdFull cid Nothing [AdditionalDataSaved (pollId poll)] [] $ "Poll: " <> pollTitle poll <> "\n" <> statsStrs
       else return [baSendToChatId cid "Poll not visible o.o!"]
-doPollCommand (_, cid, _, _) ListPoll = do
+doPollCommand (_, cid, _, _, _) ListPoll = do
   pollMap <- getPollMap
   let pollStrs = [ tshow pid <> ". " <> pollTitle poll | (pid, poll) <- M.toList pollMap, readablePoll cid poll ]
   return [baSendToChatId cid $ "Polls:\n" <> T.intercalate "\n" pollStrs]
-doPollCommand (_, cid, _, _) (DeletePoll pid) = do
+doPollCommand (_, cid, _, _, _) (DeletePoll pid) = do
   pollMap <- getPollMap
   case M.lookup pid pollMap of
     Nothing -> return [baSendToChatId cid "Poll not found o.o!"]

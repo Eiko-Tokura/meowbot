@@ -136,15 +136,16 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", message
         mNonEmpty []   = Nothing
         mNonEmpty l    = Just l
 
-type EssentialContent = (Text, ChatId, UserId, MessageId)
+type EssentialContent = (Text, ChatId, UserId, MessageId, Sender)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
 cqmsgToEssentialContent cqmsg =
-  (,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
-        <*> (case eventType cqmsg of
-              GroupMessage -> GroupChat <$> groupId cqmsg
-              PrivateMessage -> PrivateChat <$> userId cqmsg
-              _ -> Nothing
-            )
-        <*> userId cqmsg
-        <*> messageId cqmsg
+  (,,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
+         <*> (case eventType cqmsg of
+               GroupMessage -> GroupChat <$> groupId cqmsg
+               PrivateMessage -> PrivateChat <$> userId cqmsg
+               _ -> Nothing
+             )
+         <*> userId cqmsg
+         <*> messageId cqmsg
+         <*> sender cqmsg
 

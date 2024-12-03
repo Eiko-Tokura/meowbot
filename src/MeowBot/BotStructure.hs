@@ -314,7 +314,7 @@ baSendToChatId (PrivateChat uid) txt = BASendPrivate uid txt
 
 -- | runing an ExceptT String IO String action with string result, and send the result to a chat id. Handles exceptions.
 sendIOeToChatId :: EssentialContent -> ExceptT Text IO Text -> ReaderStateT r OtherData IO [BotAction]
-sendIOeToChatId (_, cid, _, mid) ioess = do
+sendIOeToChatId (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioess
   case ess of
     Right str -> do
@@ -323,7 +323,7 @@ sendIOeToChatId (_, cid, _, mid) ioess = do
     Left err -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 sendIOeToChatIdAsync :: EssentialContent -> ExceptT Text IO Text -> IO (Async (Meow [BotAction]))
-sendIOeToChatIdAsync (_, cid, _, mid) ioess = async $ do
+sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioess
   case ess of
     Right str -> return $ do
@@ -333,7 +333,7 @@ sendIOeToChatIdAsync (_, cid, _, mid) ioess = async $ do
 
 -- | send message to a chat id, recording the message as reply.
 sendToChatId :: EssentialContent -> Text -> OtherData -> ([BotAction], OtherData)
-sendToChatId (_, cid, _, mid) str other_data =
+sendToChatId (_, cid, _, mid, _) str other_data =
   ([baSendToChatId cid str], insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.

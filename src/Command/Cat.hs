@@ -20,7 +20,7 @@ import Control.Monad.Trans.ReaderState
 
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
-  (msg, cid, uid, mid) <- MaybeT $ getEssentialContent <$> ask
+  (msg, cid, uid, mid, sender) <- MaybeT $ getEssentialContent <$> ask
   other_data <- lift get
   whole_chat <- lift ask
   let sd = savedData other_data
@@ -34,7 +34,7 @@ commandCat = BotCommand Cat $ botT $ do
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
-  asyncAction <- liftIO $ (if md then sendIOeToChatIdMdAsync else sendIOeToChatIdAsync) (msg, cid, uid, mid) ioEChatResponse
+  asyncAction <- liftIO $ (if md then sendIOeToChatIdMdAsync else sendIOeToChatIdAsync) (msg, cid, uid, mid, sender) ioEChatResponse
   return $ pure $ BAAsync $ asyncAction
   where checkAllowedCatUsers _  GPT3 anybody = return anybody
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g

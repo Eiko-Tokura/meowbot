@@ -113,7 +113,7 @@ botServer mods mode connection = do
   putStrLn "As server, connected to go-cqhttp WebSocket client."
   initialData mods >>= void . runStateT (botLoop Nothing mods mode conn)
 
--- | consider changing the model to allow some concurrency
+-- | changed the model to allow some concurrency
 botLoop :: Maybe (Async Text) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
 botLoop reuseAsyncMsgText mods mode conn = do
   asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn) return reuseAsyncMsgText

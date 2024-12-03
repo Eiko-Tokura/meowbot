@@ -7,10 +7,10 @@ import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
 import MeowBot.BotStructure
 import MeowBot.CQCode
+import MeowBot.Async
 import MeowBot.Parser (Parser, tshow, Chars)
 import qualified MeowBot.Parser as MP
 import qualified Data.Text as T
-import Data.Text (Text)
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
@@ -22,8 +22,8 @@ commandMd = BotCommand Md $ do
   mdParser' <- commandParserTransformByBotName mdParser
   case mess of
     Nothing -> return []
-    Just (msg, cid, _, _) -> do
-      mEitherStrings <- lift $ mT $ runExceptT . markdownToImage <$> MP.runParser mdParser' msg
+    Just (msg, cid, _, _, _) -> asyncPureIOBotAction $ do
+      mEitherStrings <- mT $ runExceptT . markdownToImage <$> MP.runParser mdParser' msg
       case mEitherStrings of
         Nothing -> return []
         Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
@@ -35,7 +35,6 @@ commandMd = BotCommand Md $ do
       MP.commandSeparator
       MP.some' MP.item
 
-
 turnMdCQCode :: Text -> ExceptT Text IO Text
 turnMdCQCode md = fmap
   (\fps -> T.concat [embedCQCode (CQImage filepath) | filepath <- fps]) $
@@ -44,10 +43,9 @@ turnMdCQCode md = fmap
         runExceptT
           (map (T.pack . useAnyPath) <$> markdownToImage md)
 
-
 sendIOeToChatIdMd :: EssentialContent -> ExceptT Text IO Text -> ReaderStateT r OtherData IO [BotAction]
 --OtherData -> IO ([BotAction], OtherData)
-sendIOeToChatIdMd (_, cid, _, mid) ioess = do
+sendIOeToChatIdMd (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> do
@@ -59,7 +57,7 @@ sendIOeToChatIdMd (_, cid, _, mid) ioess = do
 
 sendIOeToChatIdMdAsync :: EssentialContent -> ExceptT Text IO Text -> IO (Async (Meow [BotAction]))
 --OtherData -> IO ([BotAction], OtherData)
-sendIOeToChatIdMdAsync (_, cid, _, mid) ioess = async $ do
+sendIOeToChatIdMdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> return $ do

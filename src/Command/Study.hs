@@ -151,7 +151,7 @@ restrictPages = take 5
 
 commandStudy :: BotCommand
 commandStudy = BotCommand Study $ botT $ do
-  (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
+  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> ask
   studyParser' <- lift $ commandParserTransformByBotName studyParser
   query <- pureMaybe $ MP.runParser studyParser' msg
   other_data <- lift get
@@ -290,7 +290,7 @@ readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stri
 
 commandBook :: BotCommand
 commandBook = BotCommand BookMan $ botT $ do
-  (msg, cid, _, _) <- MaybeT $ getEssentialContent <$> ask
+  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> ask
   query <- pureMaybe $ MP.runParser bookParser msg
   other_data <- lift get
   case query of

@@ -25,8 +25,8 @@ import Control.Monad.Trans.ReaderState
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> ask)
-  (msg, _, uid, mid) <- MaybeT $ getEssentialContent <$> ask
-  (msg1, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> ask
+  (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> ask
+  (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> ask
   pureMaybe $ listToMaybe $ catMaybes
     [ do
         props   <- listToMaybe [ props | CQOther "mface" props <- cqs ]
