@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE TupleSections, DerivingVia #-}
 module Control.Monad.Trans.ReaderState where
 
 import Data.Bifunctor
@@ -6,11 +6,13 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad.IO.Class
+import Data.Monoid
 
 -- a mix of reader and state monad transformer
 
 -- | A ReaderStateT r s m a value represents a computation that has a read-only environment of type r, a state of type s, and a result of type a.
 newtype ReaderStateT r s m a = ReaderStateT { runReaderStateT :: r -> s -> m (a, s) }
+  deriving (Semigroup, Monoid) via (Ap (ReaderStateT r s m) a)
 
 instance Functor m => Functor (ReaderStateT r s m) where
   fmap f v = ReaderStateT $ \r s -> first f <$> runReaderStateT v r s
