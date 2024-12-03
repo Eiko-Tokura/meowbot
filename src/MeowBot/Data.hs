@@ -73,7 +73,14 @@ data Sender = Sender
   { senderNickname :: Maybe Text
   , senderCard     :: Maybe Text
   , senderRole     :: Maybe Role
-  } deriving (Show, Read, Eq, Generic, FromJSON, NFData)
+  } deriving (Show, Read, Eq, Generic, NFData)
+
+instance FromJSON Sender where
+  parseJSON = withObject "Sender" $ \o -> do
+    nickname <- o .:? "nickname"
+    card     <- o .:? "card"
+    role     <- o .:? "role"
+    return Sender { senderNickname = nickname, senderCard = card, senderRole = role }
 
 data Role = ROwner | RAdmin | RMember | RUnknown
   deriving (Show, Read, Eq, Generic, NFData)
@@ -126,15 +133,18 @@ instance FromJSON CQMessage where
                 Just _ -> MP.runParser cqmsg $ fromMaybe "" strmsg )
 
 showCQ :: CQMessage -> String
-showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, ": ", messageContent, mcqcodes]
+showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderName, senderCard', ": ", messageContent] --, mcqcodes]
   where messageType    = show $ eventType cqmsg
         absId          = maybe "" (\c -> "[" <> show c <> "] ") . absoluteId $ cqmsg
         chatId         = maybe "" show . groupId $ cqmsg
         senderId       = maybe "" (\c -> "(" ++ show c ++ ")") . userId $ cqmsg
+        senderName     = maybe "" unpack $ senderNickname =<< sender cqmsg
+        senderCard'    = surround $ maybe "" (unpack) $ senderCard =<< sender cqmsg
         messageContent = maybe "" unpack $ message cqmsg
-        mcqcodes       = maybe "" (("\n"++) . show) $ mNonEmpty . cqcodes =<< metaMessage cqmsg
-        mNonEmpty []   = Nothing
-        mNonEmpty l    = Just l
+        surround s     = if null s then s else "(" ++ s ++ ")"
+        -- mcqcodes       = maybe "" (("\n"++) . show) $ mNonEmpty . cqcodes =<< metaMessage cqmsg
+        -- mNonEmpty []   = Nothing
+        -- mNonEmpty l    = Just l
 
 type EssentialContent = (Text, ChatId, UserId, MessageId, Sender)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
