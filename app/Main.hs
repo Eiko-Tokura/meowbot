@@ -17,6 +17,8 @@ import MeowBot.CommandRule
 
 import Control.Parallel.Strategies
 import Control.Concurrent.Async
+import Control.Applicative
+import Control.Monad.STM
 
 import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
@@ -115,15 +117,11 @@ botServer mods mode connection = do
 botLoop :: Maybe (Async Text) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
 botLoop reuseAsyncMsgText mods mode conn = do
   asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn) return reuseAsyncMsgText
-  asyncActionList <- gets (asyncActions . otherdata)
-  asyncBotActions <- lift $ async (waitAny (S.toList asyncActionList))
+  asyncActionList <- gets (S.toList . asyncActions . otherdata)
   prevData        <- get
-  result <- lift $
-    if   null asyncActionList
-    then Left <$> wait asyncMsgText
-    else waitEither asyncMsgText asyncBotActions
+  result <- lift . atomically $ Left <$> waitSTM asyncMsgText <|> Right <$> asum [ (ba, ) <$> waitSTM ba | ba <- asyncActionList ]
   newAsyncMsg <- case result of
-    Left  msgText                         -> handleMessage mods mode conn msgText >> lift (cancel asyncBotActions >> return Nothing)
+    Left  msgText                         -> handleMessage mods mode conn msgText >> return Nothing
     Right (completedAsync, meowBotAction) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
   saveData prevData
   botLoop newAsyncMsg mods mode conn

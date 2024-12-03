@@ -129,6 +129,7 @@ library meowbot-lib
                  , process
                  , random
                  , safe
+                 , stm
                  , text
                  , template-haskell
                  , time
@@ -169,6 +170,7 @@ executable meowbot
                  , process
                  , random
                  , safe
+                 , stm
                  , text
                  , template-haskell
                  , time
