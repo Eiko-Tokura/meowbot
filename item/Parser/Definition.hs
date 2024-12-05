@@ -44,6 +44,7 @@ instance Stream [a] a where
 --
 -- * `a` the return type
 newtype ParserT sb b m a = ParserT { runParserT :: StateT sb m a }
+  deriving MonadTrans via (StateT sb)
   -- deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadState sb, MonadZero, MonadTry) via (StateT sb m)
   -- deriving (Semigroup, Monoid) via Ap (StateT sb m) a -- Ap m a is a newtype whose monoid structure is defined applicatively
   -- deriving MonadTrans via (StateT sb)

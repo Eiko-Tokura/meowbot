@@ -71,19 +71,19 @@ data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugF
 parseArgs :: ParserE [String] String String [BotInstance]
 parseArgs = many (do
   runFlag <- asum
-    [ lift1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
-    , lift1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+    [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+    , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     ]
   restFlags <- many (identityParser |+| commandParser |+| debugParser)
   return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (rights $ rights restFlags)
-  ) <* lift end
+  ) <* liftR end
     where
       identityParser = asum 
-        [ lift1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
-        , lift1 just "--sys-msg" >> withE "--sys-msg needs a String argument" (UseSysMsg <$> nonFlag)
+        [ liftR1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
+        , liftR1 just "--sys-msg" >> withE "--sys-msg needs a String argument" (UseSysMsg <$> nonFlag)
         ]
-      commandParser = lift1 just "--command" >> CommandFlag <$> readE commandIdHint nonFlag
-      debugParser = lift $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
+      commandParser = liftR1 just "--command" >> CommandFlag <$> readE commandIdHint nonFlag
+      debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
       nonFlag = require (not . ("--" `isPrefixOf`)) getItem
       commandIdHint = "commandId must be one of " ++ show [minBound..maxBound :: CommandId]
 
@@ -95,10 +95,25 @@ parseArgs = many (do
 main :: IO ()
 main = do
   args <- getArgs
-  case runParserE "Failed to parse arguments" parseArgs args of
+  case runParserE argumentHelp parseArgs args of
     Left errMsg -> putStrLn errMsg
     Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []]
     Right bots  -> runInstances bots
+  where argumentHelp = unlines 
+          [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg]"
+          , "  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server"
+          , "  --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection"
+          , "  --name <name>             : set the name of the bot"
+          , "  --sys-msg <msg>           : set the global system message of the bot"
+          , "  --command <commandId>     : allow the bot to use the command with the given commandId, use multiple --command flags to allow multiple commands"
+          , "                              commandId must be one of " ++ show [minBound..maxBound :: CommandId]
+          , "                              if no --command flags are given, the bot will use all commands"
+          , "  --debug-json              : print the JSON message received from the server"
+          , "  --debug-cqmsg             : print the decoded CQMessage"
+          , "  If no arguments are given, the bot will run as a client connecting to the go-cqhttp WebSocket server on 127.0.0.1:3001"
+          , ""
+          , "Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags."
+          ]
 
 runInstances :: [BotInstance] -> IO ()
 runInstances bots = do
@@ -115,7 +130,7 @@ runInstances bots = do
         withDefault def [] = def
         withDefault _ xs = xs
         botModules = BotModules
-          { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) (coerce commandFlags)
+          { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands)   (coerce commandFlags)
           , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) (coerce commandFlags)
           , nameOfBot = listToMaybe [ nameBot | UseName nameBot <- identityFlags ]
           , globalSysMsg = mGlobalSysMsg
