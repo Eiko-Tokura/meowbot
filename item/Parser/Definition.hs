@@ -4,11 +4,13 @@ module Parser.Definition where
 
 import Control.Monad.State
 import Control.Monad.Trans.State.Lazy()
+import Control.Monad.Trans.Except
 import Control.Monad.Item
 import Control.Monad
 import Control.Applicative
 import Data.Text (Text)
 import Data.Maybe
+import Data.Monoid
 import qualified Data.Text as T
 
 class Stream sb b | sb -> b where
@@ -45,8 +47,8 @@ instance Stream [a] a where
 -- * `a` the return type
 newtype ParserT sb b m a = ParserT { runParserT :: StateT sb m a }
   deriving MonadTrans via (StateT sb)
+  deriving (Semigroup, Monoid) via Ap (StateT sb m) a -- Ap m a is a newtype whose monoid structure is defined applicatively
   -- deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadState sb, MonadZero, MonadTry) via (StateT sb m)
-  -- deriving (Semigroup, Monoid) via Ap (StateT sb m) a -- Ap m a is a newtype whose monoid structure is defined applicatively
   -- deriving MonadTrans via (StateT sb)
 instance (Monad m) => Functor (ParserT sb b m) where
   fmap f (ParserT p) = ParserT $ fmap f p
@@ -80,6 +82,16 @@ instance (Monad m, Alternative m) => Alternative (ParserT sb b m) where
   empty = ParserT $ StateT $ const empty
   (<|>) (ParserT a) (ParserT b) = ParserT $ StateT $ \s -> runStateT a s <|> runStateT b s
   {-# INLINE empty #-}
+  {-# INLINE (<|>) #-}
+
+-- | This is an Overlapping instance, because the `Alternative` for `ExceptT` ignores the alternative value when the first path terminates without a Left value, this is not what we want, we need parsers that can fail without giving error value.
+--
+-- Therefore, we insist using the `Alternative m` to induce the `Alternative` instance for `ParserT sb b (ExceptT e m)`.
+--
+instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ParserT sb b (ExceptT e m)) where
+  empty = ParserT $ StateT $ const $ ExceptT empty
+  {-# INLINE empty #-}
+  ParserT a <|> ParserT b = ParserT $ StateT $ \s -> ExceptT $ runExceptT (runStateT a s) <|> runExceptT (runStateT b s)
   {-# INLINE (<|>) #-}
 
 instance (MonadZero m, Stream sb b) => MonadItem b (ParserT sb b m) where

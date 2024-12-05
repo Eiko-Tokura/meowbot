@@ -1,6 +1,18 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE TypeFamilies, FunctionalDependencies #-}
-module Parser.Except where
+-- | This module provides functionalities for error messages and error handling in parsers
+-- use in conjunction with Parser.Run
+module Parser.Except 
+  ( ParserExceptT, ParserE
+  , runParserExceptT
+  , packParserExceptT
+  , liftR, liftR1, liftR2
+  , lift0, lift1, lift2
+  , withE, readE, addE
+  , runParserE
+  , mergeEither
+  , module Control.Monad.Trans.Except
+  ) where
 
 import Control.Applicative
 import Parser.Definition
@@ -12,46 +24,26 @@ import Data.Bifunctor
 -- this will use a stack of monad transformers, we stack ExceptT inside ParserT
 -- ~ StateT sb (ExceptT e m) a
 -- ~ sb -> m (Either e (a, sb))
--- maybe we actually want something like
--- sb -> m (Either e a, sb) ~ ExceptT e (StateT sb m) a
 type ParserExceptT sb b e m a = ParserT sb b (ExceptT e m) a
 type ParserE sb b e a         = ParserExceptT sb b e [] a
 
--- A lesson is learned here about choosing the order of monad transformers
--- if you want something to behave like T1, then use T1 (T2 m) a
--- here I think since we want something behave more like a Parser, not an ExceptT, 
--- we should use ParserT (ExceptT e m) a instead of ExceptT e (ParserT sb b m) a
---
--- because the Alternative for ExceptT is different from the Alternative for ParserT and is not what we want
---
--- There are three ways to fix this:
---
--- 1. switch the order of ExceptT and ParserT
---
--- 2. use a newtype to wrap the ExceptT
---
--- 3. write an orphan instance for Alternative (ExceptT e (ParserT sb b m)) (quick and dirty)
+-- instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ExceptT e (ParserT sb b m)) where
+--   empty = ExceptT $ Right <$> empty
+--   {-# INLINE empty #-}
+--   ExceptT a <|> ExceptT b = ExceptT $ a <|> b
+--   {-# INLINE (<|>) #-}
 
-instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ParserT sb b (ExceptT e m)) where
-  empty = ParserT $ StateT $ const $ ExceptT empty
-  {-# INLINE empty #-}
-  ParserT a <|> ParserT b = ParserT $ StateT $ \s -> ExceptT $ runExceptT (runStateT a s) <|> runExceptT (runStateT b s)
-  {-# INLINE (<|>) #-}
-
-instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ExceptT e (ParserT sb b m)) where
-  empty = ExceptT $ Right <$> empty
-  {-# INLINE empty #-}
-  ExceptT a <|> ExceptT b = ExceptT $ a <|> b
-  {-# INLINE (<|>) #-}
-
+-- | Unwraps the ParserExceptT monad transformer stack into a function that takes a state and returns a monadic value
 runParserExceptT :: ParserExceptT sb b e m a -> sb -> m (Either e (a, sb))
 runParserExceptT = (runExceptT .) . runStateT . runParserT
 {-# INLINE runParserExceptT #-}
 
+-- | Wraps a function that takes a state and returns a monadic value into a ParserExceptT monad transformer stack
 packParserExceptT :: (sb -> m (Either e (a, sb))) -> ParserExceptT sb b e m a
 packParserExceptT = ParserT . StateT . (ExceptT .)
 {-# INLINE packParserExceptT #-}
 
+-- | Lifts a monad transformer inside the ParserT, R means "on the right"
 liftR :: (Monad m, MonadTrans t') => ParserT sb b m a -> ParserT sb b (t' m) a
 liftR = ParserT . StateT . (lift .) . runStateT . runParserT
 {-# INLINE liftR #-}
@@ -64,6 +56,7 @@ liftR2 :: (Monad m, MonadTrans t') => (a1 -> a2 -> ParserT sb b m a) -> a1 -> a2
 liftR2 = ((liftR .) .)
 {-# INLINE liftR2 #-}
 
+-- | reads a string value and throws an error if it fails
 readE :: (Monad m, Read a) => e -> ParserT sb b m String -> ParserExceptT sb b e m a
 readE e p = do
   s <- liftR p
@@ -72,6 +65,7 @@ readE e p = do
     _         -> lift (throwE e)
 {-# INLINE readE #-}
 
+-- | identical to `lift`
 lift0 :: (Monad m, MonadTrans t) => m a -> t m a
 lift0 = lift
 {-# INLINE lift0 #-}
@@ -84,18 +78,22 @@ lift2 :: (Monad m, MonadTrans t) => (a -> b -> m c) -> a -> b -> t m c
 lift2 = ((lift .) .)
 {-# INLINE lift2 #-}
 
+-- | Modify an ordinary parser to a parser that can throw an error when it fails
 withE :: (Monad m, Alternative m) => e -> ParserT sb b m a -> ParserExceptT sb b e m a
 withE e p = liftR p <|> lift (throwE e)
 {-# INLINE withE #-}
 
+-- | Add an error message to a ParserExceptT
 addE :: (Monad m, Alternative m) => e -> ParserExceptT sb b e m a -> ParserExceptT sb b e m a
 addE e p = p <|> lift (throwE e)
 {-# INLINE addE #-}
 
+-- | Run a ParserE and return the result or the error message
 runParserE :: e -> ParserE sb b e a -> sb -> Either e a
 runParserE e0 p = ((mergeEither e0 . map (second fst) . runExceptT) .) . runStateT $ runParserT p
 {-# INLINE runParserE #-}
 
+-- | Merge a list of Either into a single Either, if there is any Right value, return the first one, otherwise return the first Left value
 mergeEither :: e -> [Either e a] -> Either e a
 mergeEither e0 [] = Left e0
 mergeEither e0 (x:xs) = case x of

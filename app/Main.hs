@@ -41,7 +41,6 @@ import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveD
 
 import Control.Monad.Trans.ReaderState(globalize)
 import Control.Monad.Trans.State
-import Control.Monad.Trans.Except
 import Control.Monad.Trans
 import Control.Monad
 
@@ -79,7 +78,7 @@ parseArgs = many (do
   return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags)
   ) <* liftR end
     where
-      identityParser = asum 
+      identityParser = asum
         [ liftR1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
         , liftR1 just "--sys-msg" >> withE "--sys-msg needs a String argument" (UseSysMsg <$> nonFlag)
         ]
@@ -103,9 +102,10 @@ main = do
   args <- getArgs
   case runParserE argumentHelp parseArgs args of
     Left errMsg -> putStrLn errMsg
-    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []]
-    Right bots  -> runInstances bots
-  where argumentHelp = unlines 
+    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []] >> halt
+    Right bots  -> runInstances bots >> halt
+  where halt = sequence_ (repeat $ threadDelay 60_000_000)
+        argumentHelp = unlines
           [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg]"
           , "  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server"
           , "  --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection"
@@ -144,9 +144,7 @@ runInstances bots = do
     case runFlag of
       RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot bot
       RunServer ip port -> runServer ip port    (botServer botModules mode) `forkFinally` recoverBot bot
-  -- halt the main thread forever to avoid the main thread exiting, in the future it can be replaced with a control panel
   putStrLn "All bots started! owo"
-  sequence_ (repeat $ threadDelay 60_000_000)
 
 putLogLn :: String -> IO ()
 putLogLn str = do
