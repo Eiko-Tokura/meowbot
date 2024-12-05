@@ -28,7 +28,7 @@ import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
-import Data.Maybe (listToMaybe)
+import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Aeson (eitherDecode)
 import Data.Coerce (coerce)
 import Data.List (isPrefixOf)
@@ -104,7 +104,7 @@ main = do
     Left errMsg -> putStrLn errMsg
     Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []] >> halt
     Right bots  -> runInstances bots >> halt
-  where halt = sequence_ (repeat $ threadDelay 60_000_000)
+  where halt = threadDelay maxBound >> halt
         argumentHelp = unlines
           [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg]"
           , "  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server"
@@ -201,25 +201,26 @@ handleMessage :: BotModules -> RunningMode -> Connection -> Text -> StateT AllDa
 handleMessage mods mode conn msgText = do
   let strText = unpack msgText
       eCQmsg  = eitherDecode ((BL.fromStrict . TE.encodeUtf8) msgText) :: Either String CQMessage
-  case traceModeWith DebugCQMessage mode show eCQmsg of
-    Left errMsg -> lift $ putStrLn ("Failed to decode message: " ++ errMsg ++ "\n" ++ strText)
+      nameBot = fromMaybe "喵喵" $ nameOfBot mods
+  case traceModeWith DebugCQMessage mode (((nameBot ++ "debug: ") ++) . show) eCQmsg of
+    Left errMsg -> lift $ putStrLn $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ strText)
     Right cqmsg -> case eventType cqmsg of
       HeartBeat -> return ()
       Response -> do
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
         updateSavedAdditionalData
-        lift $ putStrLn "<- response."
+        lift $ putStrLn $ nameBot ++ " <- response."
       PrivateMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
         updateSavedAdditionalData
-        lift $ putStrLn $ "<- " ++ showCQ cqmsg'
+        lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
       GroupMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
         updateSavedAdditionalData
-        lift $ putStrLn $ "<- " ++ showCQ cqmsg'
+        lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
       UnknownMessage -> return ()
       _ -> return ()
