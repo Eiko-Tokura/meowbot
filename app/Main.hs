@@ -63,7 +63,7 @@ allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, 
 type RunningMode = [DebugFlag]
 data DebugFlag   = DebugJson | DebugCQMessage deriving (Eq, Show)
 data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Show)
-newtype IdentityFlag = UseName String deriving (Eq, Show)
+data IdentityFlag = UseName String | UseSysMsg String deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
 data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugFlag] deriving (Eq, Show)
@@ -78,7 +78,10 @@ parseArgs = many (do
   return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (rights $ rights restFlags)
   ) <* lift end
     where
-      identityParser = lift1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
+      identityParser = asum 
+        [ lift1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
+        , lift1 just "--sys-msg" >> withE "--sys-msg needs a String argument" (UseSysMsg <$> nonFlag)
+        ]
       commandParser = lift1 just "--command" >> CommandFlag <$> readE commandIdHint nonFlag
       debugParser = lift $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
       nonFlag = require (not . ("--" `isPrefixOf`)) getItem
@@ -108,13 +111,13 @@ runInstances bots = do
     putStrLn $ "Running flags: "  ++ show runFlag
     putStrLn $ "Identity flags: " ++ show identityFlags
     putStrLn $ "Command flags: "  ++ show commandFlags
-    let mGlobalSysMsg = listToMaybe [ sysMsg | UseName sysMsg <- identityFlags ]
+    let mGlobalSysMsg = listToMaybe [ sysMsg | UseSysMsg sysMsg <- identityFlags ]
         withDefault def [] = def
         withDefault _ xs = xs
         botModules = BotModules
           { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) (coerce commandFlags)
           , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) (coerce commandFlags)
-          , nameOfBot = coerce $ listToMaybe identityFlags
+          , nameOfBot = listToMaybe [ nameBot | UseName nameBot <- identityFlags ]
           , globalSysMsg = mGlobalSysMsg
           }
     case runFlag of
@@ -185,7 +188,7 @@ handleMessage mods mode conn msgText = do
       HeartBeat -> return ()
       Response -> do
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
-        updateSavedAdditionalData 
+        updateSavedAdditionalData
         lift $ putStrLn "<- response."
       PrivateMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
