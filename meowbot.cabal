@@ -51,6 +51,7 @@ library item
     exposed-modules: Control.Monad.Item
                    , Parser.Char
                    , Parser.Definition
+                   , Parser.Except
                    , Parser.Run
                    , Parser.Template
                    , Parser.Text
@@ -96,6 +97,7 @@ library meowbot-lib
                    , Data.FilePathFor
                    , Data.PersistModel
                    , External.ChatAPI
+                   , External.ChatAPI.Function
                    , External.MarkdownImage
                    , MeowBot.Async
                    , MeowBot.BotStructure

@@ -14,12 +14,15 @@ import Command.Study
 import Command.Poll
 import MeowBot.BotStructure
 import MeowBot.CommandRule
+import Parser.Run
+import Parser.Except
 
 import Control.Parallel.Strategies
 import Control.Concurrent.Async
-import Control.Applicative
+import Control.Concurrent
 import Control.Monad.STM
 
+import GHC.Exception (SomeException)
 import GHC.IO.Encoding (utf8)
 import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
@@ -28,6 +31,9 @@ import System.Environment (getArgs)
 import Data.Maybe (listToMaybe)
 import Data.Aeson (eitherDecode)
 import Data.Coerce (coerce)
+import Data.List (isPrefixOf)
+import Data.Either
+import Data.Time.Clock (getCurrentTime)
 import qualified Data.Set as S
 import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
@@ -40,8 +46,13 @@ import Control.Monad
 
 -- import GHC.Conc (forkIO)
 -- import GHC.Debug.Stub
-
 import Debug.Trace
+
+-- | A tracing function that will only print the message when the flag is in the list.
+traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
+traceModeWith flag ls f a
+  | flag `elem` ls = trace (f a) a
+  | otherwise      = a
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll]
@@ -55,52 +66,78 @@ data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Sho
 newtype IdentityFlag = UseName String deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
-traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
-traceModeWith flag ls f a
-  | flag `elem` ls = trace (f a) a
-  | otherwise      = a
+data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugFlag] deriving (Eq, Show)
+
+parseArgs :: ParserE [String] String String [BotInstance]
+parseArgs = many (do
+  runFlag <- asum
+    [ lift1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+    , lift1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+    ]
+  restFlags <- many (identityParser |+| commandParser |+| debugParser)
+  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (rights $ rights restFlags)
+  ) <* lift end
+    where
+      identityParser = lift1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
+      commandParser = lift1 just "--command" >> CommandFlag <$> readE commandIdHint nonFlag
+      debugParser = lift $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
+      nonFlag = require (not . ("--" `isPrefixOf`)) getItem
+      commandIdHint = "commandId must be one of " ++ show [minBound..maxBound :: CommandId]
 
 -- | The main function of the bot.
 --  It will parse the command line arguments and start the bot.
 --
 --  you can run a debuger on port 2077
 --  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
---
 main :: IO ()
 main = do
   args <- getArgs
-  let mode = [ DebugJson | "--debug-json" `elem` args ] ++ [ DebugCQMessage | "--debug-cqmsg" `elem` args ]
-      runFlags
-        =  [ RunClient ip (read port) | ("--run-client", ip, port) <- zip3 args (drop 1 args) (drop 2 args) ]
-        ++ [ RunServer ip (read port) | ("--run-server", ip, port) <- zip3 args (drop 1 args) (drop 2 args) ]
-      identityFlags
-        =  [ UseName name | ("--name", name) <- zip args (drop 1 args) ]
-      commandIds
-        =  if "--all-commands" `elem` args
-           then []
-           else [ read cmd | ("--command", cmd) <- zip args (drop 1 args) ]
-      mGlobalSysMsg
-        =  listToMaybe [ sysMsg | ("--sys-msg", sysMsg) <- zip args (drop 1 args) ]
+  case runParserE "Failed to parse arguments" parseArgs args of
+    Left errMsg -> putStrLn errMsg
+    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []]
+    Right bots  -> runInstances bots
+
+runInstances :: [BotInstance] -> IO ()
+runInstances bots = do
   putStrLn "Meow~ Here comes the MeowBot! owo"
-  putStrLn $ "Running mode: "   ++ show mode
-  putStrLn $ "Running flags: "  ++ show runFlags
-  putStrLn $ "Identity flags: " ++ show identityFlags
-  putStrLn $ "Command flags: "  ++ show commandIds
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
-  let withDefault def [] = def
-      withDefault _ xs = xs
-      botModules = BotModules
-        { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) commandIds
-        , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) commandIds
-        , nameOfBot = coerce $ listToMaybe identityFlags
-        , globalSysMsg = mGlobalSysMsg
-        }
-  if null runFlags
-  then runClient "127.0.0.1" 3001 "" (botClient botModules mode)
-  else forM_ runFlags $ \case
-    (RunClient ip port) -> void $ runClient ip port "" (botClient botModules mode)
-    (RunServer ip port) -> void $ runServer ip port (botServer botModules mode)
+  forM_ bots $ \bot@(BotInstance runFlag identityFlags commandFlags mode) -> do
+    putStrLn $ "\n### Starting bot instance: " ++ show bot
+    putStrLn $ "Running mode: "   ++ show mode
+    putStrLn $ "Running flags: "  ++ show runFlag
+    putStrLn $ "Identity flags: " ++ show identityFlags
+    putStrLn $ "Command flags: "  ++ show commandFlags
+    let mGlobalSysMsg = listToMaybe [ sysMsg | UseName sysMsg <- identityFlags ]
+        withDefault def [] = def
+        withDefault _ xs = xs
+        botModules = BotModules
+          { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands) (coerce commandFlags)
+          , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) (coerce commandFlags)
+          , nameOfBot = coerce $ listToMaybe identityFlags
+          , globalSysMsg = mGlobalSysMsg
+          }
+    case runFlag of
+      RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot bot
+      RunServer ip port -> runServer ip port    (botServer botModules mode) `forkFinally` recoverBot bot
+  -- halt the main thread forever to avoid the main thread exiting, in the future it can be replaced with a control panel
+  putStrLn "All bots started! owo"
+  sequence_ (repeat $ threadDelay 60_000_000)
+
+putLogLn :: String -> IO ()
+putLogLn str = do
+  time <- show <$> getCurrentTime
+  let str' = "[" ++ time ++ "]\n" ++ str in putStrLn str' >> appendFile "error.log" (str' ++ "\n")
+
+recoverBot :: BotInstance -> Either SomeException () -> IO ()
+recoverBot bot = \case
+  Left e ->  do
+    putLogLn $ "****The bot instance " ++ show bot ++ "\n****failed with exception:****\n" ++ show e
+    putStrLn "****recovering in 60 seconds****"
+    threadDelay 60_000_000
+    putStrLn "****restarting****"
+    runInstances [bot]
+  Right _ -> putStrLn $ "Bot instance finished: " ++ show bot
 
 botClient :: BotModules -> RunningMode -> ClientApp ()
 botClient mods mode connection = do

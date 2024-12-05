@@ -23,6 +23,7 @@ import Data.ByteString.Lazy (toStrict)
 import qualified Data.ByteString.Lazy.Internal as BLI
 import GHC.Generics (Generic)
 import Control.DeepSeq
+import External.ChatAPI.Function
 
 data ChatModel = GPT3 | GPT4 deriving (Show, Eq)
 data ChatParams  = ChatParams
@@ -77,7 +78,8 @@ apiKeyFile = "apiKey"
 data ChatRequest = ChatRequest {
   model :: Text,
   messages :: [Message],
-  temperature :: Double
+  temperature :: Double,
+  tools :: Maybe [Tool]
 } deriving (Show, Generic)
 
 instance ToJSON Message
@@ -88,7 +90,7 @@ promptMessage prompt = Message "user" (pack prompt)
 
 generateRequestBody :: ChatParams -> [Message] -> ByteString
 generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
-  ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (systemTemp mset))
+  ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (systemTemp mset)) Nothing
   where sysMessage = if md then Message
                           "system"
                           "You are a endearing catgirl assistant named '喵喵'. \

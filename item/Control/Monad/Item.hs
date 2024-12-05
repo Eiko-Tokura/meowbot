@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
-{-# LANGUAGE FlexibleContexts, DefaultSignatures, FunctionalDependencies, DerivingVia, StandaloneDeriving #-}
+{-# LANGUAGE FlexibleContexts, TypeOperators, DefaultSignatures, FunctionalDependencies, DerivingVia, StandaloneDeriving #-}
 -- | A module for items from a stream.
 -- abstracting the concept of an item from a stream, most likely used in parsers.
 -- But it does not mention anything about parser, nor does it mention characters or text
@@ -139,6 +139,8 @@ infixr 5 <:>
 (|+|) p q = fmap Left p <|> fmap Right q
 infixr 3 |+|
 {-# INLINE (|+|) #-}
+
+type (|+|) = Either
 
 -- | type sum, but prefer the **right side** as default and return Right r
 (+|) :: Alternative m => m e -> m a -> m (Either e a)

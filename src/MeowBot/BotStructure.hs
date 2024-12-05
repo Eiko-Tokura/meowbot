@@ -112,7 +112,7 @@ updateSavedAdditionalData = do
   let od = otherdata ad
       sd = savedData od
       rd = runningData od
-      sd' = sd {savedAdditional = coerce filterSavedAdditional rd}
+      sd' = sd { savedAdditional = coerce filterSavedAdditional rd }
   ST.put ad { otherdata = od { savedData = sd' } }
 
 type CommandValue = Meow [BotAction]
