@@ -41,6 +41,7 @@ import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveD
 
 import Control.Monad.Trans.ReaderState(globalize)
 import Control.Monad.Trans.State
+import Control.Monad.Trans.Except
 import Control.Monad.Trans
 import Control.Monad
 
@@ -74,16 +75,21 @@ parseArgs = many (do
     [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     ]
-  restFlags <- many (identityParser |+| commandParser |+| debugParser)
-  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (rights $ rights restFlags)
+  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| unrecognizedFlag)
+  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags)
   ) <* liftR end
     where
       identityParser = asum 
         [ liftR1 just "--name" >> withE "--name needs a String argument" (UseName <$> nonFlag)
         , liftR1 just "--sys-msg" >> withE "--sys-msg needs a String argument" (UseSysMsg <$> nonFlag)
         ]
-      commandParser = liftR1 just "--command" >> CommandFlag <$> readE commandIdHint nonFlag
+      commandParser = do
+        liftR1 just "--command"
+        addE ("--command needs exactly one commandId argument, " ++ commandIdHint) (CommandFlag <$> readE commandIdHint nonFlag)
       debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
+      unrecognizedFlag = do
+        flag <- liftR $ require ("--" `isPrefixOf`) getItem
+        lift $ throwE $ "Unrecognized flag " ++ flag
       nonFlag = require (not . ("--" `isPrefixOf`)) getItem
       commandIdHint = "commandId must be one of " ++ show [minBound..maxBound :: CommandId]
 
