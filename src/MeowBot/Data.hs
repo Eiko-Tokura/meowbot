@@ -30,6 +30,7 @@ import qualified MeowBot.Parser as MP
 import Data.Text (Text, unpack, pack)
 import MeowBot.Parser (cqmsg)
 import Data.Maybe
+import External.ProxyWS (ProxyData)
 
 data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read, Generic, NFData)
@@ -46,9 +47,10 @@ data BotModules = BotModules
   , canUsePrivateCommands :: [CommandId]
   , nameOfBot :: BotName
   , globalSysMsg :: Maybe String
+  , proxyTChans :: [ProxyData]
   } deriving (Show)
 
-data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | SelfMessage | UnknownMessage
+data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage
   deriving (Show, Eq, Read, Generic, NFData)
 
 data CQMessage = CQMessage
@@ -59,6 +61,7 @@ data CQMessage = CQMessage
   , sender       :: Maybe Sender
   , message      :: Maybe Text
   , time         :: Maybe Int
+  , self_id      :: Maybe Int
   , responseData :: Maybe ResponseData
   , echoR        :: Maybe Text
   , absoluteId   :: Maybe Int
@@ -92,7 +95,8 @@ instance FromJSON Role where
     "member" -> return RMember
     _ -> return RUnknown
 
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+emptyCQMessage :: CQMessage
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -113,11 +117,12 @@ instance FromJSON CQMessage where
     message       <- obj .:? "raw_message"
     strmsg        <- obj .:? "raw_message" :: Parser (Maybe Text)
     let eventType = case (postType, metaEventType, messageType, dataObj) of
-          (Just "message", _,  Just "private", _) -> PrivateMessage
-          (Just "message", _, Just "group", _) -> GroupMessage
-          (Nothing, _, Nothing, Just _) -> Response
-          (Just "meta_event", Just "heartbeat", Nothing, Nothing) -> HeartBeat
-          _ -> UnknownMessage
+          (Just "message"    , _                , Just "private" , _      ) -> PrivateMessage
+          (Just "message"    , _                , Just "group"   , _      ) -> GroupMessage
+          (Nothing           , _                , Nothing        , Just _ ) -> Response
+          (Just "meta_event" , Just "heartbeat" , Nothing        , Nothing) -> HeartBeat
+          (_                 , Just "lifecycle" , _              , _      ) -> LifeCycle
+          _                                                                 -> UnknownMessage
     CQMessage <$> pure eventType
               <*> obj .:? "message_id"
               <*> obj .:? "group_id"
@@ -125,6 +130,7 @@ instance FromJSON CQMessage where
               <*> obj .:? "sender"
               <*> pure message
               <*> obj .:? "time"
+              <*> obj .:? "self_id"
               <*> pure dataObj
               <*> obj .:? "echo"
               <*> pure Nothing

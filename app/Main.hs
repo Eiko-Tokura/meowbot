@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings #-}
 module Main where
 
 import Command
@@ -16,6 +16,9 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 import Parser.Run
 import Parser.Except
+
+import External.ProxyWS
+import Utils.ByteString
 
 import Control.Parallel.Strategies
 import Control.Concurrent.Async
@@ -35,11 +38,10 @@ import Data.List (isPrefixOf)
 import Data.Either
 import Data.Time.Clock (getCurrentTime)
 import qualified Data.Set as S
-import qualified Data.Text.Encoding as TE
 import qualified Data.ByteString.Lazy as BL
-import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest)
+import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest, sendTextData)
 
-import Control.Monad.Trans.ReaderState(globalize)
+import Control.Monad.Trans.ReaderState (globalize)
 import Control.Monad.Trans.State
 import Control.Monad.Trans
 import Control.Monad
@@ -64,9 +66,10 @@ type RunningMode = [DebugFlag]
 data DebugFlag   = DebugJson | DebugCQMessage deriving (Eq, Show)
 data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Show)
 data IdentityFlag = UseName String | UseSysMsg String deriving (Eq, Show)
+data ProxyFlag = ProxyFlag String Int deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
-data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugFlag] deriving (Eq, Show)
+data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugFlag] [ProxyFlag] deriving (Eq, Show)
 
 parseArgs :: ParserE [String] String String [BotInstance]
 parseArgs = many (do
@@ -74,8 +77,8 @@ parseArgs = many (do
     [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     ]
-  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| unrecognizedFlag)
-  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags)
+  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| unrecognizedFlag)
+  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags)
   ) <* liftR end
     where
       identityParser = asum
@@ -86,6 +89,9 @@ parseArgs = many (do
         liftR1 just "--command"
         addE ("--command needs exactly one commandId argument, " ++ commandIdHint) (CommandFlag <$> readE commandIdHint nonFlag)
       debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
+      proxyParser = do
+        liftR1 just "--proxy"
+        ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
       unrecognizedFlag = do
         flag <- liftR $ require ("--" `isPrefixOf`) getItem
         lift $ throwE $ "Unrecognized flag " ++ flag
@@ -102,11 +108,11 @@ main = do
   args <- getArgs
   case runParserE argumentHelp parseArgs args of
     Left errMsg -> putStrLn errMsg
-    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] []] >> halt
+    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] []] >> halt
     Right bots  -> runInstances bots >> halt
   where halt = threadDelay maxBound >> halt
         argumentHelp = unlines
-          [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg]"
+          [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]"
           , "  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server"
           , "  --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection"
           , "  --name <name>             : set the name of the bot"
@@ -116,6 +122,7 @@ main = do
           , "                              if no --command flags are given, the bot will use all commands"
           , "  --debug-json              : print the JSON message received from the server"
           , "  --debug-cqmsg             : print the decoded CQMessage"
+          , "  --proxy <address> <port>  : set the proxy server to connect to, use multiple --proxy flags to connect to multiple servers"
           , "  If no arguments are given, the bot will run as a client connecting to the go-cqhttp WebSocket server on 127.0.0.1:3001"
           , ""
           , "Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags."
@@ -126,12 +133,14 @@ runInstances bots = do
   putStrLn "Meow~ Here comes the MeowBot! owo"
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
-  forM_ bots $ \bot@(BotInstance runFlag identityFlags commandFlags mode) -> do
+  forM_ bots $ \bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags) -> do
     putStrLn $ "\n### Starting bot instance: " ++ show bot
     putStrLn $ "Running mode: "   ++ show mode
     putStrLn $ "Running flags: "  ++ show runFlag
     putStrLn $ "Identity flags: " ++ show identityFlags
     putStrLn $ "Command flags: "  ++ show commandFlags
+    putStrLn $ "Proxy flags: "    ++ show proxyFlags
+    proxyData <- sequence $ [ createProxyData addr port | ProxyFlag addr port <- proxyFlags ] 
     let mGlobalSysMsg = listToMaybe [ sysMsg | UseSysMsg sysMsg <- identityFlags ]
         withDefault def [] = def
         withDefault _ xs = xs
@@ -140,6 +149,7 @@ runInstances bots = do
           , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) (coerce commandFlags)
           , nameOfBot = listToMaybe [ nameBot | UseName nameBot <- identityFlags ]
           , globalSysMsg = mGlobalSysMsg
+          , proxyTChans = proxyData
           }
     case runFlag of
       RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot bot
@@ -155,9 +165,9 @@ recoverBot :: BotInstance -> Either SomeException () -> IO ()
 recoverBot bot = \case
   Left e ->  do
     putLogLn $ "****The bot instance " ++ show bot ++ "\n****failed with exception:****\n" ++ show e
-    putStrLn "****recovering in 60 seconds****"
+    putStrLn   "****recovering in 60 seconds****"
     threadDelay 60_000_000
-    putStrLn "****restarting****"
+    putStrLn   "****restarting****"
     runInstances [bot]
   Right _ -> putStrLn $ "Bot instance finished: " ++ show bot
 
@@ -173,57 +183,79 @@ botServer mods mode connection = do
   initialData mods >>= void . runStateT (botLoop Nothing mods mode conn)
 
 -- | changed the model to allow some concurrency
-botLoop :: Maybe (Async Text) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
+botLoop :: Maybe (Async BL.ByteString) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
 botLoop reuseAsyncMsgText mods mode conn = do
-  asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode unpack <$> receiveData conn) return reuseAsyncMsgText
+  asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode bsToString <$> receiveData conn) return reuseAsyncMsgText
   asyncActionList <- gets (S.toList . asyncActions . otherdata)
   prevData        <- get
-  result <- lift . atomically $ Left <$> waitSTM asyncMsgText <|> Right <$> asum [ (ba, ) <$> waitSTM ba | ba <- asyncActionList ]
+  result <- lift . atomically $ asum
+    [ Left <$> waitSTM asyncMsgText
+    , Right . Left  <$> asum [ (ba, ) <$> waitSTM ba | ba <- asyncActionList ]
+    , Right . Right <$> asum ( map receiveFromProxy (proxyTChans mods) )
+    ]
   newAsyncMsg <- case result of
-    Left  msgText                         -> handleMessage mods mode conn msgText >> return Nothing
-    Right (completedAsync, meowBotAction) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
+    Left  msgBS                                  -> handleMessage mods mode conn msgBS >> return Nothing
+    Right (Left (completedAsync, meowBotAction)) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
+    Right (Right proxyMsg)                       -> do
+      lift $ putStrLn $ fromMaybe "喵喵" (nameOfBot mods) ++ " <- Proxy : " ++ take 512 (bsToString proxyMsg)
+      lift $ sendTextData conn proxyMsg
+      return (Just asyncMsgText)
   saveData prevData
   botLoop newAsyncMsg mods mode conn
 
 -- | deregister the completed async action and do the bot action
 handleCompletedAsync :: Connection -> Async (Meow [BotAction]) -> Meow [BotAction] -> StateT AllData IO ()
 handleCompletedAsync conn completedAsync meowBotAction = do
-  -- | remove the completed async action from the set
+  -- remove the completed async action from the set
   newAsyncSet <- gets (S.delete completedAsync . asyncActions . otherdata)
   modify $ \ad -> ad { otherdata = (otherdata ad) { asyncActions = newAsyncSet } }
-  -- | do the bot action in the Meow monad
+  -- do the bot action in the Meow monad
   globalize wholechat otherdata AllData $ meowBotAction >>= mapM_ (doBotAction conn)
-  -- | update the saved data if needed
+  -- update the saved data if needed
   updateSavedAdditionalData
 
--- | handle the message from the server
-handleMessage :: BotModules -> RunningMode -> Connection -> Text -> StateT AllData IO ()
-handleMessage mods mode conn msgText = do
-  let strText = unpack msgText
-      eCQmsg  = eitherDecode ((BL.fromStrict . TE.encodeUtf8) msgText) :: Either String CQMessage
+-- | handle the message from the server, also handles proxy messages
+handleMessage :: BotModules -> RunningMode -> Connection -> BL.ByteString -> StateT AllData IO ()
+handleMessage mods mode conn msgBS = do
+  let eCQmsg  = eitherDecode msgBS :: Either String CQMessage
       nameBot = fromMaybe "喵喵" $ nameOfBot mods
   case traceModeWith DebugCQMessage mode (((nameBot ++ "debug: ") ++) . show) eCQmsg of
-    Left errMsg -> lift $ putStrLn $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ strText)
+    Left errMsg -> lift $ putStrLn $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msgBS)
     Right cqmsg -> case eventType cqmsg of
-      HeartBeat -> return ()
+      LifeCycle -> updateSelfInfo cqmsg >> doProxyWork (not . null $ mode) nameBot
+      HeartBeat -> doProxyWork (not . null $ mode) nameBot
       Response -> do
         modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
         updateSavedAdditionalData
         lift $ putStrLn $ nameBot ++ " <- response."
       PrivateMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
+        modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
         updateSavedAdditionalData
         lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
+        when (filterMsg cqmsg') $ doProxyWork True nameBot
       GroupMessage -> do
         cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ (`using` rseqWholeChat) . updateAllDataByMessage   cqmsg'
+        modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
         updateSavedAdditionalData
         lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
+        when (filterMsg cqmsg') $ doProxyWork True nameBot
       UnknownMessage -> return ()
       _ -> return ()
+      where 
+        filterMsg cqmsg' = any (`isPrefixOf` (unpack $ fromMaybe "" $ message cqmsg')) ["!", "！", "/"]
+        doProxyWork shouldPrint nameBot | null (proxyTChans mods) = return ()
+                                        | otherwise = do
+          when shouldPrint $ lift $ putStrLn (nameBot ++ " -> Proxy ") >> putStr (bsToString msgBS ++ "\n") 
+          lift $ mapM_ (`sendToProxy` msgBS) (proxyTChans mods) 
+          makeHeader >>= \case
+            Nothing      -> return ()
+            Just headers -> do
+              pending <- gets (pendingProxies . otherdata)
+              lift . mapM_ (\pd -> proxyClientForWS (Just $ proxyChans pd) headers (proxyAddr pd) (proxyPort pd)) $ pending
+              unless (null pending) $ modify $ \ad -> ad { otherdata = (otherdata ad) { pendingProxies = [] } }
 
 initialData :: BotModules -> IO AllData
 initialData mods = do
@@ -233,10 +265,10 @@ initialData mods = do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 [] msavedData mods (coerce $ savedAdditional msavedData) S.empty <$> getAllScripts
+      AllData [] . OtherData 0 Nothing [] msavedData mods (coerce $ savedAdditional msavedData) (proxyTChans mods) S.empty <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo"
-      AllData [] . OtherData 0 [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] S.empty <$> getAllScripts
+      AllData [] . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] (proxyTChans mods) S.empty <$> getAllScripts
   where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]

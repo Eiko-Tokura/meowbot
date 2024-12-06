@@ -9,13 +9,14 @@ module MeowBot.BotStructure
   , Meow
   , BotCommand(..), BotModules(..), CommandValue
   , GroupId(..), UserId(..), ChatId(..)
-  , BotAction(..), AllData(..), OtherData(..), SavedData(..), Saved(..)
+  , BotAction(..), AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
   , UserGroup(..), GroupGroup(..)
   , SendMessageForm(..), Params(..)
   , MetaMessageItem(..)
   , saveData, savedDataPath
   , gIncreaseAbsoluteId, increaseAbsoluteId
   , updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, updateSavedAdditionalData
+  , updateSelfInfo
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
 
@@ -30,6 +31,7 @@ module MeowBot.BotStructure
   , rseqWholeChat
 
   , Async, async
+  , makeHeader
   ) where
 
 import MeowBot.CommandRule
@@ -51,6 +53,7 @@ import Data.Aeson (object, ToJSON, toJSON, (.=))
 import Data.Additional
 import Data.Additional.Saved
 import GHC.Generics (Generic)
+import External.ProxyWS (ProxyData, cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
 import MeowBot.Parser (ChatSetting(..))
 import qualified MeowBot.Parser as MP
@@ -87,12 +90,32 @@ data AllData = AllData
   , otherdata :: OtherData
   } deriving Show
 
+data SelfInfo = SelfInfo
+  { selfId :: UserId
+  } deriving Show
+
+updateSelfInfo :: CQMessage -> StateT AllData IO ()
+updateSelfInfo cqmsg = do
+  mselfInfo <- ST.gets (selfInfo . otherdata)
+  let msid = self_id cqmsg
+  case (mselfInfo, msid) of
+    (Nothing, Just sid) -> ST.modify $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo $ coerce sid } }
+    _ -> return ()
+
+makeHeader :: StateT AllData IO (Maybe Headers)
+makeHeader = do
+  sid <- gets (fmap selfId . selfInfo . otherdata)
+  return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
+
+
 data OtherData = OtherData -- In the future one can add course data.. etc
   { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
+  , selfInfo       :: !(Maybe SelfInfo)
   , sent_messages  :: ![CQMessage]
   , savedData      :: !SavedData
   , botModules     :: !BotModules
   , runningData    :: ![AdditionalData]  -- ^ additional data that is running, not saved.
+  , pendingProxies :: ![ProxyData]
   , asyncActions   :: !(S.Set (Async (Meow [BotAction]))) -- ^ actions that are running asynchronously
   , aokana         :: [ScriptBlock]
   } deriving Show
