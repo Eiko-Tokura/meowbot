@@ -83,7 +83,7 @@ type Meow a = ReaderStateT WholeChat OtherData IO a
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
 
-forestSizeForEachChat = 256 -- ^ controls how many trees to keep in each chat room
+forestSizeForEachChat = 200 -- ^ controls how many trees to keep in each chat room
 
 data AllData = AllData
   { wholechat :: WholeChat
@@ -218,13 +218,13 @@ updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
       Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (GroupChat gid) cqmsg)
+        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg)
         other_data
       Nothing -> AllData whole_chat other_data
 
     PrivateMessage -> case userId cqmsg of
       Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat [] (attachRule cqmsg) (PrivateChat uid) cqmsg)
+        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg)
         other_data
       Nothing -> AllData whole_chat other_data
 
@@ -245,8 +245,8 @@ updateAllDataByResponse (rdata, mecho) alldata =
           ms = filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of
-        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) [] (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
+        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
         _ -> alldata
 
 attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
@@ -257,11 +257,12 @@ attachRule msg1 =
       Nothing -> False
       Just mid -> mid == id)
 
-updateListByFuncKeyElement :: (Eq k) => [(k, [Tree a])] -> [(k, [Tree a])] -> Maybe (a -> Bool) -> k -> a -> [(k, [Tree a])]
-updateListByFuncKeyElement [] past _ key element = (key, [Node element []]) : reverse past
-updateListByFuncKeyElement (l:ls) past attachTo key element
-  | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : reverse past ++ ls
-  | otherwise     = updateListByFuncKeyElement ls (l:past) attachTo key element
+type End a = a -> a
+updateListByFuncKeyElement :: (Ord k) => [(k, [Tree a])] -> End [(k, [Tree a])] -> Maybe (a -> Bool) -> k -> a -> [(k, [Tree a])]
+updateListByFuncKeyElement [] past _ key element = (key, [Node element []]) : past []
+updateListByFuncKeyElement (l: !ls) past attachTo key element
+  | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : past ls
+  | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
   where (keyl, treel) = l
 
 putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]

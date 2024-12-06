@@ -115,7 +115,6 @@ instance FromJSON CQMessage where
     metaEventType <- obj .:? "meta_event_type" :: Parser (Maybe Text)
     dataObj       <- obj .:? "data"
     message       <- obj .:? "raw_message"
-    strmsg        <- obj .:? "raw_message" :: Parser (Maybe Text)
     let eventType = case (postType, metaEventType, messageType, dataObj) of
           (Just "message"    , _                , Just "private" , _      ) -> PrivateMessage
           (Just "message"    , _                , Just "group"   , _      ) -> GroupMessage
@@ -136,7 +135,7 @@ instance FromJSON CQMessage where
               <*> pure Nothing
               <*> pure ( case message of
                 Nothing -> Nothing
-                Just _ -> MP.runParser cqmsg $ fromMaybe "" strmsg )
+                Just _ -> MP.runParser cqmsg $ fromMaybe "" message )
 
 showCQ :: CQMessage -> String
 showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderName, senderCard', ": ", messageContent] --, mcqcodes]

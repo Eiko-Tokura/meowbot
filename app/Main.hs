@@ -93,7 +93,7 @@ parseArgs = many (do
         liftR1 just "--proxy"
         ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
       unrecognizedFlag = do
-        flag <- liftR $ require ("--" `isPrefixOf`) getItem
+        flag <- liftR $ require ((&&) <$> ("--" `isPrefixOf`) <*> (`notElem` ["--run-client", "--run-server"])) getItem
         lift $ throwE $ "Unrecognized flag " ++ flag
       nonFlag = require (not . ("--" `isPrefixOf`)) getItem
       commandIdHint = "commandId must be one of " ++ show [minBound..maxBound :: CommandId]
@@ -229,27 +229,25 @@ handleMessage mods mode conn msgBS = do
         updateSavedAdditionalData
         lift $ putStrLn $ nameBot ++ " <- response."
       PrivateMessage -> do
-        cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
-        updateSavedAdditionalData
-        lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
+        updateStates nameBot cqmsg
         doBotCommands conn (filter ((`elem` canUsePrivateCommands mods) . identifier) allPrivateCommands)
-        when (filterMsg cqmsg') $ doProxyWork True nameBot
+        when (filterMsg cqmsg) $ doProxyWork True nameBot
       GroupMessage -> do
-        cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
-        modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
-        updateSavedAdditionalData
-        lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
+        updateStates nameBot cqmsg
         doBotCommands conn (filter ((`elem` canUseGroupCommands mods) . identifier) allGroupCommands)
-        when (filterMsg cqmsg') $ doProxyWork True nameBot
-      UnknownMessage -> return ()
+        when (filterMsg cqmsg) $ doProxyWork True nameBot
       _ -> return ()
-      where 
+      where
+        updateStates nameBot cqmsg = do
+          cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> gIncreaseAbsoluteId
+          modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
+          updateSavedAdditionalData
+          lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
         filterMsg cqmsg' = any (`isPrefixOf` (unpack $ fromMaybe "" $ message cqmsg')) ["!", "！", "/"]
         doProxyWork shouldPrint nameBot | null (proxyTChans mods) = return ()
                                         | otherwise = do
-          when shouldPrint $ lift $ putStrLn (nameBot ++ " -> Proxy ") >> putStr (bsToString msgBS ++ "\n") 
-          lift $ mapM_ (`sendToProxy` msgBS) (proxyTChans mods) 
+          when shouldPrint $ lift $ putStrLn (nameBot ++ " -> Proxy ") >> putStr (bsToString msgBS ++ "\n")
+          lift $ mapM_ (`sendToProxy` msgBS) (proxyTChans mods)
           makeHeader >>= \case
             Nothing      -> return ()
             Just headers -> do

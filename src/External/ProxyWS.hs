@@ -24,7 +24,7 @@ import Data.Maybe (fromMaybe)
 -- import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Lazy (ByteString)
--- import Utils.ByteString (bsToString)
+import Utils.ByteString (bsToString)
 
 import Network.WebSockets
 
