@@ -18,9 +18,7 @@ import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Maybe (fromMaybe)
-import Data.ByteString (ByteString)
-import Data.ByteString.Lazy (toStrict)
-import qualified Data.ByteString.Lazy.Internal as BLI
+import qualified Data.ByteString.Lazy as BL
 import GHC.Generics (Generic)
 import Control.DeepSeq
 import External.ChatAPI.Function
@@ -88,8 +86,8 @@ instance ToJSON ChatRequest
 promptMessage :: String -> Message
 promptMessage prompt = Message "user" (pack prompt)
 
-generateRequestBody :: ChatParams -> [Message] -> ByteString
-generateRequestBody (ChatParams model md mset) mes = toStrict $ encode $
+generateRequestBody :: ChatParams -> [Message] -> BL.ByteString
+generateRequestBody (ChatParams model md mset) mes = encode $
   ChatRequest strModel (sysMessage : mes) (fromMaybe 0.5 (systemTemp mset)) Nothing
   where sysMessage = if md then Message
                           "system"
@@ -114,13 +112,13 @@ fetchChatCompletionResponse apiKey model msg = do
   let requestBody = generateRequestBody model msg --promptMessage prompt
   let request' = request
         { method = "POST"
-        , requestBody = RequestBodyBS requestBody
+        , requestBody = RequestBodyBS (BL.toStrict requestBody)
         , requestHeaders =
             [ ("Content-Type", "application/json")
             , ("Authorization", "Bearer " <> encodeUtf8 apiKey)
             ]
         }
-  result <- try (httpLbs request' manager) :: IO (Either SomeException (Response BLI.ByteString))
+  result <- try (httpLbs request' manager) :: IO (Either SomeException (Response BL.ByteString))
   return $ bimap (T.pack . show) responseBody result >>= first T.pack . eitherDecode
 
 displayResponse :: ChatCompletionResponse -> Text
@@ -129,7 +127,7 @@ displayResponse inp = let chos = choices inp in
     []         -> ""
     headChos:_ -> (content . message) headChos
 
-readApiKeyFile = ExceptT . fmap (bimap ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) (T.pack . head . lines)) . try @SomeException $ readFile apiKeyFile
+readApiKeyFile = ExceptT . fmap (bimap ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) T.pack) . try @SomeException $ (head . lines) <$> readFile apiKeyFile
 
 simpleChat :: ChatParams -> String -> ExceptT Text IO Text
 simpleChat model prompt = do

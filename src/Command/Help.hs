@@ -15,7 +15,7 @@ import Control.Monad.Trans.ReaderState
 
 commandHelp :: BotCommand
 commandHelp = BotCommand Help $ botT $ do
-  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> ask
+  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> asks fst
   mbotName <- lift $ nameOfBot . botModules <$> get
   helpParser' <- lift $ commandParserTransformByBotName $ helpParser mbotName
   helpText <- pureMaybe $ MP.runParser helpParser' msg

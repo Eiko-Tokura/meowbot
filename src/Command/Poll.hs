@@ -5,7 +5,6 @@ import Command
 import Command.Poll.PollData
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans
 import Probability.Foundation
 import Data.Additional
 import Data.Maybe
@@ -67,15 +66,15 @@ pollTreeParser = do
 
 commandPoll :: BotCommand
 commandPoll = BotCommand Poll $ botT $ do
-  ess@(str, _, _, _, _) <- MaybeT $ getEssentialContent <$> ask
-  tree <- lift $ getFirstTree <$> ask
+  ess@(str, _, _, _, _) <- MaybeT $ getEssentialContent <$> asks fst
+  tree <- lift $ getFirstTree <$> readable
   pollParser' <- lift $ commandParserTransformByBotName pollParser
   case (runParser pollParser' str, runParser pollTreeParser tree) of
     (Just cmd, _) -> lift $ doPollCommand ess cmd
     (_, Just cmd) -> lift $ doPollCommand ess cmd
     _             -> return []
 
-getPollMap :: (MonadIO m) => ReaderStateT r OtherData m (M.Map PollId PollData)
+getPollMap :: (MonadIO m) => MeowT m (M.Map PollId PollData)
 getPollMap = do
   mPollMap <- listToMaybe . getAdditionalDataSavedType @_ @(M.Map PollId PollData) <$> get
   case mPollMap of
@@ -88,7 +87,7 @@ getPollMap = do
       liftIO $ print s
       return emptyMap
 
-doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> ReaderStateT r OtherData m [BotAction]
+doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> MeowT m [BotAction]
 doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list

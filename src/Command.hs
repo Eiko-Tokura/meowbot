@@ -23,7 +23,7 @@ import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser (tshow)
 
-commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> ReaderStateT WholeChat OtherData m (MP.Parser sb Char a)
+commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
   botname <- nameOfBot . botModules <$> get
   return $ case botname of
@@ -36,11 +36,11 @@ restrictNumber _ [] = ["什么也没找到 o.o"]
 restrictNumber n xs =  [tshow i <> " " <> x | (i, x) <- zip [1 :: Int ..] $ take n xs]
                     <> ["(显示了前" <> tshow (min n (length xs)) <> "/" <> tshow (length xs) <> "条)" | length xs > n]
 
-botT :: Monad m => MaybeT (ReaderStateT WholeChat OtherData m) [a] -> ReaderStateT WholeChat OtherData m [a]
+botT :: Monad m => MaybeT (MeowT m) [a] -> MeowT m [a]
 botT = fmap (fromMaybe []) . runMaybeT
 
 -- | Execute a BotAction, if it is a BAAsync, then put it into the asyncActions instead of waiting for it
-doBotAction :: Connection -> BotAction -> ReaderStateT WholeChat OtherData IO ()
+doBotAction :: Connection -> BotAction -> Meow ()
 doBotAction conn (BASendPrivate uid txt) = RS.get >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)   = RS.get >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
@@ -64,7 +64,7 @@ deleteMsg conn mid = do
 
 permissionCheck :: BotCommand -> CommandValue
 permissionCheck botCommand = botT $ do
-  (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> ask
+  (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> readable
   other <- lift RS.get
   let sd = savedData other
   if checkCommandRule sd (identifier botCommand) cid uid
@@ -103,6 +103,6 @@ permissionCheck botCommand = botT $ do
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
 -- if there are any async bot actions, put them into the asyncActions instead of waiting for them
 doBotCommands ::  Connection -> [BotCommand] -> StateT AllData IO ()
-doBotCommands conn commands = globalize wholechat otherdata AllData $ do
+doBotCommands conn commands = globalize (\a -> (wholechat a, botConfig a)) otherdata (uncurry AllData) $ runMeowT $ do
   actions <- permissionCheck `mapM` commands
   doBotAction conn `mapM_` concat actions

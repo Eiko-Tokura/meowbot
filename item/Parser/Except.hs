@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies, FunctionalDependencies #-}
 -- | This module provides functionalities for error messages and error handling in parsers
 -- use in conjunction with Parser.Run
-module Parser.Except 
+module Parser.Except
   ( ParserExceptT, ParserE
   , runParserExceptT
   , packParserExceptT

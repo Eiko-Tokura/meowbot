@@ -15,7 +15,7 @@ asyncMeowBotAction = fmap (pure . BAAsync) . lift . async
 -- | Separate the action into async IO action and the function to convert the result of the IO action to a list of BotActions.
 -- the first part will be handled asynchronously, will not block the main thread.
 -- the second part will be executed in the main thread, not asynchronously.
-asyncMeowBot 
+asyncMeowBot
   :: IO a -- ^ The IO action to be executed asynchronously
   -> (a -> Meow [BotAction]) -- ^ The function to convert the result of the IO action to a list of BotActions
   -> Meow [BotAction] -- ^ The Meow action that will be executed asynchronously

@@ -1,4 +1,4 @@
-module Utils.ByteString 
+module Utils.ByteString
   ( bsToString
   ) where
 

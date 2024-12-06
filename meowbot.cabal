@@ -89,6 +89,7 @@ library meowbot-lib
                    , Command.Study
                    , Command.User
                    , Control.Monad.IOe
+                   , Control.Monad.Readable
                    , Control.Monad.MaybeHints
                    , Control.Monad.Trans.ReaderState
                    , Data.Additional

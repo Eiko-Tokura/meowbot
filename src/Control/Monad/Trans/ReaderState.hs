@@ -1,11 +1,19 @@
 {-# LANGUAGE TupleSections, DerivingVia #-}
-module Control.Monad.Trans.ReaderState where
+module Control.Monad.Trans.ReaderState
+  ( module Control.Monad.Reader
+  , module Control.Monad.State
+  , ReaderStateT(..)
+  , pullback
+  , globalize
+  , pureMaybe
+  , onlyState
+  , onlyStateT
+  ) where
 
 import Data.Bifunctor
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Class
+import Control.Monad.State
+import Control.Monad.Reader
 import Control.Monad.Trans.Maybe
-import Control.Monad.IO.Class
 import Data.Monoid
 
 -- a mix of reader and state monad transformer
@@ -37,21 +45,32 @@ instance MonadTrans (ReaderStateT r s) where
   lift v = ReaderStateT $ \_ s -> (,s) <$> v
   {-# INLINE lift #-}
 
-ask :: Monad m => ReaderStateT r s m r
-ask = ReaderStateT $ curry return
-{-# INLINE ask #-}
+instance Monad m => MonadState s (ReaderStateT r s m) where
+  state f = ReaderStateT $ \_ s -> return (f s)
+  {-# INLINE state #-}
 
-get :: Monad m => ReaderStateT r s m s
-get = ReaderStateT $ \_ s -> return (s, s)
-{-# INLINE get #-}
+instance Monad m => MonadReader r (ReaderStateT r s m) where
+  ask = ReaderStateT $ \r s -> return (r, s)
+  {-# INLINE ask #-}
 
-put :: Monad m => s -> ReaderStateT r s m ()
-put s = ReaderStateT $ \_ _ -> return ((), s)
-{-# INLINE put #-}
+  local f v = ReaderStateT $ \r s -> runReaderStateT v (f r) s
+  {-# INLINE local #-}
 
-modify :: Monad m => (s -> s) -> ReaderStateT r s m ()
-modify f = ReaderStateT $ \_ s -> return ((), f s)
-{-# INLINE modify #-}
+-- ask :: Monad m => ReaderStateT r s m r
+-- ask = ReaderStateT $ curry return
+-- {-# INLINE ask #-}
+
+-- get :: Monad m => ReaderStateT r s m s
+-- get = ReaderStateT $ \_ s -> return (s, s)
+-- {-# INLINE get #-}
+
+-- put :: Monad m => s -> ReaderStateT r s m ()
+-- put s = ReaderStateT $ \_ _ -> return ((), s)
+-- {-# INLINE put #-}
+
+-- modify :: Monad m => (s -> s) -> ReaderStateT r s m ()
+-- modify f = ReaderStateT $ \_ s -> return ((), f s)
+-- {-# INLINE modify #-}
 
 pullback :: Monad m => (r -> r') -> ReaderStateT r' s m a -> ReaderStateT r s m a
 pullback f v = ReaderStateT $ \r s -> runReaderStateT v (f r) s

@@ -3,7 +3,7 @@
 -- | In this module we define the functionalities to proxy over a WebSocket connection.
 --
 -- this will be used to proxy the messages from the client to the server and vice versa.
-module External.ProxyWS 
+module External.ProxyWS
   ( Headers
   , ProxyData(..)
   , cqhttpHeaders
@@ -24,7 +24,6 @@ import Data.Maybe (fromMaybe)
 -- import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Lazy (ByteString)
-import Utils.ByteString (bsToString)
 
 import Network.WebSockets
 
@@ -55,7 +54,7 @@ import Network.WebSockets
 --   ^    |
 --   |    v
 --   A <- B
---   
+--
 -- plan 2:
 --
 --   The current thread that already connects to Q, will also broadcast the message over a channel or a TChan, this needs to be bi-directional
@@ -64,8 +63,8 @@ import Network.WebSockets
 --
 --
 -- In any case, we need to have B connect to C.
--- 
--- the plan is to write a function for B, that 
+--
+-- the plan is to write a function for B, that
 --
 -- * launches two TChan for reading and writing
 
@@ -82,7 +81,7 @@ instance Show ProxyData where
   show (ProxyData addr port _) = "ProxyData { proxyAddr = " ++ addr ++ ", proxyPort = " ++ show port ++ " }"
 
 cqhttpHeaders :: Int -> Headers
-cqhttpHeaders sid = 
+cqhttpHeaders sid =
   [ ("X-Client-Role", "Universal")
   , ("X-Self-Id", B8.pack $ show sid)
   ]
@@ -97,7 +96,7 @@ createProxyData :: AddressString -> PortInt -> IO ProxyData
 createProxyData addr port = do
   chanIn  <- newTBQueueIO 10
   chanOut <- newTBQueueIO 10
-  return $ ProxyData addr port (chanIn, chanOut) 
+  return $ ProxyData addr port (chanIn, chanOut)
 
 proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> IO (TBQueue a, TBQueue a)
 proxyClientForWS ioChans headers address port = do
@@ -111,8 +110,8 @@ proxyClientForWS ioChans headers address port = do
       void $ proxyClientForWS (Just (chanIn, chanOut)) headers address port
     Right _ -> return ()
   return (chanIn, chanOut)
-  where 
-    proxyClient masync chanIn chanOut = 
+  where
+    proxyClient masync chanIn chanOut =
       runClientWith address port "" defaultConnectionOptions headers $ \conn -> do
         putStrLn $ "Connected to " ++ address ++ ":" ++ show port
         putStrLn $ "Headers: " ++ show headers

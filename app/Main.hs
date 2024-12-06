@@ -41,7 +41,6 @@ import qualified Data.Set as S
 import qualified Data.ByteString.Lazy as BL
 import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest, sendTextData)
 
-import Control.Monad.Trans.ReaderState (globalize)
 import Control.Monad.Trans.State
 import Control.Monad.Trans
 import Control.Monad
@@ -62,23 +61,14 @@ allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, 
 allGroupCommands :: [BotCommand]
 allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll]
 
-type RunningMode = [DebugFlag]
-data DebugFlag   = DebugJson | DebugCQMessage deriving (Eq, Show)
-data RunningFlag = RunClient String Int | RunServer String Int deriving (Eq, Show)
-data IdentityFlag = UseName String | UseSysMsg String deriving (Eq, Show)
-data ProxyFlag = ProxyFlag String Int deriving (Eq, Show)
-newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
-
-data BotInstance = BotInstance RunningFlag [IdentityFlag] [CommandFlags] [DebugFlag] [ProxyFlag] deriving (Eq, Show)
-
 parseArgs :: ParserE [String] String String [BotInstance]
 parseArgs = many (do
   runFlag <- asum
     [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     ]
-  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| unrecognizedFlag)
-  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags)
+  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| unrecognizedFlag)
+  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags)
   ) <* liftR end
     where
       identityParser = asum
@@ -92,6 +82,7 @@ parseArgs = many (do
       proxyParser = do
         liftR1 just "--proxy"
         ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+      logParser = LogFlag <$> liftR1 just "--log" >> withE "--log needs a file path argument" (LogFlag <$> nonFlag)
       unrecognizedFlag = do
         flag <- liftR $ require ((&&) <$> ("--" `isPrefixOf`) <*> (`notElem` ["--run-client", "--run-server"])) getItem
         lift $ throwE $ "Unrecognized flag " ++ flag
@@ -108,7 +99,7 @@ main = do
   args <- getArgs
   case runParserE argumentHelp parseArgs args of
     Left errMsg -> putStrLn errMsg
-    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] []] >> halt
+    Right []    -> runInstances [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] []] >> halt
     Right bots  -> runInstances bots >> halt
   where halt = threadDelay maxBound >> halt
         argumentHelp = unlines
@@ -133,14 +124,15 @@ runInstances bots = do
   putStrLn "Meow~ Here comes the MeowBot! owo"
   hSetEncoding stdout utf8
   hSetEncoding stderr utf8
-  forM_ bots $ \bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags) -> do
+  forM_ bots $ \bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags) -> do
     putStrLn $ "\n### Starting bot instance: " ++ show bot
     putStrLn $ "Running mode: "   ++ show mode
     putStrLn $ "Running flags: "  ++ show runFlag
     putStrLn $ "Identity flags: " ++ show identityFlags
     putStrLn $ "Command flags: "  ++ show commandFlags
     putStrLn $ "Proxy flags: "    ++ show proxyFlags
-    proxyData <- sequence $ [ createProxyData addr port | ProxyFlag addr port <- proxyFlags ] 
+    putStrLn $ "Log flags: "      ++ show logFlags
+    proxyData <- sequence $ [ createProxyData addr port | ProxyFlag addr port <- proxyFlags ]
     let mGlobalSysMsg = listToMaybe [ sysMsg | UseSysMsg sysMsg <- identityFlags ]
         withDefault def [] = def
         withDefault _ xs = xs
@@ -150,21 +142,25 @@ runInstances bots = do
           , nameOfBot = listToMaybe [ nameBot | UseName nameBot <- identityFlags ]
           , globalSysMsg = mGlobalSysMsg
           , proxyTChans = proxyData
+          , logFile = [ logFile | LogFlag logFile <- logFlags ]
           }
     case runFlag of
       RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot bot
       RunServer ip port -> runServer ip port    (botServer botModules mode) `forkFinally` recoverBot bot
   putStrLn "All bots started! owo"
 
-putLogLn :: String -> IO ()
-putLogLn str = do
+putLogLn :: [FilePath] -> String -> IO ()
+putLogLn [] = putStrLn
+putLogLn files = \str -> do
   time <- show <$> getCurrentTime
-  let str' = "[" ++ time ++ "]\n" ++ str in putStrLn str' >> appendFile "error.log" (str' ++ "\n")
+  let str' = "[" ++ time ++ "]\n" ++ str in putStrLn str' >> mapM_ (`appendFile` (str' ++ "\n")) files
+{-# INLINE putLogLn #-}
 
 recoverBot :: BotInstance -> Either SomeException () -> IO ()
 recoverBot bot = \case
   Left e ->  do
-    putLogLn $ "****The bot instance " ++ show bot ++ "\n****failed with exception:****\n" ++ show e
+    putLogLn ("error.log":[f | LogFlag f <- botLogFlags bot]) $
+      "****The bot instance " ++ show bot ++ "\n****failed with exception:****\n" ++ show e
     putStrLn   "****recovering in 60 seconds****"
     threadDelay 60_000_000
     putStrLn   "****restarting****"
@@ -210,7 +206,7 @@ handleCompletedAsync conn completedAsync meowBotAction = do
   newAsyncSet <- gets (S.delete completedAsync . asyncActions . otherdata)
   modify $ \ad -> ad { otherdata = (otherdata ad) { asyncActions = newAsyncSet } }
   -- do the bot action in the Meow monad
-  globalize wholechat otherdata AllData $ meowBotAction >>= mapM_ (doBotAction conn)
+  globalizeMeow $ meowBotAction >>= mapM_ (doBotAction conn)
   -- update the saved data if needed
   updateSavedAdditionalData
 
@@ -263,10 +259,10 @@ initialData mods = do
       putStrLn "Found saved data file, loading data! owo"
       savedData <- readFile $ savedDataPath $ nameOfBot mods
       let msavedData = read savedData
-      AllData [] . OtherData 0 Nothing [] msavedData mods (coerce $ savedAdditional msavedData) (proxyTChans mods) S.empty <$> getAllScripts
+      AllData [] mods . OtherData 0 Nothing [] msavedData mods (coerce $ savedAdditional msavedData) (proxyTChans mods) S.empty <$> getAllScripts
     else do
       putStrLn "No saved data file found, starting with empty data! owo"
-      AllData [] . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] (proxyTChans mods) S.empty <$> getAllScripts
+      AllData [] mods . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) mods [] (proxyTChans mods) S.empty <$> getAllScripts
   where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]

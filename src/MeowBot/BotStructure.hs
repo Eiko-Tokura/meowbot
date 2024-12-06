@@ -6,8 +6,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module MeowBot.BotStructure
   ( module MeowBot.Data
-  , Meow
-  , BotCommand(..), BotModules(..), CommandValue
+  , module Control.Monad.Readable
+  , Meow, MeowT(..), globalizeMeow
+  , BotCommand(..), BotModules(..), BotConfig, CommandValue
   , GroupId(..), UserId(..), ChatId(..)
   , BotAction(..), AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
   , UserGroup(..), GroupGroup(..)
@@ -39,8 +40,10 @@ import MeowBot.Data
 import Control.Parallel.Strategies
 import Control.Concurrent.Async (Async, asyncThreadId, async)
 import Control.Monad
-import Control.Monad.Trans
-import Control.Monad.Trans.State as ST
+import Control.Monad.State
+import Control.Monad.Reader
+import Control.Monad.Readable
+import qualified Control.Monad.Trans.State as ST
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.ReaderState as RST
 import Command.Aokana.Scripts
@@ -48,6 +51,7 @@ import Data.Coerce
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Ord (comparing, Down(..))
 import Data.List (maximumBy, sortOn)
+import Data.Kind (Type)
 import qualified Data.Set as S
 import Data.Aeson (object, ToJSON, toJSON, (.=))
 import Data.Additional
@@ -75,10 +79,26 @@ data BotAction
   | BAPureAsync
       (Async [BotAction]) -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
 
-type Meow a = ReaderStateT WholeChat OtherData IO a 
+type Meow a = MeowT IO a
 -- ^ the monad that the bot runs in
 -- running in this monad it is necessary to block other threads from modifying the data.
 -- so avoid running long blocking operations in this monad, use async and staged actions instead.
+
+-- | The monad transformer that the bot runs in.
+newtype MeowT (m :: Type -> Type) a = MeowT { runMeowT :: ReaderStateT (WholeChat, BotConfig) OtherData m a }
+  deriving (Functor, Applicative, Monad, MonadIO) via (ReaderStateT (WholeChat, BotConfig) OtherData m)
+  deriving (MonadReader (WholeChat, BotConfig), MonadState OtherData) via ReaderStateT (WholeChat, BotConfig) OtherData m
+  deriving MonadTrans via ReaderStateT (WholeChat, BotConfig) OtherData
+
+type BotConfig = BotModules
+
+instance Monad m => MonadReadable BotConfig (MeowT m) where
+  readable = asks snd
+  {-# INLINE readable #-}
+
+instance Monad m => MonadReadable WholeChat (MeowT m) where
+  readable = asks fst
+  {-# INLINE readable #-}
 
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
@@ -86,8 +106,9 @@ instance Show (Async (Meow [BotAction])) where
 forestSizeForEachChat = 200 -- ^ controls how many trees to keep in each chat room
 
 data AllData = AllData
-  { wholechat :: WholeChat
-  , otherdata :: OtherData
+  { wholechat  :: WholeChat
+  , botConfig  :: BotConfig
+  , otherdata  :: OtherData
   } deriving Show
 
 data SelfInfo = SelfInfo
@@ -96,10 +117,10 @@ data SelfInfo = SelfInfo
 
 updateSelfInfo :: CQMessage -> StateT AllData IO ()
 updateSelfInfo cqmsg = do
-  mselfInfo <- ST.gets (selfInfo . otherdata)
+  mselfInfo <- gets (selfInfo . otherdata)
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> ST.modify $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo $ coerce sid } }
+    (Nothing, Just sid) -> modify $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo $ coerce sid } }
     _ -> return ()
 
 makeHeader :: StateT AllData IO (Maybe Headers)
@@ -152,10 +173,10 @@ instance HasAdditionalData OtherData where
   modifyAdditionalData f od = od {runningData = f $ runningData od}
 
 rseqWholeChat :: Strategy AllData
-rseqWholeChat (AllData wc od) = do
+rseqWholeChat (AllData wc m od) = do
   wc' <- evalList (evalTuple2 r0 rseq) wc
   od' <- rseq od
-  return $ AllData wc' od'
+  return $ AllData wc' m od'
 
 -- | if savedData changed, save it to file
 saveData :: AllData -> StateT AllData IO ()
@@ -169,14 +190,18 @@ savedDataPath :: BotName -> FilePath
 savedDataPath Nothing = "savedData"
 savedDataPath (Just n) = "savedData-" ++ n
 
-gIncreaseAbsoluteId :: (Monad m) => StateT AllData m Int
-gIncreaseAbsoluteId = globalize wholechat otherdata AllData increaseAbsoluteId
+-- | globalize MeowT to StateT AllData IO
+globalizeMeow :: (Monad m) => MeowT m a -> StateT AllData m a
+globalizeMeow = globalize (\a -> (wholechat a, botConfig a)) otherdata (uncurry AllData) . runMeowT
 
-increaseAbsoluteId :: (Monad m) => ReaderStateT r OtherData m Int
+gIncreaseAbsoluteId :: (Monad m) => StateT AllData m Int
+gIncreaseAbsoluteId = globalizeMeow increaseAbsoluteId
+
+increaseAbsoluteId :: (Monad m) => MeowT m Int
 increaseAbsoluteId = do
-  other_data <- RST.get
+  other_data <- get
   let mid = message_number other_data
-  RST.put $ other_data {message_number = mid + 1}
+  put $ other_data {message_number = mid + 1}
   return $ mid + 1
 
 data SendMessageForm = SendMessageForm
@@ -214,25 +239,27 @@ instance ToJSON Params where
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
 updateAllDataByMessage :: CQMessage -> AllData -> AllData
-updateAllDataByMessage cqmsg (AllData whole_chat other_data) =
+updateAllDataByMessage cqmsg (AllData whole_chat m other_data) =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
       Just gid -> AllData
         (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg)
+        m
         other_data
-      Nothing -> AllData whole_chat other_data
+      Nothing -> AllData whole_chat m other_data
 
     PrivateMessage -> case userId cqmsg of
       Just uid -> AllData
         (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg)
+        m
         other_data
-      Nothing -> AllData whole_chat other_data
+      Nothing -> AllData whole_chat m other_data
 
     Response -> let (rdata, mecho) = (responseData cqmsg, echoR cqmsg) in
       case rdata of
-        Nothing     -> AllData whole_chat other_data
-        Just rsdata -> updateAllDataByResponse (rsdata, mecho) (AllData whole_chat other_data)
-    _ -> AllData whole_chat other_data
+        Nothing     -> AllData whole_chat m other_data
+        Just rsdata -> updateAllDataByResponse (rsdata, mecho) (AllData whole_chat m other_data)
+    _ -> AllData whole_chat m other_data
 
 
 updateAllDataByResponse :: (ResponseData, Maybe Text) -> AllData -> AllData
@@ -337,12 +364,12 @@ baSendToChatId (GroupChat gid)   txt = BASendGroup gid txt
 baSendToChatId (PrivateChat uid) txt = BASendPrivate uid txt
 
 -- | runing an ExceptT String IO String action with string result, and send the result to a chat id. Handles exceptions.
-sendIOeToChatId :: EssentialContent -> ExceptT Text IO Text -> ReaderStateT r OtherData IO [BotAction]
+sendIOeToChatId :: EssentialContent -> ExceptT Text IO Text -> Meow [BotAction]
 sendIOeToChatId (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioess
   case ess of
     Right str -> do
-      RST.modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
@@ -351,7 +378,7 @@ sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioess
   case ess of
     Right str -> return $ do
-      RST.modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
@@ -362,10 +389,10 @@ sendToChatId (_, cid, _, mid, _) str other_data =
 
 -- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
-baSendToChatIdFull :: Monad m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> ReaderStateT r OtherData m [BotAction]
+baSendToChatIdFull :: Monad m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT m [BotAction]
 baSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- pure mid ] ++ items)
-  RST.modify $ insertMyResponseHistory cid meta
+  modify $ insertMyResponseHistory cid meta
   return [ baSendToChatId cid str ]
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)

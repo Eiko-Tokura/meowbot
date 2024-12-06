@@ -11,6 +11,8 @@ module MeowBot.Data
 
   , BotName
   , BotModules(..)
+  , BotInstance(..)
+  , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..)
   --, CommandValue
   , EssentialContent
 
@@ -42,12 +44,30 @@ type ChatRoom = (ChatId, Chat)
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 type BotName = Maybe String
 
+type RunningMode     = [DebugFlag]
+data DebugFlag       = DebugJson | DebugCQMessage deriving (Eq, Show)
+data RunningFlag     = RunClient String Int | RunServer String Int deriving (Eq, Show)
+data IdentityFlag    = UseName String | UseSysMsg String deriving (Eq, Show)
+data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
+data LogFlag         = LogFlag FilePath deriving (Eq, Show)
+newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
+
+data BotInstance = BotInstance
+  { botRunFlag :: RunningFlag
+  , botIdentityFlags :: [IdentityFlag]
+  , botCommandFlags :: [CommandFlags]
+  , botDebugFlags :: [DebugFlag]
+  , botProxyFlags :: [ProxyFlag]
+  , botLogFlags :: [LogFlag]
+  } deriving (Eq, Show)
+
 data BotModules = BotModules
   { canUseGroupCommands   :: [CommandId]
   , canUsePrivateCommands :: [CommandId]
   , nameOfBot :: BotName
   , globalSysMsg :: Maybe String
   , proxyTChans :: [ProxyData]
+  , logFile :: [FilePath]
   } deriving (Show)
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage

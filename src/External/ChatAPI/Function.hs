@@ -99,19 +99,19 @@ instance ToJSON PropertyType where
 --
 -- 2. assistant calls the function
 --Choice(
---    finish_reason='tool_calls', 
---    index=0, 
---    logprobs=None, 
+--    finish_reason='tool_calls',
+--    index=0,
+--    logprobs=None,
 --    message=chat.completionsMessage(
---        content=None, 
---        role='assistant', 
---        function_call=None, 
+--        content=None,
+--        role='assistant',
+--        function_call=None,
 --        tool_calls=[
 --            chat.completionsMessageToolCall(
---                id='call_62136354', 
+--                id='call_62136354',
 --                function=Function(
---                    arguments='{"order_id":"order_12345"}', 
---                    name='get_delivery_date'), 
+--                    arguments='{"order_id":"order_12345"}',
+--                    name='get_delivery_date'),
 --                type='function')
 --        ])
 --)
@@ -126,9 +126,9 @@ instance ToJSON PropertyType where
 --     }),
 --     "tool_call_id": response['choices'][0]['message']['tool_calls'][0]['id']
 -- }
--- 
+--
 -- # Prepare the chat completion call payload
--- 
+--
 -- completion_payload = {
 --     "model": "gpt-4o",
 --     "messages": [
@@ -172,7 +172,7 @@ instance ToJSON PropertyType where
 --   , tools  :: [Tool]
 --   } deriving (Show)
 -- canonical use case is MeowMeow a = AssistantT ChatId [Message] Meow a
-newtype AssistantT id context m a 
+newtype AssistantT id context m a
   = AssistantT { runAssistant :: ReaderT [Tool] (StateT (AssistantState id context) m) a }
   deriving (Functor, Applicative, Monad, MonadReader [Tool], MonadState (AssistantState id context)) via ReaderT [Tool] (StateT (AssistantState id context) m)
 

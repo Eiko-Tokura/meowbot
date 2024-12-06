@@ -18,7 +18,7 @@ import Control.Monad.Trans.ReaderState
 
 commandSetSysMessage :: BotCommand
 commandSetSysMessage = BotCommand System $ botT $ do
-  ess@(msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> ask
+  ess@(msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> asks fst
   sysMsgParser' <- lift $ commandParserTransformByBotName sysMsgParser
   msys <- pureMaybe $ MP.runParser sysMsgParser' msg
   other_data <- lift get
@@ -29,11 +29,11 @@ commandSetSysMessage = BotCommand System $ botT $ do
     Left msysMsg -> lift $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
       case msysMsg of
-        Just _ -> onlyState $ sendToChatId ess "系统消息已设置owo!"
-        Nothing -> onlyState $ sendToChatId ess "系统消息已返回默认owo!"
+        Just _ -> MeowT $ onlyState $ sendToChatId ess "系统消息已设置owo!"
+        Nothing -> MeowT $ onlyState $ sendToChatId ess "系统消息已返回默认owo!"
     Right temp -> lift $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
-      onlyState $ sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
+      MeowT $ onlyState $ sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
   where
     sysMsgParser =
       ( do
