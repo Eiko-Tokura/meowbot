@@ -6,7 +6,7 @@ module MeowBot.Parser
   , positiveInt
   , Tree(..)
   , flattenTree
-  , htmlDecode
+  , htmlDecode, htmlDecodeFunction
   , cqcodeExceptFace
   , cqother
   , htmlCodes
@@ -82,6 +82,10 @@ htmlCodes = just '&' >> asumE
 htmlDecode :: (Chars sb) => Parser sb Char String
 htmlDecode = many $ htmlCodes <|> getItem
 {-# INLINE htmlDecode #-}
+
+htmlDecodeFunction :: (Chars sb) => sb -> String
+htmlDecodeFunction = fromMaybe "" . runParser htmlDecode
+{-# INLINE htmlDecodeFunction #-}
 
 cqother :: (Chars sb) => Text -> Parser sb Char CQCode
 cqother str = CQOther str <$> intercalateBy ($(itemInQ ",;"))

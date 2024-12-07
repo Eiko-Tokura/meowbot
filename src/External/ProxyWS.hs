@@ -10,6 +10,7 @@ module External.ProxyWS
   , sendToProxy
   , receiveFromProxy
   , createProxyData
+  , runProxyWS
   , proxyClientForWS
   ) where
 
@@ -75,29 +76,45 @@ data ProxyData = ProxyData
   { proxyAddr    :: AddressString
   , proxyPort    :: PortInt
   , proxyChans   :: (TBQueue ByteString, TBQueue ByteString)
+  , proxyRunning :: TVar Bool -- ^ This is used to check if the proxy is already running, avoid creating multiple proxies
   }
 
 instance Show ProxyData where
-  show (ProxyData addr port _) = "ProxyData { proxyAddr = " ++ addr ++ ", proxyPort = " ++ show port ++ " }"
+  show (ProxyData addr port _ _) = "ProxyData { proxyAddr = " ++ addr ++ ", proxyPort = " ++ show port ++ " }"
 
+-- | The headers for cqhttp connection.
 cqhttpHeaders :: Int -> Headers
 cqhttpHeaders sid =
   [ ("X-Client-Role", "Universal")
   , ("X-Self-Id", B8.pack $ show sid)
   ]
 
+-- | Send a message to the proxy (write to TBQueue).
 sendToProxy :: ProxyData -> ByteString -> IO ()
-sendToProxy (ProxyData _ _ (chanIn, _)) msg = atomically $ writeTBQueue chanIn msg
+sendToProxy (ProxyData _ _ (chanIn, _) _) msg = atomically $ writeTBQueue chanIn msg
 
+-- | Receive a message from the proxy (read from TBQueue).
 receiveFromProxy :: ProxyData -> STM ByteString
-receiveFromProxy (ProxyData _ _ (_, chanOut)) = readTBQueue chanOut
+receiveFromProxy (ProxyData _ _ (_, chanOut) _) = readTBQueue chanOut
 
+-- | Create a new 'ProxyData' with the provided address and port, and empty TBQueues.
 createProxyData :: AddressString -> PortInt -> IO ProxyData
 createProxyData addr port = do
   chanIn  <- newTBQueueIO 10
   chanOut <- newTBQueueIO 10
-  return $ ProxyData addr port (chanIn, chanOut)
+  running <- newTVarIO False
+  return $ ProxyData addr port (chanIn, chanOut) running
 
+-- | Create a proxy client thread for a WebSocket connection, using the provided headers. It will avoid creating multiple proxies.
+-- wraps 'proxyClientForWS' and starts a new thread for it.
+runProxyWS :: ProxyData -> Headers -> IO ()
+runProxyWS (ProxyData addr port chans running) headers = do
+  alreadyRunning <- atomically $ readTVar running
+  unless alreadyRunning $ do
+    atomically $ writeTVar running True
+    void $ proxyClientForWS (Just chans) headers addr port
+
+-- | Create a proxy client for a WebSocket connection, using the provided headers and TBQueues.
 proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> IO (TBQueue a, TBQueue a)
 proxyClientForWS ioChans headers address port = do
   chanIn  <- maybe (newTBQueueIO 10) (return . fst) ioChans

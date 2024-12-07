@@ -68,6 +68,7 @@ data BotModules = BotModules
   , globalSysMsg :: Maybe String
   , proxyTChans :: [ProxyData]
   , logFile :: [FilePath]
+  , botInstance :: BotInstance
   } deriving (Show)
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage
@@ -158,7 +159,7 @@ instance FromJSON CQMessage where
                 Just _ -> MP.runParser cqmsg $ fromMaybe "" message )
 
 showCQ :: CQMessage -> String
-showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderName, senderCard', ": ", messageContent] --, mcqcodes]
+showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderName, senderCard', ": ", MP.htmlDecodeFunction messageContent] --, mcqcodes]
   where messageType    = show $ eventType cqmsg
         absId          = maybe "" (\c -> "[" <> show c <> "] ") . absoluteId $ cqmsg
         chatId         = maybe "" show . groupId $ cqmsg

@@ -143,10 +143,11 @@ runInstances bots = do
           , globalSysMsg = mGlobalSysMsg
           , proxyTChans = proxyData
           , logFile = [ logFile | LogFlag logFile <- logFlags ]
+          , botInstance = bot
           }
     case runFlag of
-      RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot bot
-      RunServer ip port -> runServer ip port    (botServer botModules mode) `forkFinally` recoverBot bot
+      RunClient ip port -> runClient ip port "" (botClient botModules mode) `forkFinally` recoverBot botModules
+      RunServer ip port -> runServer ip port    (botServer botModules mode) `forkFinally` recoverBot botModules
   putStrLn "All bots started! owo"
 
 putLogLn :: [FilePath] -> String -> IO ()
@@ -156,15 +157,18 @@ putLogLn files = \str -> do
   let str' = "[" ++ time ++ "]\n" ++ str in putStrLn str' >> mapM_ (`appendFile` (str' ++ "\n")) files
 {-# INLINE putLogLn #-}
 
-recoverBot :: BotInstance -> Either SomeException () -> IO ()
+recoverBot :: BotModules -> Either SomeException () -> IO ()
 recoverBot bot = \case
   Left e ->  do
-    putLogLn ("error.log":[f | LogFlag f <- botLogFlags bot]) $
+    putLogLn ("error.log":[f | LogFlag f <- botLogFlags (botInstance bot)]) $
       "****The bot instance " ++ show bot ++ "\n****failed with exception:****\n" ++ show e
     putStrLn   "****recovering in 60 seconds****"
     threadDelay 60_000_000
     putStrLn   "****restarting****"
-    runInstances [bot]
+    let mode = botDebugFlags (botInstance bot)
+    case botRunFlag (botInstance bot) of
+      RunClient ip port -> void $ runClient ip port "" (botClient bot mode) `forkFinally` recoverBot bot
+      RunServer ip port -> void $ runServer ip port    (botServer bot mode) `forkFinally` recoverBot bot
   Right _ -> putStrLn $ "Bot instance finished: " ++ show bot
 
 botClient :: BotModules -> RunningMode -> ClientApp ()
@@ -248,7 +252,7 @@ handleMessage mods mode conn msgBS = do
             Nothing      -> return ()
             Just headers -> do
               pending <- gets (pendingProxies . otherdata)
-              lift . mapM_ (\pd -> proxyClientForWS (Just $ proxyChans pd) headers (proxyAddr pd) (proxyPort pd)) $ pending
+              lift . mapM_ (\pd -> runProxyWS pd headers) $ pending
               unless (null pending) $ modify $ \ad -> ad { otherdata = (otherdata ad) { pendingProxies = [] } }
 
 initialData :: BotModules -> IO AllData
