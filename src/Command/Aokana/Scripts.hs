@@ -63,10 +63,10 @@ lines' = map Line . lines
 unlines' :: [Line] -> String
 unlines' = unlines . map unLine
 
-lineShape :: (Stream sl Line) => Parser String Char a -> Parser sl Line a
+lineShape :: (IsStream sl Line) => Parser String Char a -> Parser sl Line a
 lineShape p = maybe MP.zero return . MP.runParser p . unLine =<< MP.getItem
 
-comments :: (Stream sl Line) => Parser sl Line ()
+comments :: (IsStream sl Line) => Parser sl Line ()
 comments = lineShape $ do
   MP.spaces0
   $(MP.stringQ "//")
@@ -75,7 +75,7 @@ comments = lineShape $ do
 simplify :: (MultiLangString -> (a, Text)) -> ScriptBlock -> Text
 simplify f block = maybe "" (snd . f) $ scriptContent block
 
-emptyLine :: (Stream s Line) => Parser s Line ()
+emptyLine :: (IsStream s Line) => Parser s Line ()
 emptyLine = lineShape $ do
   many $(MP.itemInQ [' ', '\t', '\r'])
   MP.end
@@ -88,10 +88,10 @@ evalScripts ls = evalList evalScriptBlock ls
 paragraphToScript :: String -> Maybe [ScriptBlock]
 paragraphToScript = fmap (`using` evalScripts) . MP.runParser parseSingleScriptFile . lines'
 
-parseSingleScriptFile :: (Stream s Line) => Parser s Line [ScriptBlock]
+parseSingleScriptFile :: (IsStream s Line) => Parser s Line [ScriptBlock]
 parseSingleScriptFile = MP.some contigousBlock
 
-contigousBlock :: (Stream s Line) => Parser s Line ScriptBlock
+contigousBlock :: (IsStream s Line) => Parser s Line ScriptBlock
 contigousBlock = do
   some (comments <|> emptyLine)
   associatedData  <- MP.many associatedDataParser
@@ -123,7 +123,7 @@ contigousBlock = do
 spacesOrTabular :: (Chars sb) => Parser sb Char String
 spacesOrTabular = some $ MP.itemIn [' ', '\t']
 
-associatedDataParser :: (Stream s Line) => Parser s Line AssociatedData
+associatedDataParser :: (IsStream s Line) => Parser s Line AssociatedData
 associatedDataParser = lineShape $ MP.asumE
   [ $(stringQ "voice0") >> Voice <$> (spacesOrTabular >> some' item)
   , $(stringQ "scene")  >> Scene <$> (spacesOrTabular >> some' item)
@@ -138,7 +138,7 @@ specialSymbol = '␂'  -- this is a special symbol that marks the start of every
 speakerBrackets = ('【', '】')
 contentBrackets = ('「', '」')
 
-multiLangStringParser :: (Stream s Line) => Parser s Line MultiLangString
+multiLangStringParser :: (IsStream s Line) => Parser s Line MultiLangString
 multiLangStringParser = lineShape $ MultiLangString
   <$> singleLangParser
   <*> singleLangParser

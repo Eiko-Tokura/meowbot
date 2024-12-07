@@ -13,7 +13,7 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Text as T
 
-class Stream sb b | sb -> b where
+class IsStream sb b | sb -> b where
   uncons :: sb -> [(b, sb)] -- ^ ways to take out the first singleton, allowing brances
   {-# MINIMAL uncons #-}
 
@@ -22,14 +22,14 @@ class Stream sb b | sb -> b where
   flatten x = uncons x >>= \(b, sb') -> map (b:) (flatten sb')
   {-# INLINE flatten #-}
 
-instance Stream Text Char where
+instance IsStream Text Char where
   uncons = maybe [] pure . T.uncons
   {-# INLINE uncons #-}
   flatten = pure . T.unpack
   {-# INLINE flatten #-}
 
-instance Stream [a] a where
-  {-# SPECIALIZE instance Stream [Char] Char #-}
+instance IsStream [a] a where
+  {-# SPECIALIZE instance IsStream [Char] Char #-}
   uncons [] = []
   uncons (x:xs) = pure (x, xs)
   {-# INLINE uncons #-}
@@ -94,7 +94,7 @@ instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ParserT sb
   ParserT a <|> ParserT b = ParserT $ StateT $ \s -> ExceptT $ runExceptT (runStateT a s) <|> runExceptT (runStateT b s)
   {-# INLINE (<|>) #-}
 
-instance (MonadZero m, Stream sb b) => MonadItem b (ParserT sb b m) where
+instance (MonadZero m, IsStream sb b) => MonadItem b (ParserT sb b m) where
   getItem = ParserT $ do
     sb <- get
     case uncons sb of
@@ -108,11 +108,11 @@ instance (MonadIsZero m) => MonadTry (ParserT sb b m) where
 
 type Parser sb b a = ParserT sb b [] a
 
-runParser :: (Stream sb b) => Parser sb b a -> sb -> Maybe a
+runParser :: (IsStream sb b) => Parser sb b a -> sb -> Maybe a
 runParser p = listToMaybe . evalStateT (runParserT p)
 {-# INLINE runParser #-}
 
-runParserFull :: (Stream sb b) => Parser sb b a -> sb -> [a]
+runParserFull :: (IsStream sb b) => Parser sb b a -> sb -> [a]
 runParserFull p = evalStateT (runParserT p)
 {-# INLINE runParserFull #-}
 

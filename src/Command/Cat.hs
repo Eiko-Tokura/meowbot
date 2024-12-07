@@ -8,7 +8,7 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import External.ChatAPI
 import MeowBot.Parser (Parser, Chars)
-import Parser.Definition (Stream)
+import Parser.Definition (IsStream)
 import qualified MeowBot.Parser as MP
 import Control.Monad.IOe
 
@@ -77,7 +77,7 @@ replyCatParser name msys = catParser name msys <|> ( do
   return (ChatParams GPT3 False msys, str)
   )
 
-treeCatParser :: forall s. (Stream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
+treeCatParser :: forall s. (IsStream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
 treeCatParser name msys mid = do
   elist  <- Right <$>
     --   ( do

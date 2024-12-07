@@ -7,12 +7,12 @@ module Parser.Run
   , module Parser.Template
   , runParser, runParserFull
   , Parser
-  , Stream
+  , IsStream
   ) where
 
 import Control.Applicative
 import Control.Monad.Item
 import Parser.Char
-import Parser.Definition (Stream, runParser, runParserFull, Parser) -- not fully exported
+import Parser.Definition (IsStream, runParser, runParserFull, Parser) -- not fully exported
 import Parser.Template
 import Parser.Text

@@ -9,7 +9,7 @@ import Control.Applicative
 import Data.Text (Text)
 import qualified Data.Text as T
 
-type Chars sb = Stream sb Char
+type Chars sb = IsStream sb Char
 -- | Parse a non-empty word, which is a continuous string of characters that are not spaces, or a string inside a pair of quotes.
 word :: Chars sb => Parser sb Char String
 word =   insideBrackets ('\'', '\'')
@@ -28,7 +28,7 @@ nonFlagWord = insideBrackets ('\'', '\'')
 nonFlagWord' :: Chars sb => Parser sb Char Text
 nonFlagWord' = T.pack <$> nonFlagWord
 
-class (Stream sb b) => Packable sb b where
+class (IsStream sb b) => Packable sb b where
   packable :: [b] -> sb
 
 instance Packable String Char where

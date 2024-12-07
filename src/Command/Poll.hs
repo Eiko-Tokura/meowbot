@@ -52,7 +52,7 @@ pollParser = do
     deletePollParser = $(stringQ "delete")  >> commandSeparator >> DeletePoll <$> int
     listPollParser   = $(stringQ "list")    >> return ListPoll
 
-pollTreeParser :: (Stream s CQMessage) => Parser s CQMessage PollCommand
+pollTreeParser :: (IsStream s CQMessage) => Parser s CQMessage PollCommand
 pollTreeParser = do
   self <- satisfy $ \cqm -> eventType cqm == SelfMessage && (not . null $ getAdditionalDataSavedType @_ @PollId cqm)
   let pollId = head . getAdditionalDataSavedType @_ @PollId $ self

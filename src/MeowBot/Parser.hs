@@ -48,7 +48,7 @@ instance Functor Tree where
   fmap fab (Node a subTrees) = Node (fab a) (fmap (fmap fab) subTrees)
   {-# INLINE fmap #-}
 
-instance Stream (Tree a) a where
+instance IsStream (Tree a) a where
   uncons EmptyTree = []
   uncons (Node a []) = [(a, EmptyTree)]
   uncons (Node a subTrees) = (a, ) <$> subTrees
@@ -135,7 +135,7 @@ headCommand :: (Chars sb) => String -> Parser sb Char String
 headCommand cmd = spaces0 >> just ':' <|> just '：' >> string cmd
 {-# INLINE headCommand #-}
 
-canBeEmpty :: forall sb b a. (Stream sb b) => Parser sb b a -> Parser sb b (Maybe a)
+canBeEmpty :: forall sb b a. (IsStream sb b) => Parser sb b a -> Parser sb b (Maybe a)
 canBeEmpty p = fromRight Nothing <$> (end @b |+| (Just <$> p))
 {-# INLINE canBeEmpty #-}
 
