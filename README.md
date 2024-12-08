@@ -8,8 +8,14 @@ It was my first Haskell project and was not well written. But I have now revisit
 - [x] Generating really good pictures, formulas from Markdown
 - [x] Generating Chat output in Markdown and display in pictures
 - [x] Generating Random Variables
+- [x] Polling
+- [x] User And Group Management
+- [x] Automatic Retract User Messages In Group
+- [x] Proxy WebSocket connection To Connect To External Servers
+- [x] Run as client mode or server mode, or many of them at once
+- [x] Full Async and Concurrent Support
 
-use ':help' to get more information.
+When using the bot, you can use ':help' to get more information about each command.
 
 Welcome to contribute and play with MeowMeow!
 
@@ -22,3 +28,22 @@ If you want to run it, you need the following files to support the above functio
 3. add aokana voice files in ./aokana/voice and script files in ./aokana/scripts
 
 Compile and run it in either ghc, cabal or stack, whatever >w<
+
+### Command Line Arguments
+
+```
+Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]
+  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server
+  --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection
+  --name <name>             : set the name of the bot
+  --sys-msg <msg>           : set the global system message of the bot
+  --command <commandId>     : allow the bot to use the command with the given commandId, use multiple --command flags to allow multiple commands
+                              commandId must be one of [Aokana,Cat,Help,Md,Random,Retract,System,User,Study,BookMan,Poll]
+                              if no --command flags are given, the bot will use all commands
+  --debug-json              : print the JSON message received from the server
+  --debug-cqmsg             : print the decoded CQMessage
+  --proxy <address> <port>  : set the proxy server to connect to, use multiple --proxy flags to connect to multiple servers
+  If no arguments are given, the bot will run as a client connecting to the go-cqhttp WebSocket server on 127.0.0.1:3001
+
+Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags.
+```
