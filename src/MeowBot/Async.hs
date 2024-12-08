@@ -3,6 +3,9 @@ module MeowBot.Async where
 
 import MeowBot.BotStructure
 import Control.Monad.Trans
+import Control.Concurrent.Async
+import Control.Concurrent.STM
+import Control.Monad.Cont
 
 asyncPureIOBotAction :: IO [BotAction] -> Meow [BotAction]
 asyncPureIOBotAction = fmap (pure . BAPureAsync) . lift . async
@@ -21,3 +24,12 @@ asyncMeowBot
   -> Meow [BotAction] -- ^ The Meow action that will be executed asynchronously
 asyncMeowBot ioa f = asyncMeowBotAction $ fmap f ioa
 {-# INLINE asyncMeowBot #-}
+
+-- | Safe version of async, will never thread leak.
+asyncSafe :: IO a -> Cont (IO b) (Async a)
+asyncSafe = cont . withAsync
+{-# INLINE asyncSafe #-}
+
+asyncSafeSTM :: MonadIO m => IO a -> m (STM a)
+asyncSafeSTM = liftIO . ($ return . waitSTM) . withAsync
+{-# INLINE asyncSafeSTM #-}

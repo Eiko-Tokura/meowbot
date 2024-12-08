@@ -24,9 +24,9 @@ import Control.Monad.Trans.ReaderState
 -- | This command is used to automatically retract emoticons that contain certain keywords owo
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
-  cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> readable)
+  cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> query)
   (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> asks fst
-  (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> readable
+  (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> query
   pureMaybe $ listToMaybe $ catMaybes
     [ do
         props   <- listToMaybe [ props | CQOther "mface" props <- cqs ]

@@ -36,6 +36,7 @@ import Data.Either(lefts, rights, fromRight)
 import Data.Text (Text)
 import qualified Data.Text as T
 
+-- | Convert a value to 'Text' using 'show'.
 tshow :: Show a => a -> Text
 tshow = T.pack . show
 {-# INLINE tshow #-}
@@ -54,6 +55,7 @@ instance IsStream (Tree a) a where
   uncons (Node a subTrees) = (a, ) <$> subTrees
   {-# INLINE uncons #-}
 
+-- | Flatten a tree to a list, putting the root node first, then the children.
 flattenTree :: Tree a -> [a]
 flattenTree EmptyTree = []
 flattenTree (Node a children) = a : concatMap flattenTree children
@@ -62,10 +64,12 @@ flattenTree (Node a children) = a : concatMap flattenTree children
 -- flattenTree :: Tree a -> [a]
 -- flattenTree = concat . flatten
 
+-- | Identicial to 'getItem'.
 item :: (MonadItem i m) => m i
 item = getItem
 {-# INLINE item #-}
 
+-- | Parse HTML codes to a Char, only `&amp;`, `&#44;`, `&#91;`, `&#93;`.
 htmlCodes :: (Chars sb) => Parser sb Char Char
 htmlCodes = just '&' >> asumE
   [ $(stringQ_ "amp;") >> pure '&'
@@ -79,10 +83,12 @@ htmlCodes = just '&' >> asumE
   ]
 {-# INLINE htmlCodes #-}
 
+-- | Using 'htmlCodes' to continuously decode HTML codes.
 htmlDecode :: (Chars sb) => Parser sb Char String
 htmlDecode = many $ htmlCodes <|> getItem
 {-# INLINE htmlDecode #-}
 
+-- | Using 'htmlDecode' to decode HTML codes, the function version.
 htmlDecodeFunction :: (Chars sb) => sb -> String
 htmlDecodeFunction = fromMaybe "" . runParser htmlDecode
 {-# INLINE htmlDecodeFunction #-}

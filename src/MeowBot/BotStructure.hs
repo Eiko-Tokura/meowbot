@@ -7,6 +7,7 @@
 module MeowBot.BotStructure
   ( module MeowBot.Data
   , module Control.Monad.Readable
+  , module Control.Monad.IOe
   , Meow, MeowT(..), globalizeMeow
   , BotCommand(..), BotModules(..), BotConfig, CommandValue
   , GroupId(..), UserId(..), ChatId(..)
@@ -27,7 +28,6 @@ module MeowBot.BotStructure
   , baSendToChatId, baSendToChatIdFull
   , getFirstTree, getNewMsg, getNewMsgN
   , getTimeLine, getTimeLineCid
-  , mT
 
   , rseqWholeChat
 
@@ -40,6 +40,7 @@ import MeowBot.Data
 import Control.Parallel.Strategies
 import Control.Concurrent.Async (Async, asyncThreadId, async)
 import Control.Monad
+import Control.Monad.IOe
 import Control.Monad.State
 import Control.Monad.Reader
 import Control.Monad.Readable
@@ -93,12 +94,12 @@ newtype MeowT (m :: Type -> Type) a = MeowT { runMeowT :: ReaderStateT (WholeCha
 type BotConfig = BotModules
 
 instance Monad m => MonadReadable BotConfig (MeowT m) where
-  readable = asks snd
-  {-# INLINE readable #-}
+  query = asks snd
+  {-# INLINE query #-}
 
 instance Monad m => MonadReadable WholeChat (MeowT m) where
-  readable = asks fst
-  {-# INLINE readable #-}
+  query = asks fst
+  {-# INLINE query #-}
 
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
@@ -186,6 +187,7 @@ saveData prev_data = do
     putStrLn "Saved data changed, I'm saving it to file! owo"
     writeFile (savedDataPath $ nameOfBot $ botModules $ otherdata new_data) $ show $ savedData (otherdata new_data)
 
+-- | Specify the path to save the data according to the bot name.
 savedDataPath :: BotName -> FilePath
 savedDataPath Nothing = "savedData"
 savedDataPath (Just n) = "savedData-" ++ n
@@ -288,7 +290,7 @@ type End a = a -> a
 updateListByFuncKeyElement :: (Ord k) => [(k, [Tree a])] -> End [(k, [Tree a])] -> Maybe (a -> Bool) -> k -> a -> [(k, [Tree a])]
 updateListByFuncKeyElement [] past _ key element = (key, [Node element []]) : past []
 updateListByFuncKeyElement (l: !ls) past attachTo key element
-  | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : past ls
+  | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : let !pastls = past ls in pastls
   | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
   where (keyl, treel) = l
 
@@ -353,10 +355,6 @@ getTimeLineCid :: ChatId -> WholeChat -> [CQMessage]
 getTimeLineCid cid wc = case lookup cid wc of
   Just forest -> sortOn (Down . time) . concatMap flattenTree $ forest
   Nothing -> []
-
-mT :: (Applicative t) => Maybe (t a) -> t (Maybe a)
-mT Nothing = pure Nothing
-mT (Just ioa) = Just <$> ioa
 
 -- | Abstract representation of sending a message to a chat id.
 baSendToChatId :: ChatId -> Text -> BotAction
