@@ -6,6 +6,7 @@ import Control.Monad.Trans
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad.Cont
+import Control.Exception
 
 asyncPureIOBotAction :: IO [BotAction] -> Meow [BotAction]
 asyncPureIOBotAction = fmap (pure . BAPureAsync) . lift . async
@@ -33,3 +34,8 @@ asyncSafe = cont . withAsync
 asyncSafeSTM :: MonadIO m => IO a -> m (STM a)
 asyncSafeSTM = liftIO . ($ return . waitSTM) . withAsync
 {-# INLINE asyncSafeSTM #-}
+
+
+cancelOnException :: IO a -> Async b -> IO a
+cancelOnException = (. uninterruptibleCancel) . onException
+{-# INLINE cancelOnException #-}

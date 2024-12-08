@@ -14,6 +14,7 @@ import Command.Study
 import Command.Poll
 import MeowBot.BotStructure
 import MeowBot.CommandRule
+import MeowBot.Async
 import Parser.Run
 import Parser.Except
 
@@ -198,7 +199,7 @@ botLoop reuseAsyncMsgText mods mode conn = do
     Right (Left (completedAsync, meowBotAction)) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
     Right (Right proxyMsg)                       -> do
       lift $ putStrLn $ fromMaybe "喵喵" (nameOfBot mods) ++ " <- Proxy : " ++ take 512 (bsToString proxyMsg)
-      lift $ sendTextData conn proxyMsg
+      lift $ sendTextData conn proxyMsg `cancelOnException` asyncMsgText
       return (Just asyncMsgText)
   saveData prevData
   botLoop newAsyncMsg mods mode conn
