@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE GADTs, LambdaCase, TemplateHaskell, DerivingVia, OverloadedStrings #-}
 module Data.Additional.Saved where
 

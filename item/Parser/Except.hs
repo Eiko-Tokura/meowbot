@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE TypeFamilies, FunctionalDependencies #-}
 -- | Author : Eiko chan >w<
 --

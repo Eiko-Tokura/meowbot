@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE OverloadedStrings, LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
@@ -101,6 +100,10 @@ instance Monad m => MonadReadable WholeChat (MeowT m) where
   query = asks fst
   {-# INLINE query #-}
 
+instance Monad m => MonadReadable (Maybe EssentialContent) (MeowT m) where
+  query = queries getEssentialContent
+  {-# INLINE query #-}
+
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
 
@@ -128,7 +131,6 @@ makeHeader :: StateT AllData IO (Maybe Headers)
 makeHeader = do
   sid <- gets (fmap selfId . selfInfo . otherdata)
   return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
-
 
 data OtherData = OtherData -- In the future one can add course data.. etc
   { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
