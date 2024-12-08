@@ -1,6 +1,8 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE TypeFamilies, FunctionalDependencies #-}
--- | This module provides functionalities for error messages and error handling in parsers
+-- | Author : Eiko chan >w<
+--
+-- This module provides functionalities for error messages and error handling in parsers
 -- use in conjunction with Parser.Run
 module Parser.Except
   ( ParserExceptT, ParserE
@@ -26,12 +28,6 @@ import Data.Bifunctor
 -- ~ sb -> m (Either e (a, sb))
 type ParserExceptT sb b e m a = ParserT sb b (ExceptT e m) a
 type ParserE sb b e a         = ParserExceptT sb b e [] a
-
--- instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ExceptT e (ParserT sb b m)) where
---   empty = ExceptT $ Right <$> empty
---   {-# INLINE empty #-}
---   ExceptT a <|> ExceptT b = ExceptT $ a <|> b
---   {-# INLINE (<|>) #-}
 
 -- | Unwraps the ParserExceptT monad transformer stack into a function that takes a state and returns a monadic value
 runParserExceptT :: ParserExceptT sb b e m a -> sb -> m (Either e (a, sb))

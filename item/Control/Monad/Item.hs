@@ -1,9 +1,11 @@
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
 {-# LANGUAGE FlexibleContexts, TypeOperators, DefaultSignatures, FunctionalDependencies, DerivingVia, StandaloneDeriving #-}
--- | A module for items from a stream.
+-- | Author : Eiko chan >w<
+--
+-- A module for items from a stream.
 -- abstracting the concept of an item from a stream, most likely used in parsers.
 -- But it does not mention anything about parser, nor does it mention characters or text
--- so it potentially can be used by all parsers.
+-- so the interface potentially can be used by **all parsers** (or even something not parsers).
 module Control.Monad.Item where
 
 import Control.Applicative
@@ -11,6 +13,7 @@ import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 
+-- | A class of monad that can provide items. (possibly from a stream)
 class Monad m => MonadItem i m | m -> i where
   getItem :: m i
 
@@ -46,7 +49,7 @@ instance MonadZero m => MonadZero (StateT s m) where
 deriving via (AdditiveStructure Maybe) instance MonadZero Maybe
 deriving via (AdditiveStructure []) instance MonadZero []
 
--- | A class of monad that can determine whether a value is zero
+-- | A class of monad that can determine whether a value is zero (failure) inside the monad.
 class MonadZero m => MonadIsZero m where
   isZero :: m a -> m Bool
   {-# MINIMAL isZero #-}
@@ -73,73 +76,89 @@ instance MonadIsZero m => MonadTry (StateT s m) where
     if success then Just <$> lift res else return Nothing
   {-# INLINE tryMaybe #-}
 
+-- | Parses the end of the input, only succeeds if getItem returns zero
 end :: forall i m. (MonadZero m, MonadTry m, MonadItem i m) => m ()
 end = do
   hasItem <- tryBool (getItem @i)
   when hasItem zero
 {-# INLINE end #-}
 
+-- | Require the return value to satisfy the condition, otherwise return zero
 require :: MonadZero m => (i -> Bool) -> m i -> m i
 require cond = (>>= \i -> if cond i then return i else zero)
 {-# INLINE require #-}
 
+-- | Parse an item that satisfies the condition
 satisfy :: (MonadZero m, MonadItem i m) => (i -> Bool) -> m i
 satisfy cond = require cond getItem
 {-# INLINE satisfy #-}
 
+-- | Parse an item that belonds to the given list, uses `elemE`
 itemIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
 itemIn is = satisfy (`elemE` is)
 {-# INLINE itemIn #-}
 
+-- | an `elem` that expands to a union of `==` checks at compile time. Use it only on constant and literal lists.
 elemE :: Eq a => a -> [a] -> Bool
 elemE = elem
 {-# INLINE[1] elemE #-}
 {-# RULES "expand elemE" forall a x. elemE a [x] = a == x #-}
 {-# RULES "expand elemE" forall a x xs. elemE a (x:xs) = a == x || elemE a xs #-}
 
+-- | an `notElem` that expands to a union of `==` checks at compile time. Use it on constant and literal lists.
 notElemE :: Eq a => a -> [a] -> Bool
 notElemE = (not .) . elemE
 {-# INLINE notElemE #-}
 
+-- | one or more `itemIn`
 itemsIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 itemsIn = some . itemIn
 {-# INLINE itemsIn #-}
 
+-- | one or more items not in the list
 itemNotIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
 itemNotIn is = satisfy (`notElemE` is)
 {-# INLINE itemNotIn #-}
 
+-- | one or more `itemNotIn`
 itemsNotIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 itemsNotIn = some . itemNotIn
 {-# INLINE itemsNotIn #-}
 
+-- | parse any item that is not in the list
 noneOf :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
 noneOf is = satisfy (`notElemE` is)
 {-# INLINE noneOf #-}
 
+-- | parse exactly the item given
 just :: (MonadZero m, MonadItem i m, Eq i) => i -> m i
 just i = satisfy (== i)
 {-# INLINE just #-}
 
+-- | parse item not equal to the given item
 itemNot :: (MonadZero m, MonadItem i m, Eq i) => i -> m i
 itemNot i = satisfy (/= i)
 {-# INLINE itemNot #-}
 
+-- | parse exactly a list of given items
 string :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 string = mapM just
 {-# INLINE string #-}
 
--- Applicative combinators
+-- ## Applicative combinators
+-- | Applicative version of `(:)`
 (<:>) :: Applicative f => f a -> f [a] -> f [a]
 (<:>) = liftA2 (:)
 infixr 5 <:>
 {-# INLINE (<:>) #-}
 
+-- | Alternative options packed into Either, 
 (|+|) :: Alternative m => m a -> m b -> m (Either a b)
 (|+|) p q = fmap Left p <|> fmap Right q
 infixr 3 |+|
 {-# INLINE (|+|) #-}
 
+-- | A type synonym for Either, right associative
 type (|+|) = Either
 
 -- | type sum, but prefer the **right side** as default and return Right r
@@ -153,38 +172,51 @@ optMaybe :: Alternative m => m a -> m (Maybe a)
 optMaybe p = fmap Just p <|> pure Nothing
 {-# INLINE optMaybe #-}
 
+-- | optionally parse, return True if successful
 optBool :: Alternative m => m a -> m Bool
 optBool = fmap isJust . optMaybe
 {-# INLINE optBool #-}
 
+-- | optionally parse
 opt_ :: Alternative m => m a -> m ()
 opt_ = void . optMaybe
 {-# INLINE opt_ #-}
 
--- MonadTry and MonadZero combinators
+-- ## MonadTry and MonadZero combinators
+-- | parse one or more items until the till-parser succeeds
 someTill :: (MonadTry m, MonadZero m) => m t -> m a -> m [a]
 someTill pt p = do
   end <- tryBool pt
   if end then zero else p <:> manyTill pt p
 {-# INLINE someTill #-}
 
+-- | parse zero or more items until the till-parser succeeds
 manyTill :: (MonadTry m) => m t -> m a -> m [a]
 manyTill pt p = do
   end <- tryBool pt
   if end then return [] else p <:> manyTill pt p
 {-# INLINE manyTill #-}
 
+-- | parse one or more items separated by the sep-parser
 intercalateBy :: (Alternative m) => m sep -> m a -> m [a]
 intercalateBy sep p = p <:> many (sep *> p)
 {-# INLINE intercalateBy #-}
 
+-- | parse zero or more items separated by the sep-parser
 intercalateBy0 :: (Alternative m) => m sep -> m a -> m [a]
 intercalateBy0 sep p = intercalateBy sep p <|> pure []
 {-# INLINE intercalateBy0 #-}
 
+-- | parse zero or more items inside two brackets-parsers, with the default item parser
 insideBrackets :: (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i) => (i, i) -> m [i]
-insideBrackets (l, r) = just l *> manyTill (just r) getItem <* just r
+insideBrackets (l, r) = insideBracketsWith (l, r) getItem
 {-# INLINE insideBrackets #-}
+
+-- | parse zero or more items inside two brackets-parsers, with the given item parser
+insideBracketsWith :: (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i) => (i, i) -> m i -> m [i]
+insideBracketsWith (l, r) item = just l *> manyTill (just r) item <* just r
+{-# INLINE insideBracketsWith #-}
+
 
 --------------------------------------------------------------------------------
 

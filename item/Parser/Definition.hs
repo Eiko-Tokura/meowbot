@@ -1,5 +1,8 @@
 {-# LANGUAGE DerivingVia, TypeFamilies, FunctionalDependencies, FlexibleInstances #-}
 {-# OPTIONS_GHC -fexpose-all-unfoldings #-}
+-- | Author : Eiko chan >w<
+--
+-- This module defines the parser type and its transformer.
 module Parser.Definition where
 
 import Control.Monad.State
@@ -13,6 +16,7 @@ import Data.Maybe
 import Data.Monoid
 import qualified Data.Text as T
 
+-- | A class for types that consist of a sequence of singletons.
 class IsStream sb b | sb -> b where
   uncons :: sb -> [(b, sb)] -- ^ ways to take out the first singleton, allowing brances
   {-# MINIMAL uncons #-}
@@ -94,6 +98,13 @@ instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ParserT sb
   ParserT a <|> ParserT b = ParserT $ StateT $ \s -> ExceptT $ runExceptT (runStateT a s) <|> runExceptT (runStateT b s)
   {-# INLINE (<|>) #-}
 
+-- | For similar reason we redefine the `Alternative` instance for `ExceptT` to use the `Alternative` instance of the inner monad.
+instance {-# OVERLAPPING #-} (Monad m, Alternative m) => Alternative (ExceptT e (ParserT sb b m)) where
+  empty = ExceptT $ Right <$> empty
+  {-# INLINE empty #-}
+  ExceptT a <|> ExceptT b = ExceptT $ a <|> b
+  {-# INLINE (<|>) #-}
+
 instance (MonadZero m, IsStream sb b) => MonadItem b (ParserT sb b m) where
   getItem = ParserT $ do
     sb <- get
@@ -106,12 +117,15 @@ instance (MonadIsZero m) => MonadTry (ParserT sb b m) where
   tryMaybe ma = ParserT $ tryMaybe $ runParserT ma
   {-# INLINE tryMaybe #-}
 
+-- | The Parser type synonym, using m = [] in ParserT
 type Parser sb b a = ParserT sb b [] a
 
+-- | Run the parser on the input, returning the first result or Nothing (failure)
 runParser :: (IsStream sb b) => Parser sb b a -> sb -> Maybe a
 runParser p = listToMaybe . evalStateT (runParserT p)
 {-# INLINE runParser #-}
 
+-- | Run the parser on the input, returning all results
 runParserFull :: (IsStream sb b) => Parser sb b a -> sb -> [a]
 runParserFull p = evalStateT (runParserT p)
 {-# INLINE runParserFull #-}

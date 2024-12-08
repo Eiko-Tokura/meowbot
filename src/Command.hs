@@ -64,7 +64,7 @@ deleteMsg conn mid = do
 
 permissionCheck :: BotCommand -> CommandValue
 permissionCheck botCommand = botT $ do
-  (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> readable
+  (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   other <- lift RS.get
   let sd = savedData other
   if checkCommandRule sd (identifier botCommand) cid uid
