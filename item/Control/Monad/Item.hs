@@ -217,7 +217,12 @@ insideBracketsWith :: (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq
 insideBracketsWith (l, r) item = just l *> manyTill (just r) item <* just r
 {-# INLINE insideBracketsWith #-}
 
-
+-- | A type constraint on m that looks like a parser, with reasonable constraints
+-- reasonably assumes MonadZero, Alternative, MonadTry, MonadItem, Eq 
+type MonadIZT i m = (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i)
+-- | A type constraint on m that looks like a parser, with reasonable constraints
+-- reasonably assumes MonadZero, Alternative, MonadItem, Eq
+type MonadIZ i m = (MonadZero m, Alternative m, MonadItem i m, Eq i)
 --------------------------------------------------------------------------------
 
 {-
