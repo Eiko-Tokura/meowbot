@@ -20,9 +20,9 @@ import Control.Monad.Trans.ReaderState
 
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
-  (msg, cid, uid, mid, sender) <- MaybeT $ getEssentialContent <$> asks fst
+  (msg, cid, uid, mid, sender) <- MaybeT $ getEssentialContent <$> query
   other_data <- lift get
-  whole_chat <- lift $ asks fst
+  whole_chat <- lift $ query
   let sd = savedData other_data
   let msys = ChatSetting
                ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botModules other_data))

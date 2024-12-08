@@ -25,7 +25,7 @@ import Control.Monad.Trans.ReaderState
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> query)
-  (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> asks fst
+  (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> query
   (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> query
   pureMaybe $ listToMaybe $ catMaybes
     [ do

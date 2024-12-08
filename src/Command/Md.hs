@@ -18,7 +18,7 @@ import Control.Monad.Trans.ReaderState
 
 commandMd :: BotCommand
 commandMd = BotCommand Md $ do
-  mess <- getEssentialContent <$> asks fst
+  mess <- getEssentialContent <$> query
   mdParser' <- commandParserTransformByBotName mdParser
   case mess of
     Nothing -> return []

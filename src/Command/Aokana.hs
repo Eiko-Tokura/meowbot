@@ -69,7 +69,7 @@ searchScripts queries = filter $ \block -> all (queryBlock block) queries
 
 commandAokana :: BotCommand
 commandAokana = BotCommand Aokana $ botT $ do
-  (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> asks fst
+  (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
   aokanaParser' <- lift $ commandParserTransformByBotName aokanaParser
   queries <- pureMaybe $ MP.runParser aokanaParser' msg
   other_data <- lift get

@@ -22,7 +22,7 @@ data Action = Add | Remove | List
 
 commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
-  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> asks fst
+  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   userParser' <- lift $ commandParserTransformByBotName userParser
   um <- pureMaybe $ MP.runParser userParser' msg
   other <- lift get

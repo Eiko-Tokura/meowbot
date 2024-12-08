@@ -37,7 +37,7 @@ sampleQuery (CustomDistribution list)      = Left          <$> discreteSamplingB
 
 commandRandom :: BotCommand --ReaderStateT WholeChat OtherData IO [BotAction]
 commandRandom = BotCommand Random $ botT $ do
-  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> asks fst
+  (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   randomParser' <- lift $ commandParserTransformByBotName randomParser
   query <- MaybeT $ return $ MP.runParser randomParser' msg
   do
