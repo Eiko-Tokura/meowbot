@@ -20,6 +20,8 @@ data CQCode
   | CQOther Text [(Text, Text)]
   deriving (Show, Read, Eq, Generic, NFData)
 
+-- note: we should create a newtype like EscapedText or RawText to avpid mixing unescaped and escaped text
+
 embedCQCode :: CQCode -> Text
 embedCQCode (CQAt qq)     = "[CQ:at,qq=" <> pack (show qq) <> "]"
 embedCQCode (CQReply id)  = "[CQ:reply,id=" <> pack (show id) <> "]"

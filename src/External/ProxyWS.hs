@@ -19,6 +19,7 @@ import Control.Concurrent.STM.TBQueue
 import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Monad
+import Control.Exception
 import Control.Applicative
 import Data.Maybe (fromMaybe)
 
@@ -140,7 +141,10 @@ proxyClientForWS ioChans headers address port = do
       case inOrOut of
         Left  msg -> do
           -- putStrLn "Sending message to proxy : " >> putStr (bsToString msg)
-          sendTextData conn msg
+          sendTextData conn msg `catch` \e -> do
+            putStrLn $ "Error sending message to proxy: " ++ show (e :: SomeException)
+            uninterruptibleCancel asyncReceiveData' -- cancel the async receive thread
+            throwIO e
           clientLoop (Just asyncReceiveData') conn (chanIn, chanOut)
         Right msg -> do
           -- putStrLn "Received message from proxy : " >> putStr (bsToString msg)
