@@ -76,7 +76,7 @@ instance MonadIsZero m => MonadTry (StateT s m) where
     if success then Just <$> lift res else return Nothing
   {-# INLINE tryMaybe #-}
 
--- | Parses the end of the input, only succeeds if getItem returns zero
+-- | Parses the end of the input, only succeeds if getItem fails in a try
 end :: forall i m. (MonadZero m, MonadTry m, MonadItem i m) => m ()
 end = do
   hasItem <- tryBool (getItem @i)
@@ -177,7 +177,7 @@ optBool :: Alternative m => m a -> m Bool
 optBool = fmap isJust . optMaybe
 {-# INLINE optBool #-}
 
--- | optionally parse
+-- | optionally parse, ignoring return value
 opt_ :: Alternative m => m a -> m ()
 opt_ = void . optMaybe
 {-# INLINE opt_ #-}
