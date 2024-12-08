@@ -24,10 +24,31 @@ Welcome to contribute and play with MeowMeow!
 If you want to run it, you need the following files to support the above functions: (otherwise the corresponding functions will not work)
 
 1. LLOneBot framework (replacing cqhttp) or natpcat.
-2. create a file 'apiKey' containing the API key of ChatGPT in the root directory of the project.
-3. add aokana voice files in ./aokana/voice and script files in ./aokana/scripts
+2. Create a file 'apiKey' containing the API key of ChatGPT in the root directory of the project. Otherwise, the ChatGPT function will not work.
+3. Add aokana voice files in ./aokana/voice and script files in ./aokana/scripts. Otherwise, the aokana function will not work.
 
 Compile and run it in either ghc, cabal or stack, whatever >w<
+
+* Using cabal
+
+  We are using the newest and coolest `ghc-9.10.1` compiler. If you haven't installed `ghc`, `cabal`, nor `stack`, install `ghcup` first is recommended, find it [here](https://www.haskell.org/ghcup/).
+
+  ```bash
+  git clone https://Eiko-Tokura/meowbot
+  cd meowbot
+  cabal build
+  ```
+
+* Using stack
+
+  Install stack via `curl -sSL https://get.haskellstack.org/ | sh` or via your package manager, also find their [website](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then run the following commands:
+
+  ```bash
+  git clone https://Eiko-Tokura/meowbot
+  cd meowbot
+  stack init
+  stack build
+  ```
 
 ### Command Line Arguments
 
