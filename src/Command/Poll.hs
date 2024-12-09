@@ -5,6 +5,7 @@ import Command
 import Command.Poll.PollData
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Trans.Maybe
+import Control.Monad
 import Probability.Foundation
 import Data.Additional
 import Data.Maybe
@@ -15,7 +16,7 @@ import qualified Data.Set as S
 import qualified Data.Map as M
 import Debug.Trace
 
-data PollEnv = PollGlobal | PollPrivate
+data PollEnv = PollGlobal | PollPrivate deriving (Show, Eq)
 
 data PollCommand
   = CreatePoll PollEnv Text [Text] -- ^ title, options
@@ -24,6 +25,7 @@ data PollCommand
   | ViewPoll   PollId
   | DeletePoll PollId
   | ListPoll
+  deriving (Show, Eq)
 
 pollParser :: (Chars sb) => Parser sb Char PollCommand
 pollParser = do
@@ -183,3 +185,21 @@ helpPoll = T.pack $ unlines
   , "  :poll view <pollId> - view the poll"
   , "  :poll list - list all (visible) polls"
   ]
+
+
+pollParserTest :: IO ()
+pollParserTest = do
+  let testPairs = 
+        [ (":poll create test 1 2 3", CreatePoll PollPrivate "test" ["1", "2", "3"])
+        , (":poll create global \"owo poll\" \"option 1\" \"option 2\"", CreatePoll PollGlobal "owo poll" ["option 1", "option 2"])
+        ]
+  forM_ testPairs $ \(input, expected) -> do
+    let result = runParser pollParser input
+    putStrLn $ "Input: " ++ input
+    putStrLn $ "Expected: " ++ show expected
+    putStrLn $ "Result: " ++ show result
+    putStrLn $ "Match: " ++ show (result == Just expected)
+    if result /= Just expected
+      then putStrLn "Failed!" >> error "pollParserTest failed!"
+      else putStrLn "Passed!"
+
