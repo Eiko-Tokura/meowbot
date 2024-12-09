@@ -209,7 +209,7 @@ intercalateBy0 sep p = intercalateBy sep p <|> pure []
 
 -- | parse zero or more items inside two brackets-parsers, with the default item parser
 insideBrackets :: (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i) => (i, i) -> m [i]
-insideBrackets (l, r) = insideBracketsWith (l, r) getItem
+insideBrackets (l, r) = just l *> manyTill (just r) getItem <* just r
 {-# INLINE insideBrackets #-}
 
 -- | parse zero or more items inside two brackets-parsers, with the given item parser

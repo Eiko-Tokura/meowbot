@@ -17,8 +17,8 @@ type Chars sb = IsStream sb Char
 -- | Parse a non-empty word, which is a continuous string of characters that are not spaces, or a string inside a pair of single or double quotes.
 -- deals with escape characters \' and \"
 word :: Chars sb => Parser sb Char String
-word =   insideBracketsWith ('\'', '\'') ($(stringQ_ "\\'") >> return '\'' <|> getItem)
-     <|> insideBracketsWith ('"', '"')   ($(stringQ_ "\\\"") >> return '"' <|> getItem)
+word =   insideBracketsWith ('\'', '\'') (($(stringQ_ "\\'") >> return '\'') <|> getItem)
+     <|> insideBracketsWith ('"', '"')   (($(stringQ_ "\\\"") >> return '"') <|> getItem)
      <|> some (itemNot ' ')
 {-# INLINE word #-}
 
@@ -29,8 +29,8 @@ word' = T.pack <$> word
 -- | Parse a word that is not a flag, i.e. a word that does not start with a dash.
 -- deals with escape characters \' and \"
 nonFlagWord :: Chars sb => Parser sb Char String
-nonFlagWord = insideBracketsWith ('\'', '\'') ($(stringQ_ "\\'") >> return '\'' <|> getItem)
-          <|> insideBracketsWith ('"', '"')   ($(stringQ_ "\\\"") >> return '"' <|> getItem)
+nonFlagWord = insideBracketsWith ('\'', '\'') (($(stringQ_ "\\'") >> return '\'') <|> getItem)
+          <|> insideBracketsWith ('"', '"')   (($(stringQ_ "\\\"") >> return '"') <|> getItem)
           <|> some (itemNotIn [' ', '-'])
 {-# INLINE nonFlagWord #-}
 
