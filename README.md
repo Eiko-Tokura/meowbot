@@ -9,11 +9,11 @@ It was my first Haskell project and was not well written. But I have now revisit
 - [x] Generating Chat output in Markdown and display in pictures
 - [x] Generating Random Variables
 - [x] Polling
-- [x] User And Group Management
-- [x] Automatic Retract User Messages In Group
-- [x] Proxy WebSocket connection To Connect To External Servers
+- [x] User, group and command management
+- [x] Automatic retract user messages in group
+- [x] Proxy WebSocket connection to connect to external servers
 - [x] Run as client mode or server mode, or many of them at once
-- [x] Full Async and Concurrent Support
+- [x] Full async and concurrent support
 
 When using the bot, you can use ':help' to get more information about each command.
 
@@ -68,3 +68,15 @@ Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <na
 
 Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags.
 ```
+
+### To Do
+
+- [ ] Adding TUI interface and control panel
+- [ ] ChatGPT Function Calling
+- [ ] Assistant And Notes Function
+- [ ] Using database to store user data and statistics
+- [ ] Provide interesting statistics functions to users
+- [ ] Bring back the funny hangman game
+- [ ] Implement common data shared among concurrent bot instances
+- [ ] Proper logging system
+- [ ] Upload `item` as a separate package to hackage
