@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, TemplateHaskell #-}
 module Main where
 
 import Command
@@ -32,7 +32,7 @@ import GHC.IO.Handle (hSetEncoding)
 import System.IO (stdout, stderr)
 import System.Directory (doesFileExist)
 import System.Environment (getArgs)
-import Data.Maybe (listToMaybe, fromMaybe)
+import Data.Maybe (listToMaybe, fromMaybe, isJust)
 import Data.Aeson (eitherDecode)
 import Data.Coerce (coerce)
 import Data.List (isPrefixOf)
@@ -244,7 +244,7 @@ handleMessage mods mode conn msgBS = do
           modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
           updateSavedAdditionalData
           lift $ putStrLn $ nameBot ++ " <- " ++ showCQ cqmsg'
-        filterMsg cqmsg' = any (`isPrefixOf` (unpack $ fromMaybe "" $ message cqmsg')) ["!", "！", "/"]
+        filterMsg cqmsg' =  isJust $ runParser ($(itemInQ ['!', '！', '/']) >> getItem) (fromMaybe "" $ message cqmsg')
         doProxyWork shouldPrint nameBot | null (proxyTChans mods) = return ()
                                         | otherwise = do
           when shouldPrint $ lift $ putStrLn (nameBot ++ " -> Proxy ") >> putStr (bsToString msgBS ++ "\n")
