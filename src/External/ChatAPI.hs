@@ -127,7 +127,14 @@ displayResponse inp = let chos = choices inp in
     []         -> ""
     headChos:_ -> (content . message) headChos
 
-readApiKeyFile = ExceptT . fmap (bimap ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) T.pack) . try @SomeException $ (head . lines) <$> readFile apiKeyFile
+readApiKeyFile = ExceptT 
+  . fmap 
+    (bimap 
+      ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show) 
+      T.pack
+    ) 
+  . try @SomeException 
+  $ fromMaybe (error "Empty apiKey") . listToMaybe . lines <$> readFile apiKeyFile
 
 simpleChat :: ChatParams -> String -> ExceptT Text IO Text
 simpleChat model prompt = do
