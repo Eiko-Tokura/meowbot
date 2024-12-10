@@ -1,7 +1,9 @@
-{-# OPTIONS_GHC -Wno-orphans #-} 
--- since we use a class to restrict, this orphan instance will not affect other types
 {-# LANGUAGE UndecidableInstances, DerivingVia, OverloadedStrings #-}
-module Utils.Persist where
+module Utils.Persist
+  ( PersistUseShow(..)
+  , PersistUseInt64(..)
+  , PersistField, PersistFieldSql
+  ) where
 
 import Database.Persist
 import Database.Persist.Sqlite
@@ -10,18 +12,24 @@ import Control.Monad
 import Text.Read
 import Data.Text (pack)
 
-class (Read a, Show a) => PersistUseShow a where
+-- | This is a newtype wrapper for PersistField and PersistFieldSql instances stored as Show
+-- to use it, either wrap your data type with PersistUseInt64
+-- or write
+--   deriving (PersistField, PersistFieldSql) via (PersistUseInt64 YourType)
+newtype PersistUseShow a = PersistUseShow a
+  deriving (Show, Read) via a
 
+-- | Newtype wrapper for PersistField and PersistFieldSql instances storing Enum as Int64
 newtype PersistUseInt64 a = PersistUseInt64 a
   deriving (Bounded, Enum) via a
 
-instance {-# OVERLAPPABLE #-} PersistUseShow a => PersistField a where
+instance (Show a, Read a) => PersistField (PersistUseShow a) where
   toPersistValue = toPersistValue . show
   fromPersistValue = fromPersistValue >=> first pack . readEither
   {-# INLINE toPersistValue #-}
   {-# INLINE fromPersistValue #-}
 
-instance {-# OVERLAPPABLE #-} PersistUseShow a => PersistFieldSql a where
+instance (Show a, Read a) => PersistFieldSql (PersistUseShow a) where
   sqlType _ = SqlString
   {-# INLINE sqlType #-}
 

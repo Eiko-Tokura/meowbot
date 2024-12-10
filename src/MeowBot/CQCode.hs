@@ -20,8 +20,7 @@ data CQCode
   | CQImage Text
   | CQOther Text [(Text, Text)]
   deriving (Show, Read, Eq, Generic, NFData)
-
-instance PersistUseShow CQCode
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow CQCode)
 
 -- note: we should create a newtype like EscapedText or RawText to avoid mixing unescaped and escaped text
 
