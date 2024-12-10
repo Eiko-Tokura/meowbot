@@ -29,11 +29,11 @@ commandSetSysMessage = BotCommand System $ botT $ do
     Left msysMsg -> lift $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
       case msysMsg of
-        Just _ -> MeowT $ onlyState $ sendToChatId ess "系统消息已设置owo!"
-        Nothing -> MeowT $ onlyState $ sendToChatId ess "系统消息已返回默认owo!"
+        Just _ -> sendToChatId ess "系统消息已设置owo!"
+        Nothing -> sendToChatId ess "系统消息已返回默认owo!"
     Right temp -> lift $ do
       put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
-      MeowT $ onlyState $ sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
+      sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
   where
     sysMsgParser =
       ( do

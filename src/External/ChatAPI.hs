@@ -17,7 +17,7 @@ import Data.Bifunctor
 import Data.Text (Text, pack)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.ByteString.Lazy as BL
 import GHC.Generics (Generic)
 import Control.DeepSeq

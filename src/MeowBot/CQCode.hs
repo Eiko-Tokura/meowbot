@@ -11,6 +11,7 @@ import Control.DeepSeq
 import GHC.Generics
 import Data.Text (Text, pack)
 import qualified Data.Text as T
+import Utils.Persist
 
 data CQCode
   = CQAt Int
@@ -20,7 +21,9 @@ data CQCode
   | CQOther Text [(Text, Text)]
   deriving (Show, Read, Eq, Generic, NFData)
 
--- note: we should create a newtype like EscapedText or RawText to avpid mixing unescaped and escaped text
+instance PersistUseShow CQCode
+
+-- note: we should create a newtype like EscapedText or RawText to avoid mixing unescaped and escaped text
 
 embedCQCode :: CQCode -> Text
 embedCQCode (CQAt qq)     = "[CQ:at,qq=" <> pack (show qq) <> "]"

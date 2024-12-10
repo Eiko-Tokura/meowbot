@@ -3,9 +3,22 @@ module MeowBot.CommandRule where
 
 import Data.Aeson
 import Control.DeepSeq
+import Database.Persist
+import Database.Persist.Sqlite
 
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
+
+instance PersistField GroupId where
+  toPersistValue (GroupId gid) = toPersistValue gid
+  fromPersistValue = fmap GroupId . fromPersistValue
+
+instance PersistField UserId where
+  toPersistValue (UserId uid) = toPersistValue uid
+  fromPersistValue = fmap UserId . fromPersistValue
+
+instance PersistFieldSql UserId where sqlType _ = SqlInt64
+instance PersistFieldSql GroupId where sqlType _ = SqlInt64
 
 data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String deriving (Show, Eq, Ord, Read)
 data GroupGroup = AllowedGroup | CustomGroupGroup String deriving (Show, Eq, Ord, Read)

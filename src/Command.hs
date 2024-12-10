@@ -47,22 +47,26 @@ doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
 doBotAction _    (BAAsync act)      = RS.modify $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
 
+-- | Low-level functions to send private messages
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> IO ()
 sendPrivate conn uid text mecho = do
   sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) mecho)
   putStrLn $ concat ["-> user ", show uid, ": ", T.unpack text]
 
+-- | Low-level functions to send group messages
 sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> IO ()
 sendGroup conn gid text mecho = do
   sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) mecho)
   putStrLn $ concat ["-> group ", show gid, ": ", T.unpack text]
 
+-- | Low-level functions to delete messages
 deleteMsg :: Connection -> MessageId -> IO ()
 deleteMsg conn mid = do
   sendTextData conn $ encode (SendMessageForm "delete_msg" (DeleteParams mid) Nothing)
   putStrLn $ "=> Delete message: " ++ show mid
 
-permissionCheck :: BotCommand -> CommandValue
+-- | Check if the command is allowed, and execute it if it is
+permissionCheck :: BotCommand -> Meow [BotAction]
 permissionCheck botCommand = botT $ do
   (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   other <- lift RS.get

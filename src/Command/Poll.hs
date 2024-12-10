@@ -20,8 +20,8 @@ data PollEnv = PollGlobal | PollPrivate deriving (Show, Eq)
 
 data PollCommand
   = CreatePoll PollEnv Text [Text] -- ^ title, options
-  | Vote       PollId  [Int]    -- ^ pollId, optionId
-  | Propose    PollId  Text   -- ^ pollId, option
+  | Vote       PollId  [Int]       -- ^ pollId, optionId
+  | Propose    PollId  Text        -- ^ pollId, option
   | ViewPoll   PollId
   | DeletePoll PollId
   | ListPoll
@@ -102,11 +102,11 @@ doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
           (PollData newPollId env' title (M.fromList $ zip [0..] options) M.empty)
           pollMap
   modify . modifyAdditionalDataSavedType $ const $ Just newPollMap
-  baSendToChatIdFull cid Nothing [AdditionalDataSaved newPollId] [] $ T.intercalate "\n" $
+  meowSendToChatIdFull cid Nothing [AdditionalDataSaved newPollId] [] $ T.intercalate "\n" $
     [ "Poll created! owo"
     , "Poll ID: " <> tshow newPollId
     , "Title: " <> title
-    ] ++ [ tshow i <> ". " <> option | (i, option) <- zip [0..] options ]
+    ] ++ [ tshow @Int i <> ". " <> option | (i, option) <- zip [0..] options ]
     ++
     [ "---"
     ] ++
@@ -145,7 +145,7 @@ doPollCommand (_, cid, _, _, _) (ViewPoll pid) = do
     Just poll -> if readablePoll cid poll
       then do
         let statsStrs = T.intercalate "\n" [ tshow oid <> ". " <> option <> ": " <> tshow votes | (oid, option, votes) <- pollStatistics poll ]
-        baSendToChatIdFull cid Nothing [AdditionalDataSaved (pollId poll)] [] $ "Poll: " <> pollTitle poll <> "\n" <> statsStrs
+        meowSendToChatIdFull cid Nothing [AdditionalDataSaved (pollId poll)] [] $ "Poll: " <> pollTitle poll <> "\n" <> statsStrs
       else return [baSendToChatId cid "Poll not visible o.o!"]
 doPollCommand (_, cid, _, _, _) ListPoll = do
   pollMap <- getPollMap
@@ -189,7 +189,7 @@ helpPoll = T.pack $ unlines
 
 pollParserTest :: IO ()
 pollParserTest = do
-  let testPairs = 
+  let testPairs =
         [ (":poll create test 1 2 3", CreatePoll PollPrivate "test" ["1", "2", "3"])
         , (":poll create global \"owo poll\" \"option 1\" \"option 2\"", CreatePoll PollGlobal "owo poll" ["option 1", "option 2"])
         ]

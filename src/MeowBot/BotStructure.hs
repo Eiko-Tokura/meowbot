@@ -8,7 +8,7 @@ module MeowBot.BotStructure
   , module Control.Monad.Readable
   , module Control.Monad.IOe
   , Meow, MeowT(..), globalizeMeow
-  , BotCommand(..), BotModules(..), BotConfig, CommandValue
+  , BotCommand(..), BotModules(..), BotConfig
   , GroupId(..), UserId(..), ChatId(..)
   , BotAction(..), AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
   , UserGroup(..), GroupGroup(..)
@@ -22,9 +22,9 @@ module MeowBot.BotStructure
   , CQMessage(..), ResponseData(..), CQEventType(..)
 
   , getEssentialContent, getEssentialContentAtN
-  , sendIOeToChatId, sendToChatId
+  , sendIOeToChatId
   , sendIOeToChatIdAsync
-  , baSendToChatId, baSendToChatIdFull
+  , baSendToChatId, sendToChatId, meowSendToChatIdFull
   , getFirstTree, getNewMsg, getNewMsgN
   , getTimeLine, getTimeLineCid
 
@@ -63,6 +63,7 @@ import MeowBot.Parser (ChatSetting(..))
 import qualified MeowBot.Parser as MP
 import MeowBot.Data.Book
 import Debug.Trace
+import Data.Time.Clock
 --import Database.Persist -- implement proper database later
 
 data BotAction
@@ -102,6 +103,10 @@ instance Monad m => MonadReadable WholeChat (MeowT m) where
 
 instance Monad m => MonadReadable (Maybe EssentialContent) (MeowT m) where
   query = queries getEssentialContent
+  {-# INLINE query #-}
+
+instance MonadIO m => MonadReadable UTCTime (MeowT m) where
+  query = liftIO getCurrentTime
   {-# INLINE query #-}
 
 instance Show (Async (Meow [BotAction])) where
@@ -162,13 +167,12 @@ updateSavedAdditionalData = do
       sd' = sd { savedAdditional = coerce filterSavedAdditional rd }
   ST.put ad { otherdata = od { savedData = sd' } }
 
-type CommandValue = Meow [BotAction]
 -- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
 -- CommandValue is a monadic value of the monad (Meow)
 
 data BotCommand = BotCommand
   { identifier :: CommandId
-  , command    :: CommandValue
+  , command    :: Meow [BotAction]
   }
 
 instance HasAdditionalData OtherData where
@@ -369,7 +373,7 @@ sendIOeToChatId (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioess
   case ess of
     Right str -> do
-      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
@@ -378,43 +382,48 @@ sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioess
   case ess of
     Right str -> return $ do
-      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 -- | send message to a chat id, recording the message as reply.
-sendToChatId :: EssentialContent -> Text -> OtherData -> ([BotAction], OtherData)
-sendToChatId (_, cid, _, mid, _) str other_data =
-  ([baSendToChatId cid str], insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
+sendToChatId :: MonadIO m => EssentialContent -> Text -> MeowT m [BotAction]
+sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] [] str
+--([baSendToChatId cid str], insertMyResponseHistory utc cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
-baSendToChatIdFull :: Monad m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT m [BotAction]
-baSendToChatIdFull cid mid adt items str = do
+meowSendToChatIdFull :: MonadIO m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT m [BotAction]
+meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- pure mid ] ++ items)
-  modify $ insertMyResponseHistory cid meta
+  insertMyResponseHistory cid meta
   return [ baSendToChatId cid str ]
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
-insertMyResponseHistory :: ChatId -> MetaMessage -> OtherData -> OtherData
-insertMyResponseHistory (GroupChat gid) meta other_data =
-  other' { sent_messages = my:sent_messages other_data } where
-    my = emptyCQMessage
-      { eventType   = SelfMessage
-      , absoluteId  = Just aid
-      , groupId     = Just gid
-      , metaMessage = Just meta
-      , echoR       = Just $ pack $ show aid
-      }
-    (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-insertMyResponseHistory (PrivateChat uid) meta other_data =
-  other' { sent_messages = my:sent_messages other_data } where
-    my = emptyCQMessage
-      { eventType   = SelfMessage
-      , absoluteId  = Just aid
-      , userId      = Just $ coerce uid
-      , metaMessage = Just meta
-      , echoR       = Just $ pack $ show aid
-      }
-    (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-
+insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> MeowT m ()
+insertMyResponseHistory (GroupChat gid) meta = do
+  utc <- query
+  modify $ \other_data ->
+      let my = emptyCQMessage
+            { eventType   = SelfMessage
+            , utcTime     = Just utc
+            , absoluteId  = Just aid
+            , groupId     = Just gid
+            , metaMessage = Just meta
+            , echoR       = Just $ pack $ show aid
+            }
+          (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
+      in other' { sent_messages = my:sent_messages other_data }
+insertMyResponseHistory (PrivateChat uid) meta = do
+  utc <- query
+  modify $ \other_data ->
+    let my = emptyCQMessage
+          { eventType   = SelfMessage
+          , utcTime     = Just utc
+          , absoluteId  = Just aid
+          , userId      = Just $ coerce uid
+          , metaMessage = Just meta
+          , echoR       = Just $ pack $ show aid
+          }
+        (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
+    in other' { sent_messages = my:sent_messages other_data }

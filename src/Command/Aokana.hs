@@ -81,7 +81,8 @@ commandAokana = BotCommand Aokana $ botT $ do
     sendResults cid mid results hasVoice queries
       | [] <- results       = return [baSendToChatId cid "啥也没有找到！o.o"]
       | List `elem` queries = return [baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ simplify zh <$> results]
-      | [] <- hasVoice      = return [baSendToChatId cid $ ("这段话没有语音owo\n" <>) $ simplify zh $ head results] -- safe because results is not empty
+      | [] <- hasVoice
+      , (hRes:_) <- results = return [baSendToChatId cid $ ("这段话没有语音owo\n" <>) $ simplify zh $ hRes] -- safe because results is not empty
       | otherwise          = do
           ranBlock <- lift $ (hasVoice !!) <$> getUniformR (0, length hasVoice - 1)
           cd <- lift getCurrentDirectory
@@ -96,7 +97,7 @@ commandAokana = BotCommand Aokana $ botT $ do
           case charPrompt of
             Nothing -> return ()
             Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt
-          modify $ insertMyResponseHistory cid  -- this will make the message repliable, potentially much more fun!
+          insertMyResponseHistory cid  -- this will make the message repliable, potentially much more fun!
                        (generateMetaMessage simplifiedBlock [] (MReplyTo mid : maybeToList (MChatSetting . (`ChatSetting` Nothing) . Just <$> charPrompt)) )
           return [ baSendToChatId cid simplifiedBlock
                  , baSendToChatId cid $ embedCQCode $ CQRecord $ T.pack $ voicePath cd (T.unpack voice)

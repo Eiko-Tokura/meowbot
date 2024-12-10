@@ -10,7 +10,6 @@ import External.ChatAPI
 import MeowBot.Parser (Parser, Chars)
 import Parser.Definition (IsStream)
 import qualified MeowBot.Parser as MP
-import Control.Monad.IOe
 
 import Control.Applicative
 

@@ -111,6 +111,7 @@ library meowbot-lib
                    , MeowBot.Parser
                    , Probability.Foundation
                    , Utils.ByteString
+                   , Utils.Persist
     
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

@@ -14,7 +14,6 @@ import qualified Data.Text as T
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.ReaderState
 
 commandMd :: BotCommand
 commandMd = BotCommand Md $ do
@@ -43,13 +42,13 @@ turnMdCQCode md = fmap
         runExceptT
           (map (T.pack . useAnyPath) <$> markdownToImage md)
 
-sendIOeToChatIdMd :: EssentialContent -> ExceptT Text IO Text -> ReaderStateT r OtherData IO [BotAction]
+sendIOeToChatIdMd :: EssentialContent -> ExceptT Text IO Text -> Meow [BotAction]
 --OtherData -> IO ([BotAction], OtherData)
 sendIOeToChatIdMd (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> do
-      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid mdcq ]
     Left err -> do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
@@ -61,7 +60,7 @@ sendIOeToChatIdMdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> return $ do
-      modify $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid mdcq ]
     Left err -> return $ do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]

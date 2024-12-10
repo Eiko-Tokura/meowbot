@@ -33,6 +33,10 @@ import Data.Text (Text, unpack, pack)
 import MeowBot.Parser (cqmsg)
 import Data.Maybe
 import External.ProxyWS (ProxyData)
+import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX
+
+import Database.Persist.Sqlite
 
 data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read, Generic, NFData)
@@ -53,26 +57,37 @@ data LogFlag         = LogFlag FilePath deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
 data BotInstance = BotInstance
-  { botRunFlag :: RunningFlag
+  { botRunFlag       :: RunningFlag
   , botIdentityFlags :: [IdentityFlag]
-  , botCommandFlags :: [CommandFlags]
-  , botDebugFlags :: [DebugFlag]
-  , botProxyFlags :: [ProxyFlag]
-  , botLogFlags :: [LogFlag]
+  , botCommandFlags  :: [CommandFlags]
+  , botDebugFlags    :: [DebugFlag]
+  , botProxyFlags    :: [ProxyFlag]
+  , botLogFlags      :: [LogFlag]
   } deriving (Eq, Show)
 
 data BotModules = BotModules
   { canUseGroupCommands   :: [CommandId]
   , canUsePrivateCommands :: [CommandId]
-  , nameOfBot :: BotName
-  , globalSysMsg :: Maybe String
-  , proxyTChans :: [ProxyData]
-  , logFile :: [FilePath]
-  , botInstance :: BotInstance
+  , nameOfBot             :: BotName
+  , globalSysMsg          :: Maybe String
+  , proxyTChans           :: [ProxyData]
+  , logFile               :: [FilePath]
+  , botInstance           :: BotInstance
   } deriving (Show)
 
 data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage
-  deriving (Show, Eq, Read, Generic, NFData)
+  deriving (Show, Eq, Read, Generic, NFData, Bounded, Enum)
+
+instance PersistField ChatId where
+  toPersistValue (GroupChat gid) = toPersistValue gid
+  toPersistValue (PrivateChat uid) = toPersistValue (-uid)
+  fromPersistValue v = do
+    gid <- fromPersistValue v
+    if gid > 0
+      then return $ GroupChat (GroupId gid)
+      else return $ PrivateChat (UserId (-gid))
+
+instance PersistFieldSql ChatId where sqlType _ = SqlInt64
 
 data CQMessage = CQMessage
   { eventType    :: CQEventType
@@ -82,6 +97,7 @@ data CQMessage = CQMessage
   , sender       :: Maybe Sender
   , message      :: Maybe Text
   , time         :: Maybe Int
+  , utcTime      :: Maybe UTCTime
   , self_id      :: Maybe Int
   , responseData :: Maybe ResponseData
   , echoR        :: Maybe Text
@@ -107,7 +123,7 @@ instance FromJSON Sender where
     return Sender { senderNickname = nickname, senderCard = card, senderRole = role }
 
 data Role = ROwner | RAdmin | RMember | RUnknown
-  deriving (Show, Read, Eq, Generic, NFData)
+  deriving (Show, Read, Eq, Generic, NFData, Bounded, Enum)
 
 instance FromJSON Role where
   parseJSON = withText "Role" $ \case
@@ -117,7 +133,7 @@ instance FromJSON Role where
     _ -> return RUnknown
 
 emptyCQMessage :: CQMessage
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -136,6 +152,7 @@ instance FromJSON CQMessage where
     metaEventType <- obj .:? "meta_event_type" :: Parser (Maybe Text)
     dataObj       <- obj .:? "data"
     message       <- obj .:? "raw_message"
+    timeUnixSec   <- obj .:? "time"            :: Parser (Maybe Int)
     let eventType = case (postType, metaEventType, messageType, dataObj) of
           (Just "message"    , _                , Just "private" , _      ) -> PrivateMessage
           (Just "message"    , _                , Just "group"   , _      ) -> GroupMessage
@@ -143,6 +160,7 @@ instance FromJSON CQMessage where
           (Just "meta_event" , Just "heartbeat" , Nothing        , Nothing) -> HeartBeat
           (_                 , Just "lifecycle" , _              , _      ) -> LifeCycle
           _                                                                 -> UnknownMessage
+        timeUTC = posixSecondsToUTCTime . fromIntegral <$> timeUnixSec
     CQMessage <$> pure eventType
               <*> obj .:? "message_id"
               <*> obj .:? "group_id"
@@ -150,6 +168,7 @@ instance FromJSON CQMessage where
               <*> obj .:? "sender"
               <*> pure message
               <*> obj .:? "time"
+              <*> return timeUTC
               <*> obj .:? "self_id"
               <*> pure dataObj
               <*> obj .:? "echo"
