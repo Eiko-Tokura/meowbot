@@ -72,7 +72,7 @@ commandAokana = BotCommand Aokana $ botT $ do
   (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
   aokanaParser' <- lift $ commandParserTransformByBotName aokanaParser
   queries <- pureMaybe $ MP.runParser aokanaParser' msg
-  other_data <- lift get
+  other_data <- lift query
   let scripts = aokana other_data
       results = searchScripts queries scripts
       hasVoice = filter (\block -> not $ null [ () | Voice _ <- associatedData block ]) results
@@ -87,7 +87,7 @@ commandAokana = BotCommand Aokana $ botT $ do
           ranBlock <- lift $ (hasVoice !!) <$> getUniformR (0, length hasVoice - 1)
           cd <- lift getCurrentDirectory
 
-          other_data <- get
+          other_data <- query
           let voice = head [v | Voice v <- associatedData ranBlock] -- safe because hasVoice is not empty
               simplifiedBlock = T.intercalate "\n"
                                   [ simplify jp ranBlock

@@ -153,10 +153,10 @@ commandStudy :: BotCommand
 commandStudy = BotCommand Study $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   studyParser' <- lift $ commandParserTransformByBotName studyParser
-  query <- pureMaybe $ MP.runParser studyParser' msg
-  other_data <- lift get
+  squery <- pureMaybe $ MP.runParser studyParser' msg
+  other_data <- query
   let allBooks = books $ savedData other_data
-  case query of
+  case squery of
     SearchBook searchQs     ->
       let searchResult = searchBooks searchQs allBooks
       in return [ baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
@@ -206,7 +206,7 @@ commandStudy = BotCommand Study $ botT $ do
                                  }
                        else book
                      | book <- allBooks ]
-      lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Remove (Just infoType) -> do -- removing some information
@@ -230,7 +230,7 @@ commandStudy = BotCommand Study $ botT $ do
                                  }
                        else book
                      | book <- allBooks ]
-      lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Show (Just infoType) -> do
@@ -291,9 +291,9 @@ readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stri
 commandBook :: BotCommand
 commandBook = BotCommand BookMan $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
-  query <- pureMaybe $ MP.runParser bookParser msg
-  other_data <- lift get
-  case query of
+  bquery <- pureMaybe $ MP.runParser bookParser msg
+  other_data <- lift $ query @OtherData
+  case bquery of
     Upload bookname pdf -> do
       return [ baSendToChatId cid $ T.pack "not supported yet o.o" ]
       --let bookinfo = BookInfo Nothing Nothing [] "uploader"
@@ -306,7 +306,7 @@ commandBook = BotCommand BookMan $ botT $ do
       --    return [ baSendToChatId cid $ T.pack $ "上传成功！\n" ++ show book ]
     Delete bookname -> do
       let newBooks = filter ((/= bookname) . book_name) $ books (savedData other_data)
-      lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid "全部忘掉啦owo!" ]
     LocalMakeBook bookname pdf -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
@@ -315,7 +315,7 @@ commandBook = BotCommand BookMan $ botT $ do
         Left err -> return [ baSendToChatId cid $ "制作书书的时候出错了o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
-          lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
+          lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
           return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
     LocalAddBook bookname imagesDir -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
@@ -324,7 +324,7 @@ commandBook = BotCommand BookMan $ botT $ do
         Left err -> return [ baSendToChatId cid $ "制作书书的时候遇到了麻烦o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
-          lift $ put $ other_data { savedData = (savedData other_data) {books = newBooks} }
+          lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
           return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
   where
     bookParser :: (Chars sb) => Parser sb Char BookManagement

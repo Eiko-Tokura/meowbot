@@ -9,7 +9,7 @@ module MeowBot.Data
   , CQMessage(..), CQEventType(..)
   , Sender(..), Role(..), ResponseData(..)
 
-  , BotName
+  , BotName(..)
   , BotModules(..)
   , BotInstance(..)
   , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..)
@@ -46,7 +46,7 @@ type Chat = [MP.Tree CQMessage]
 type ChatRoom = (ChatId, Chat)
 
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
-type BotName = Maybe String
+newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
 
 type RunningMode     = [DebugFlag]
 data DebugFlag       = DebugJson | DebugCQMessage deriving (Eq, Show)

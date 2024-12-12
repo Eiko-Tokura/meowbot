@@ -101,20 +101,25 @@ library meowbot-lib
                    , External.ChatAPI
                    , External.ChatAPI.Function
                    , External.MarkdownImage
+                   , MeowBot
+                   , MeowBot.Action
                    , MeowBot.Async
                    , MeowBot.BotStructure
-                   , MeowBot.Data
                    , MeowBot.CQCode
                    , MeowBot.CommandRule
+                   , MeowBot.Data
                    , MeowBot.Data.Book
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
+                   , MeowBot.Update
                    , Probability.Foundation
                    , Utils.ByteString
                    , Utils.Persist
                    , Module
                    , Module.LogDatabase
+                   , Module.Async
                    , System
+                   , System.Meow
     
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

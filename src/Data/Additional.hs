@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, LambdaCase, TemplateHaskell #-}
+{-# LANGUAGE GADTs, TemplateHaskell #-}
 module Data.Additional where
 
 import Data.Typeable

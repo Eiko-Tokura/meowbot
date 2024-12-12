@@ -9,6 +9,7 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Utils.Persist
 import Data.Maybe
+import Data.Coerce
 import Control.Applicative
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
@@ -36,21 +37,21 @@ ChatMessage
 
 cqMessageToChatMessage :: BotName -> CQMessage -> Maybe ChatMessage
 cqMessageToChatMessage botname cqm = do
-  cid <- fmap GroupChat (groupId cqm) <|> fmap PrivateChat (userId cqm)
+  cid <- GroupChat <$> groupId cqm <|> PrivateChat <$> userId cqm
   aid <- absoluteId cqm
   utc <- posixSecondsToUTCTime . fromIntegral <$> time cqm <|> utcTime cqm
   return $ ChatMessage
-    { chatMessageBotName = botname
-    , chatMessageTime = utc
-    , chatMessageEventType = PersistUseInt64 $ eventType cqm
-    , chatMessageMessageId = messageId cqm
-    , chatMessageChatId = cid
-    , chatMessageUserId = userId cqm
-    , chatMessageAbsoluteId = aid
-    , chatMessagePureContent = fromMaybe "" $ onlyMessage <$> metaMessage cqm
-    , chatMessageCqCodes = cqcodes =<< maybe [] pure (metaMessage cqm)
-    , chatMessageReplyTo = replyTo =<< metaMessage cqm
+    { chatMessageBotName        = coerce botname
+    , chatMessageTime           = utc
+    , chatMessageEventType      = PersistUseInt64 $ eventType cqm
+    , chatMessageMessageId      = messageId cqm
+    , chatMessageChatId         = cid
+    , chatMessageUserId         = userId cqm
+    , chatMessageAbsoluteId     = aid
+    , chatMessagePureContent    = fromMaybe "" $ onlyMessage <$> metaMessage cqm
+    , chatMessageCqCodes        = cqcodes =<< maybe [] pure (metaMessage cqm)
+    , chatMessageReplyTo        = replyTo =<< metaMessage cqm
     , chatMessageSenderNickname = senderNickname =<< sender cqm
-    , chatMessageSenderCard = senderCard =<< sender cqm
-    , chatMessageSenderRole = PersistUseInt64 <$> (senderRole =<< sender cqm)
+    , chatMessageSenderCard     = senderCard =<< sender cqm
+    , chatMessageSenderRole     = PersistUseInt64 <$> (senderRole =<< sender cqm)
     }

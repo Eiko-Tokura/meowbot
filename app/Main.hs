@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 module Main where
 
 import Command

@@ -21,18 +21,18 @@ commandSetSysMessage = BotCommand System $ botT $ do
   ess@(msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   sysMsgParser' <- lift $ commandParserTransformByBotName sysMsgParser
   msys <- pureMaybe $ MP.runParser sysMsgParser' msg
-  other_data <- lift get
+  other_data <- lift query
   let sd = savedData other_data
   --pureMaybe $ checkIfIsGroupNeedBeAllowedUsers sd (cid, uid)
   let msysSet = first (Message "system" . T.pack <$>) msys
   case msysSet of
     Left msysMsg -> lift $ do
-      put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
+      change $ \other_data -> other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
       case msysMsg of
         Just _ -> sendToChatId ess "系统消息已设置owo!"
         Nothing -> sendToChatId ess "系统消息已返回默认owo!"
     Right temp -> lift $ do
-      put other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
+      change $ \other_data -> other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
       sendToChatId ess $ "系统温度已设置为" <> tshow temp <> " owo!"
   where
     sysMsgParser =

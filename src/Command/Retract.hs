@@ -59,6 +59,11 @@ commandRetract = BotCommand Retract $ botT $ do
         guard $ uid `elem` chinoBotIds
         return [BARetractMsg mid]
     , do
+        guard $ any (`T.isInfixOf` msg1) ["日记"]                     -- "日记" is a keyword
+        guard $ uid `elem` chinoBotIds                                -- the bot is chino
+        guard $ not . null $ [ props | CQOther "image" props <- cqs ] -- there is an image
+        return [BARetractMsg mid]                                     -- retract the message
+    , do
         guard $ uid `elem` asllIds
         guard . not . null
           $  [ props | CQOther "image" props <- cqs ]

@@ -25,7 +25,7 @@ commandUser = BotCommand User $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   userParser' <- lift $ commandParserTransformByBotName userParser
   um <- pureMaybe $ MP.runParser userParser' msg
-  other <- lift get
+  other <- lift query
   let sd = savedData other
   let (actions, sd') = case um of
         UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = insert (uid, ug) $ userGroups sd})
@@ -38,7 +38,7 @@ commandUser = BotCommand User $ botT $ do
         RuleManagement Remove (Just cr)      -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd})
         RuleManagement List _                -> ([reportUM other cid um], sd)
         _ -> ([], sd)
-  lift . put $ other {savedData = sd'}
+  lift . change $ \other -> other {savedData = sd'}
   return actions
   where reportUM other_data cid um = baSendToChatId cid $ T.pack $ case um of
           UserManagement Add ug (Just uid)     -> "已添加用户" ++ show uid ++ "为" ++ show ug ++ "组。"

@@ -76,20 +76,20 @@ commandPoll = BotCommand Poll $ botT $ do
     (_, Just cmd) -> lift $ doPollCommand ess cmd
     _             -> return []
 
-getPollMap :: (MonadIO m) => MeowT m (M.Map PollId PollData)
+getPollMap :: (MonadIO m) => MeowT r mods m (M.Map PollId PollData)
 getPollMap = do
-  mPollMap <- listToMaybe . getAdditionalDataSavedType @_ @(M.Map PollId PollData) <$> get
+  mPollMap <- listToMaybe . getAdditionalDataSavedType @_ @(M.Map PollId PollData) <$> query @OtherData
   case mPollMap of
     Just pm -> liftIO (print pm) >> return pm
     Nothing -> do
       let emptyMap = M.empty :: M.Map PollId PollData
-      modify . modifyAdditionalData $ (:) $ AdditionalDataSaved emptyMap
+      change @OtherData . modifyAdditionalData $ (:) $ AdditionalDataSaved emptyMap
       liftIO $ putStrLn "Poll map initialized!"
-      s <- getAdditionalData <$> get
+      s <- getAdditionalData <$> query @OtherData
       liftIO $ print s
       return emptyMap
 
-doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> MeowT m [BotAction]
+doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> MeowT r mods m [BotAction]
 doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list
@@ -101,7 +101,7 @@ doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
           newPollId
           (PollData newPollId env' title (M.fromList $ zip [0..] options) M.empty)
           pollMap
-  modify . modifyAdditionalDataSavedType $ const $ Just newPollMap
+  change @OtherData . modifyAdditionalDataSavedType $ const $ Just newPollMap
   meowSendToChatIdFull cid Nothing [AdditionalDataSaved newPollId] [] $ T.intercalate "\n" $
     [ "Poll created! owo"
     , "Poll ID: " <> tshow newPollId
@@ -123,7 +123,7 @@ doPollCommand (_, cid, uid, _, _) (Vote pid optionIds) = do
       let newVotes = M.insert uid (S.fromList optionIds) $ pollVotes poll
           newMap   = M.insert pid poll { pollVotes = newVotes } pollMap
           hint = if random then "使用 :poll view " <> T.pack (show pid) <> "查看" else ""
-      modify . modifyAdditionalDataSavedType $ const $ Just newMap
+      change @OtherData . modifyAdditionalDataSavedType $ const $ Just newMap
       -- let statsStrs = intercalate "\n" [ option ++ ": " ++ show votes | (option, votes) <- pollStatistics poll ]
       return [baSendToChatId cid $ "记下来了！>w<" <> hint]
       else return [baSendToChatId cid "Poll not visible o.o!"]
@@ -135,7 +135,7 @@ doPollCommand (_, cid, _, _, _) (Propose pid option) = do
       then do
         let newOptions = M.insert (M.size $ pollOptions poll) option $ pollOptions poll
             newMap     = M.insert pid poll { pollOptions = newOptions } pollMap
-        modify . modifyAdditionalDataSavedType $ const $ Just newMap
+        change @OtherData . modifyAdditionalDataSavedType $ const $ Just newMap
         return [baSendToChatId cid "Option proposed! owo"]
       else return [baSendToChatId cid "Poll not visible o.o!"]
 doPollCommand (_, cid, _, _, _) (ViewPoll pid) = do
@@ -158,7 +158,7 @@ doPollCommand (_, cid, _, _, _) (DeletePoll pid) = do
     Just poll -> if readablePoll cid poll
       then do
         let newMap = M.delete pid pollMap
-        modify . modifyAdditionalDataSavedType $ const $ Just newMap
+        change @OtherData . modifyAdditionalDataSavedType $ const $ Just newMap
         return [baSendToChatId cid "Poll deleted! owo"]
       else return [baSendToChatId cid "Poll not visible o.o!"]
 

@@ -20,14 +20,15 @@ import Control.Monad.Trans.ReaderState
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
   (msg, cid, uid, mid, sender) <- MaybeT $ getEssentialContent <$> query
-  other_data <- lift get
-  whole_chat <- lift $ query
+  other_data <- query
+  whole_chat <- query
+  botmodules <- query
+  botname    <- query
   let sd = savedData other_data
   let msys = ChatSetting
-               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botModules other_data))
+               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botmodules))
                (systemTemp =<< lookup cid (chatSettings sd))
   -- looking for custom system message
-      botname = nameOfBot $ botModules other_data
   lChatModelMsg <- pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
@@ -40,7 +41,7 @@ commandCat = BotCommand Cat $ botT $ do
         checkAllowedCatUsers sd GPT4 p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
 catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String)
-catParser (Just botname) msys = do
+catParser (BotName (Just botname)) msys = do
   MP.spaces0
   parseMeowMeow
   where
@@ -49,7 +50,7 @@ catParser (Just botname) msys = do
       MP.commandSeparator2
       str <- MP.some MP.item
       return (ChatParams GPT3 False msys, str)
-catParser Nothing msys = do
+catParser (BotName Nothing) msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
   where

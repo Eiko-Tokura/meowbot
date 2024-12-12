@@ -8,6 +8,8 @@ module Control.Monad.Trans.ReaderState
   , pureMaybe
   , onlyState
   , onlyStateT
+  , restrictState
+  , restrictRead
   ) where
 
 import Data.Bifunctor
@@ -56,22 +58,6 @@ instance Monad m => MonadReader r (ReaderStateT r s m) where
   local f v = ReaderStateT $ \r s -> runReaderStateT v (f r) s
   {-# INLINE local #-}
 
--- ask :: Monad m => ReaderStateT r s m r
--- ask = ReaderStateT $ curry return
--- {-# INLINE ask #-}
-
--- get :: Monad m => ReaderStateT r s m s
--- get = ReaderStateT $ \_ s -> return (s, s)
--- {-# INLINE get #-}
-
--- put :: Monad m => s -> ReaderStateT r s m ()
--- put s = ReaderStateT $ \_ _ -> return ((), s)
--- {-# INLINE put #-}
-
--- modify :: Monad m => (s -> s) -> ReaderStateT r s m ()
--- modify f = ReaderStateT $ \_ s -> return ((), f s)
--- {-# INLINE modify #-}
-
 pullback :: Monad m => (r -> r') -> ReaderStateT r' s m a -> ReaderStateT r s m a
 pullback f v = ReaderStateT $ \r s -> runReaderStateT v (f r) s
 {-# INLINE pullback #-}
@@ -83,6 +69,19 @@ globalize readOnly stateOnly createAll v = StateT $ \all -> do
   (a, s') <- runReaderStateT v r s
   return (a, createAll r s')
 {-# INLINE globalize #-}
+
+restrictState :: Monad m => (s -> s', (s' -> m s') -> s -> m s) -> ReaderStateT r s' m a -> ReaderStateT r s m a
+restrictState (stateProjection, stateEmbedding) mrs' = ReaderStateT $ \r s -> do
+  let s0' = stateProjection s
+      smallStateDynamics = fmap snd . runReaderStateT mrs' r
+  (a, _) <- runReaderStateT mrs' r s0'
+  s1 <- stateEmbedding smallStateDynamics s
+  return (a, s1)
+{-# INLINE restrictState #-}
+
+restrictRead :: Monad m => (r -> r') -> ReaderStateT r' s m a -> ReaderStateT r s m a
+restrictRead f v = ReaderStateT $ \r s -> runReaderStateT v (f r) s
+{-# INLINE restrictRead #-}
 
 pureMaybe :: Monad m => Maybe a -> MaybeT m a
 pureMaybe = MaybeT . return

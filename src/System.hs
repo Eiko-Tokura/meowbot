@@ -14,11 +14,22 @@
 -- which is conceptually simpler.
 --
 -- We will use the first method, although a bit hard, it is the most type-safe way!
-module System where
+module System 
+  ( SystemT
+  , ModuleData(..)
+  , AllModuleLocalStates(..)
+  , AllModuleGlobalStates(..)
+  , AllModuleEvents(..)
+  , ModuleOperable(..)
+  , module Control.Monad.Logger
+  , module Module
+  ) where
 
 import Module
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
+import Control.Concurrent.STM
+import Control.Applicative
 import Data.Kind
 import Data.Bifunctor
 -- | the system type
@@ -35,20 +46,41 @@ import Data.Bifunctor
 -- * @a@ is the result type.
 type SystemT r s mods m a = ReaderStateT (AllModuleGlobalStates mods, r) (AllModuleLocalStates mods, s) (LoggingT m) a
 
-class ModuleData r (s :: Type) (a :: [Type]) where
-  data AllModuleLocalStates  a :: Type
-  data AllModuleGlobalStates a :: Type
-  --type AllStates a s :: Type
+class ModuleData r (s :: Type) (mods :: [Type]) where
+  data AllModuleLocalStates  mods :: Type
+  data AllModuleGlobalStates mods :: Type
+  data AllModuleEvents       mods :: Type
+  listenToEvents :: SystemT r s mods IO (STM (AllModuleEvents mods))
+  handleEvents   :: AllModuleEvents mods -> SystemT r s mods IO ()
 
 instance ModuleData r s '[] where
   data AllModuleLocalStates  '[] = ModuleLocalStatesNil
   data AllModuleGlobalStates '[] = ModuleGlobalStatesNil
-  --type AllStates '[] s = (AllModuleLocalStates '[], s)
+  data AllModuleEvents       '[] = ModuleEventsNil
+  listenToEvents = return $ return ModuleEventsNil
+  {-# INLINE listenToEvents #-}
+  handleEvents ModuleEventsNil = return ()
+  {-# INLINE handleEvents #-}
 
 instance (ModuleData r s ms, MeowModule r s m) => ModuleData r s (m ': ms) where
   data AllModuleLocalStates  (m ': ms) = ModuleLocalStatesCons  (ModuleLocalState m)  (AllModuleLocalStates ms)
   data AllModuleGlobalStates (m ': ms) = ModuleGlobalStatesCons (ModuleGlobalState m) (AllModuleGlobalStates ms)
-  --type AllStates (m ': ms) s = (AllModuleLocalStates (m ': ms), s)
+  data AllModuleEvents       (m ': ms) = ModuleEventHead (ModuleEvent m) | ModuleEventsTail (AllModuleEvents ms)
+  listenToEvents = do
+    tailEvents <- ReaderStateT 
+      . (\arrow (ModuleGlobalStatesCons _ allgsms, r) (ModuleLocalStatesCons lsm alllsms, s) -> second (first (ModuleLocalStatesCons lsm)) <$> arrow (allgsms, r) (alllsms, s)
+        )
+      . runReaderStateT
+      $ listenToEvents @r @s @ms
+    headEvent <- moduleEnv @r @s @m (moduleEvent (Proxy @m))
+    return $ ModuleEventHead <$> headEvent <|> ModuleEventsTail <$> tailEvents
+
+  handleEvents (ModuleEventHead e) = moduleEnv @r @s @m $ moduleEventHandler (Proxy @m) e
+  handleEvents (ModuleEventsTail es) = ReaderStateT 
+    . (\arrow (ModuleGlobalStatesCons _ allgsms, r) (ModuleLocalStatesCons lsm alllsms, s) -> second (first (ModuleLocalStatesCons lsm)) <$> arrow (allgsms, r) (alllsms, s)
+      )
+    . runReaderStateT 
+    $ handleEvents @r @s @ms es
 
 class (MeowModule r s mod, ModuleData r s mods) => ModuleOperable r s mod mods where
   projectionToOneModuleL :: AllModuleLocalStates mods -> ModuleLocalState mod
