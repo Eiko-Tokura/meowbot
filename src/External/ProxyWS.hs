@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings #-}
 -- Author : Eiko chan >w<
 -- | In this module we define the functionalities to proxy over a WebSocket connection.
 --

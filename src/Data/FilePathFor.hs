@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, FlexibleInstances, DataKinds, LambdaCase, TypeFamilies, DerivingVia, StandaloneDeriving, MultiParamTypeClasses, ScopedTypeVariables #-}
+{-# LANGUAGE GADTs, FlexibleInstances, DataKinds, TypeFamilies, DerivingVia, StandaloneDeriving, MultiParamTypeClasses, ScopedTypeVariables #-}
 module Data.FilePathFor
   ( ComposablePath(..)
   , toAbsoluteFilePath, toAbsoluteFilePaths

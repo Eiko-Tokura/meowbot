@@ -66,7 +66,7 @@ library item
 
     hs-source-dirs:   item
 
-    default-language: GHC2021
+    default-language: GHC2024
 
 
 library meowbot-lib
@@ -112,6 +112,9 @@ library meowbot-lib
                    , Probability.Foundation
                    , Utils.ByteString
                    , Utils.Persist
+                   , Module
+                   , Module.LogDatabase
+                   , System
     
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -132,9 +135,11 @@ library meowbot-lib
                  , item
                  , lens
                  , mtl
+                 , monad-logger
                  , parallel
                  , process
                  , random
+                 , resource-pool
                  , safe
                  , stm
                  , text
@@ -149,7 +154,7 @@ library meowbot-lib
     -- Directories containing source files.
     hs-source-dirs:   src
 
-    default-language: GHC2021
+    default-language: GHC2024
 
 executable meowbot
     main-is:          Main.hs
@@ -188,7 +193,7 @@ executable meowbot
                  , persistent-sqlite
                  , persistent-template
 
-    default-language: GHC2021
+    default-language: GHC2024
 
 test-suite meowbot-test
     type: exitcode-stdio-1.0
@@ -202,4 +207,4 @@ test-suite meowbot-test
     build-depends: base
                  , meowbot-lib
 
-    default-language: GHC2021
+    default-language: GHC2024

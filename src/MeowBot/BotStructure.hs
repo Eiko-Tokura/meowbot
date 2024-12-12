@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
 {-# LANGUAGE ScopedTypeVariables #-}

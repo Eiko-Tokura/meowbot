@@ -1,4 +1,4 @@
-{-# LANGUAGE LambdaCase, DerivingStrategies, DeriveAnyClass, OverloadedStrings, DerivingVia #-}
+{-# LANGUAGE DerivingStrategies, DeriveAnyClass, OverloadedStrings, DerivingVia #-}
 module MeowBot.Data
   ( module MeowBot.MetaMessage
   , UserId(..), GroupId(..), ChatId(..)

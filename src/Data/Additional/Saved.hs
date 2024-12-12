@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, LambdaCase, TemplateHaskell, DerivingVia, OverloadedStrings #-}
+{-# LANGUAGE GADTs, TemplateHaskell, DerivingVia, OverloadedStrings #-}
 module Data.Additional.Saved where
 
 import Data.Additional
