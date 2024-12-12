@@ -40,7 +40,7 @@ import Data.Either
 import Data.Time.Clock (getCurrentTime)
 import qualified Data.Set as S
 import qualified Data.ByteString.Lazy as BL
-import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest, sendTextData)
+import Network.WebSockets (Connection, ClientApp, runClient, runServer, receiveData, PendingConnection, acceptRequest, sendTextData, withPingPong, defaultPingPongOptions)
 
 import Control.Monad.Trans.State
 import Control.Monad.Trans
@@ -181,7 +181,7 @@ botServer :: BotModules -> RunningMode -> PendingConnection -> IO ()
 botServer mods mode connection = do
   conn <- acceptRequest connection
   putStrLn "As server, connected to go-cqhttp WebSocket client."
-  initialData mods >>= void . runStateT (botLoop Nothing mods mode conn)
+  withPingPong defaultPingPongOptions conn $ (initialData mods >>=) . (void .) . runStateT . botLoop Nothing mods mode
 
 -- | changed the model to allow some concurrency
 botLoop :: Maybe (Async BL.ByteString) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
