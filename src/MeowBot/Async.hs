@@ -1,7 +1,7 @@
 -- | This module provides some simple async related wrappers for MeowBot.
 module MeowBot.Async where
 
-import MeowBot.BotStructure
+import MeowBot
 import Control.Monad.Trans
 import Control.Concurrent.Async
 import Control.Concurrent.STM

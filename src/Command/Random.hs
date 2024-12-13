@@ -2,7 +2,7 @@
 module Command.Random where
 
 import Command
-import MeowBot.BotStructure
+import MeowBot
 import Probability.Foundation
 import MeowBot.Parser as MP
 import qualified Data.Text as T

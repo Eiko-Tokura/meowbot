@@ -3,6 +3,7 @@ module Parser.Run
   ( module Control.Monad.Item
   , module Control.Applicative
   , module Parser.Char
+  , module Parser.String
   , module Parser.Text
   , module Parser.Template
   , runParser, runParserFull
@@ -13,6 +14,7 @@ module Parser.Run
 import Control.Applicative
 import Control.Monad.Item
 import Parser.Char
+import Parser.String
 import Parser.Definition (IsStream, runParser, runParserFull, Parser) -- not fully exported
 import Parser.Template
 import Parser.Text

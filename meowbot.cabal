@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:            0.3.0.0
+version:             0.4.0.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -50,6 +50,7 @@ library item
 
     exposed-modules: Control.Monad.Item
                    , Parser.Char
+                   , Parser.String
                    , Parser.Definition
                    , Parser.Except
                    , Parser.Run
@@ -89,18 +90,19 @@ library meowbot-lib
                    , Command.Study
                    , Command.User
                    , Control.Monad.IOe
-                   , Control.Monad.Readable
                    , Control.Monad.MaybeHints
+                   , Control.Monad.Readable
                    , Control.Monad.Trans.ReaderState
                    , Data.Additional
                    , Data.Additional.Saved
-                   , Data.Template
                    , Data.FilePathFor
+                   , Data.HList
                    , Data.PersistModel
-                   , External.ProxyWS
+                   , Data.Template
                    , External.ChatAPI
                    , External.ChatAPI.Function
                    , External.MarkdownImage
+                   , External.ProxyWS
                    , MeowBot
                    , MeowBot.Action
                    , MeowBot.Async
@@ -112,14 +114,20 @@ library meowbot-lib
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Update
+                   , Module
+                   , Module.Async
+                   , Module.AsyncInstance
+                   , Module.Command
+                   , Module.CommandInstance
+                   , Module.LogDatabase
                    , Probability.Foundation
+                   , System
+                   , System.Cat
+                   , System.Meow
+                   , System.General
+                   , System.Logging
                    , Utils.ByteString
                    , Utils.Persist
-                   , Module
-                   , Module.LogDatabase
-                   , Module.Async
-                   , System
-                   , System.Meow
     
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -139,23 +147,23 @@ library meowbot-lib
                  , http-types
                  , item
                  , lens
-                 , mtl
                  , monad-logger
+                 , mtl
                  , parallel
+                 , persistent
+                 , persistent-sqlite
+                 , persistent-template
                  , process
                  , random
                  , resource-pool
                  , safe
                  , stm
-                 , text
                  , template-haskell
+                 , text
                  , time
                  , transformers
                  , websockets
                  , wuss
-                 , persistent
-                 , persistent-sqlite
-                 , persistent-template
     -- Directories containing source files.
     hs-source-dirs:   src
 
@@ -182,21 +190,23 @@ executable meowbot
                  , http-types
                  , item
                  , lens
+                 , monad-logger
                  , mtl
                  , parallel
+                 , persistent
+                 , persistent-sqlite
+                 , persistent-template
                  , process
                  , random
+                 , resource-pool
                  , safe
                  , stm
-                 , text
                  , template-haskell
+                 , text
                  , time
                  , transformers
                  , websockets
                  , wuss
-                 , persistent
-                 , persistent-sqlite
-                 , persistent-template
 
     default-language: GHC2024
 

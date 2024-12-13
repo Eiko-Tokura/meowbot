@@ -41,17 +41,15 @@ import MeowBot.Data
 import Control.Parallel.Strategies
 import Control.Monad.IOe
 import Control.Monad.Readable
-import Control.Concurrent.Async (Async, asyncThreadId, async)
+import Control.Monad.Trans.ReaderState
 import Command.Aokana.Scripts
 import Data.Aeson (object, ToJSON, toJSON, (.=))
 import Data.Additional
 import Data.Maybe
+import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
 import Data.Additional.Saved
 import Data.Ord (comparing, Down(..))
-import Data.List (maximumBy, sortOn)
-import Data.Kind (Type)
-import qualified Data.Set as S
 import GHC.Generics (Generic)
 import MeowBot.Parser (ChatSetting(..))
 import MeowBot.Data.Book
@@ -85,6 +83,14 @@ data OtherData = OtherData -- In the future one can add course data.. etc
   --, asyncActions   :: !(S.Set (Async (Meow [BotAction]))) -- ^ actions that are running asynchronously
   , aokana         :: [ScriptBlock]
   } deriving Show
+
+instance {-# OVERLAPPABLE #-} Monad m => MonadReadable OtherData (ReaderStateT r (s0, AllData) m) where
+  query = gets (otherdata . snd)
+  {-# INLINE query #-}
+
+instance {-# OVERLAPPABLE #-} Monad m => MonadModifiable OtherData (ReaderStateT r (s0, AllData) m) where
+  change f = modify $ second $ \ad -> ad {otherdata = f $ otherdata ad}
+  {-# INLINE change #-}
 
 data SavedData = SavedData
   { chatSettings    :: [(ChatId, ChatSetting)]

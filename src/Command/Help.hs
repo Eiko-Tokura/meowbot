@@ -5,7 +5,7 @@ import Command
 import Command.Random (helpRandom)
 import Command.Study (helpStudy)
 import Command.Poll (helpPoll)
-import MeowBot.BotStructure
+import MeowBot
 import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
 

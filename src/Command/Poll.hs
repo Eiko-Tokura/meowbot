@@ -11,7 +11,8 @@ import Data.Additional
 import Data.Maybe
 import qualified Data.Text as T
 import MeowBot.Parser
-import MeowBot.BotStructure
+import MeowBot
+import System.General
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Debug.Trace

@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DataKinds, AllowAmbiguousTypes #-}
+{-# LANGUAGE TypeFamilies, DataKinds, AllowAmbiguousTypes, UndecidableInstances #-}
 -- | This module defines the system type, and the type classes that are used to define the data structure of the system.
 --
 -- * We need a data family associated to (mods, s)
@@ -16,11 +16,12 @@
 -- We will use the first method, although a bit hard, it is the most type-safe way!
 module System 
   ( SystemT
-  , ModuleData(..)
-  , AllModuleLocalStates(..)
-  , AllModuleGlobalStates(..)
-  , AllModuleEvents(..)
-  , ModuleOperable(..)
+  , Modules(..)
+  , AllModuleLocalStates
+  , AllModuleGlobalStates
+  , AllModuleEvents
+  , AllModuleInitDataG
+  , AllModuleInitDataL
   , module Control.Monad.Logger
   , module Module
   ) where
@@ -29,8 +30,7 @@ import Module
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
 import Control.Concurrent.STM
-import Control.Applicative
-import Data.Kind
+import Data.HList
 import Data.Bifunctor
 -- | the system type
 --
@@ -46,102 +46,67 @@ import Data.Bifunctor
 -- * @a@ is the result type.
 type SystemT r s mods m a = ReaderStateT (AllModuleGlobalStates mods, r) (AllModuleLocalStates mods, s) (LoggingT m) a
 
-class ModuleData r (s :: Type) (mods :: [Type]) where
-  data AllModuleLocalStates  mods :: Type
-  data AllModuleGlobalStates mods :: Type
-  data AllModuleEvents       mods :: Type
-  listenToEvents :: SystemT r s mods IO (STM (AllModuleEvents mods))
-  handleEvents   :: AllModuleEvents mods -> SystemT r s mods IO ()
+type AllModuleInitDataG    mods = FList ModuleInitDataG   mods
+type AllModuleInitDataL    mods = FList ModuleInitDataL   mods
+type AllModuleGlobalStates mods = FList ModuleGlobalState mods
+type AllModuleLocalStates  mods = FList ModuleLocalState  mods
+type AllModuleEvents       mods = FList ModuleEvent       mods
 
-instance ModuleData r s '[] where
-  data AllModuleLocalStates  '[] = ModuleLocalStatesNil
-  data AllModuleGlobalStates '[] = ModuleGlobalStatesNil
-  data AllModuleEvents       '[] = ModuleEventsNil
-  listenToEvents = return $ return ModuleEventsNil
+-- handleEvents :: (Modules mods, MonadIO m) => AllModuleEvents mods -> SystemT r s mods m ()
+
+class Modules r s mods where
+  listenToEvents  :: SystemT r s mods IO (STM (AllModuleEvents mods))
+  handleEvents    :: AllModuleEvents mods    -> SystemT r s mods IO ()
+  initAllModulesG :: AllModuleInitDataG mods -> LoggingT IO (AllModuleGlobalStates mods)
+  initAllModulesL :: r -> AllModuleInitDataG mods -> AllModuleInitDataL mods -> LoggingT IO (AllModuleLocalStates mods)
+
+instance Modules r s '[] where
+  listenToEvents = return $ return FNil
   {-# INLINE listenToEvents #-}
-  handleEvents ModuleEventsNil = return ()
+  handleEvents FNil = return ()
+  {-# INLINE handleEvents #-}
+  initAllModulesG _ = return FNil
+  {-# INLINE initAllModulesG #-}
+  initAllModulesL _ _ _ = return FNil
+  {-# INLINE initAllModulesL #-}
+
+moduleEnv :: (mod `In` mods, Monad m) => ModuleT r s mod m a -> SystemT r s mods m a
+moduleEnv = ReaderStateT 
+  . (\arrow (allGlob, r) (allLoc, s) ->
+      let locmod  = getF allLoc
+          globmod = getF allGlob
+      in second (first $ \l -> modifyF (const l) allLoc) <$> arrow (globmod, r) (locmod, s)
+    )
+  . runReaderStateT
+
+inductiveEnv :: Monad m => SystemT r s mods m a -> SystemT r s (mod ': mods) m a
+inductiveEnv = ReaderStateT 
+  . (\arrowms (_ :** allGlobms, r) (locm :** allLocms, s) -> 
+      second (first (locm :**)) <$> arrowms (allGlobms, r) (allLocms, s)
+    )
+  . runReaderStateT
+
+instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) where
+
+  listenToEvents = do
+    tailEvents <- inductiveEnv $ listenToEvents @r @s @mods
+    headEvent <- moduleEnv $ moduleEvent @r @s @mod (Proxy @mod)
+    return $ (:**) <$> headEvent <*> tailEvents
+  {-# INLINE listenToEvents #-}
+
+  handleEvents (x :** xs) = do
+    moduleEnv $ moduleEventHandler (Proxy @mod) x 
+    inductiveEnv $ handleEvents @r @s @mods xs
   {-# INLINE handleEvents #-}
 
-instance (ModuleData r s ms, MeowModule r s m) => ModuleData r s (m ': ms) where
-  data AllModuleLocalStates  (m ': ms) = ModuleLocalStatesCons  (ModuleLocalState m)  (AllModuleLocalStates ms)
-  data AllModuleGlobalStates (m ': ms) = ModuleGlobalStatesCons (ModuleGlobalState m) (AllModuleGlobalStates ms)
-  data AllModuleEvents       (m ': ms) = ModuleEventHead (ModuleEvent m) | ModuleEventsTail (AllModuleEvents ms)
-  listenToEvents = do
-    tailEvents <- ReaderStateT 
-      . (\arrow (ModuleGlobalStatesCons _ allgsms, r) (ModuleLocalStatesCons lsm alllsms, s) -> second (first (ModuleLocalStatesCons lsm)) <$> arrow (allgsms, r) (alllsms, s)
-        )
-      . runReaderStateT
-      $ listenToEvents @r @s @ms
-    headEvent <- moduleEnv @r @s @m (moduleEvent (Proxy @m))
-    return $ ModuleEventHead <$> headEvent <|> ModuleEventsTail <$> tailEvents
+  initAllModulesG (init :** inits) = do
+    mg   <- initModule @r @s @mod (Proxy @mod) init
+    mgs  <- initAllModulesG @r @s inits
+    return (mg :** mgs)
+  {-# INLINE initAllModulesG #-} 
 
-  handleEvents (ModuleEventHead e) = moduleEnv @r @s @m $ moduleEventHandler (Proxy @m) e
-  handleEvents (ModuleEventsTail es) = ReaderStateT 
-    . (\arrow (ModuleGlobalStatesCons _ allgsms, r) (ModuleLocalStatesCons lsm alllsms, s) -> second (first (ModuleLocalStatesCons lsm)) <$> arrow (allgsms, r) (alllsms, s)
-      )
-    . runReaderStateT 
-    $ handleEvents @r @s @ms es
-
-class (MeowModule r s mod, ModuleData r s mods) => ModuleOperable r s mod mods where
-  projectionToOneModuleL :: AllModuleLocalStates mods -> ModuleLocalState mod
-
-  projectionToOneModuleG :: AllModuleGlobalStates mods -> ModuleGlobalState mod
-
-  modifyOneModule :: Monad m => (ModuleLocalState mod -> m (ModuleLocalState mod)) -> AllModuleLocalStates mods -> m (AllModuleLocalStates mods)
-
-  modifyOneModuleAndState :: Monad m =>
-    ((ModuleLocalState mod, s) -> m (ModuleLocalState mod, s)) ->
-    (AllModuleLocalStates mods, s) -> m (AllModuleLocalStates mods, s)
-
-  moduleEnv :: Monad m => ModuleT r s mod m a -> SystemT r s mods m a
-
--- | The base case
-instance {-# OVERLAPPING #-} (MeowModule r s mod, ModuleData r s (mod ': xs)) => ModuleOperable r s mod (mod ': xs) where
-  projectionToOneModuleL (ModuleLocalStatesCons x _) = x
-  {-# INLINE projectionToOneModuleL #-}
-
-  projectionToOneModuleG (ModuleGlobalStatesCons x _) = x
-  {-# INLINE projectionToOneModuleG #-}
-
-  modifyOneModule f (ModuleLocalStatesCons x xs) = (`ModuleLocalStatesCons` xs) <$> (f x) 
-  {-# INLINE modifyOneModule #-}
-
-  modifyOneModuleAndState f (ModuleLocalStatesCons x xs, s) = do
-    (x', s') <- f (x, s)
-    return (ModuleLocalStatesCons x' xs, s')
-  {-# INLINE modifyOneModuleAndState #-}
-
-  moduleEnv = restrictRead (first $ projectionToOneModuleG @r @s @mod) . restrictState
-    ( first (projectionToOneModuleL @r @s @mod)
-    , modifyOneModuleAndState @r @s @mod
-    )
-  {-# INLINE moduleEnv #-}
-
--- | The inductive case
-instance {-# OVERLAPPABLE #-}
-  ( MeowModule r s mod
-  , ModuleData r s (x ': xs)
-  , ModuleOperable r s mod xs
-  ) 
-  => ModuleOperable r s mod (x ': xs) 
-  where
-  projectionToOneModuleL (ModuleLocalStatesCons _ xs) = projectionToOneModuleL @r @s @mod xs
-  {-# INLINE projectionToOneModuleL #-}
-
-  projectionToOneModuleG (ModuleGlobalStatesCons _ xs) = projectionToOneModuleG @r @s @mod xs
-  {-# INLINE projectionToOneModuleG #-}
-
-  modifyOneModule f (ModuleLocalStatesCons x xs) = ModuleLocalStatesCons x <$> modifyOneModule @r @s @mod f xs
-  {-# INLINE modifyOneModule #-}
-
-  modifyOneModuleAndState f (ModuleLocalStatesCons x xs, s) = do
-    (xs', s') <- modifyOneModuleAndState @r @s @mod f (xs, s)
-    return $ (ModuleLocalStatesCons x xs', s')
-  {-# INLINE modifyOneModuleAndState #-}
-
-  moduleEnv = restrictRead (first $ projectionToOneModuleG @r @s @mod) . restrictState
-    ( first (projectionToOneModuleL @r @s @mod)
-    , modifyOneModuleAndState @r @s @mod
-    )
-  {-# INLINE moduleEnv #-}
-
+  initAllModulesL r (initG :** initGs) (initL :** initLs) = do
+    ml   <- initModuleLocal @r @s @mod (Proxy @mod) r initG initL
+    mls  <- initAllModulesL @r @s r initGs initLs
+    return (ml :** mls)
+  {-# INLINE initAllModulesL #-}

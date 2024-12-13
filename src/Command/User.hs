@@ -5,7 +5,7 @@ import Command
 import MeowBot.Parser (Parser, (<|>))
 import qualified MeowBot.Parser as MP
 import Control.Monad.IOe
-import MeowBot.BotStructure
+import MeowBot
 import MeowBot.CommandRule
 import qualified Data.Text as T
 import Data.List

@@ -7,7 +7,7 @@ module Command.SetSysMessage
 import Command
 import MeowBot.Parser ((|+|), (<|>), tshow)
 import qualified MeowBot.Parser as MP
-import MeowBot.BotStructure
+import MeowBot
 import qualified Data.Text as T
 import Data.Bifunctor
 import External.ChatAPI

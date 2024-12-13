@@ -15,13 +15,11 @@ import External.ProxyWS (ProxyData, cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
 import qualified MeowBot.Parser as MP
 import Debug.Trace
-import System
-import System.Meow
-
+import System.General
 
 forestSizeForEachChat = 128 -- ^ controls how many trees to keep in each chat room
 
-updateSelfInfo :: Monad m => CQMessage -> CatT r mods m ()
+updateSelfInfo :: (MonadReadable AllData m, MonadModifiable AllData m) => CQMessage -> m ()
 updateSelfInfo cqmsg = do
   mselfInfo <- queries (selfInfo . otherdata)
   let msid = self_id cqmsg
@@ -60,21 +58,18 @@ globalizeMeow
 gIncreaseAbsoluteId :: (Monad m) => CatT r mods m Int
 gIncreaseAbsoluteId = globalizeMeow increaseAbsoluteId
 
-increaseAbsoluteId :: (Monad m) => MeowT r mods m Int
+increaseAbsoluteId :: (MonadModifiable OtherData m) => m Int
 increaseAbsoluteId = do
-  other_data <- query
-  let mid = message_number other_data
-  modify $ second $ \other_data -> other_data {message_number = mid + 1}
-  return $ mid + 1
+  change $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
+  queries (message_number)
 
-updateSavedAdditionalData :: (Monad m) => StateT AllData m ()
-updateSavedAdditionalData = do
-  ad <- get
+updateSavedAdditionalData :: (MonadModifiable AllData m) => m ()
+updateSavedAdditionalData = change $ \ad ->
   let od = otherdata ad
       sd = savedData od
       rd = runningData od
       sd' = sd { savedAdditional = coerce filterSavedAdditional rd }
-  put ad { otherdata = od { savedData = sd' } }
+  in ad { otherdata = od { savedData = sd' } }
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
 updateAllDataByMessage :: CQMessage -> AllData -> AllData

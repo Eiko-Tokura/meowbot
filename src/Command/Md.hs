@@ -5,7 +5,7 @@ import Command
 import Data.Bifunctor
 import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
-import MeowBot.BotStructure
+import MeowBot
 import MeowBot.CQCode
 import MeowBot.Async
 import MeowBot.Parser (Parser, tshow, Chars)

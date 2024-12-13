@@ -8,23 +8,34 @@ import Data.PersistModel
 import Data.Pool
 import MeowBot.BotStructure
 import Module
+import Debug.Trace
+import Parser.Run
+import Parser.Except
 
+--------------------------------------------------------------------------------------------------
 data LogDatabase -- ^ The module that tries to log all CQMessage received into the database.
 
 instance MeowModule r AllData LogDatabase where
-  type ModuleGlobalState LogDatabase = Pool SqlBackend
-  type ModuleLocalState LogDatabase = ()
+  data ModuleGlobalState LogDatabase = LogDatabaseGlobalState { databasePool :: Pool SqlBackend }
+  data ModuleLocalState  LogDatabase = LogDatabaseLocalState
+  data ModuleEvent       LogDatabase = LogDatabaseEvent
+  data ModuleInitDataG   LogDatabase = LogDatabaseInitDataG { databasePath :: String }
+  data ModuleInitDataL   LogDatabase = LogDatabaseInitDataL
 
-  initModule _ _ = do
-    pool <- createSqlitePool "meowbot.db" 2
+  getInitDataG _ = (Just (LogDatabaseInitDataG "meowbot.db"), liftR1 just "--database" >> withE "--database needs a path argument" (LogDatabaseInitDataG <$> nonFlagString))
+
+  getInitDataL _ = (Just LogDatabaseInitDataL, empty)
+
+  initModule _ (LogDatabaseInitDataG path) = do
+    pool <- createSqlitePool (pack path) 2
     runMigration migrateAll `runSqlPool` pool
     -- ^ run the migration, which will create the table if not exists, and add the columns if not exists.
-    return pool
+    return $ LogDatabaseGlobalState pool
 
-  initModuleLocal _ _ = return ()
+  initModuleLocal _ _ _ _ = return LogDatabaseLocalState
 
   quitModule _ = do
-    pool <- readModuleStateG (Proxy @LogDatabase)
+    LogDatabaseGlobalState pool <- readModuleStateG (Proxy @LogDatabase)
     liftIO $ destroyAllResources pool
 
   afterMeow _ = do
@@ -32,5 +43,14 @@ instance MeowModule r AllData LogDatabase where
     mNewMessage <- gets (cqMessageToChatMessage botname . getNewMsg . wholechat . snd)
     case mNewMessage of
       Nothing         -> return ()
-      Just newMessage -> readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage)
+      Just newMessage -> readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool
+
+--------------------------------------------------------------------------------------------------
+-- useful logging functions
+--
+-- | A tracing function that will only print the message when the flag is in the list.
+traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
+traceModeWith flag ls f a
+  | flag `elem` ls = trace (f a) a
+  | otherwise      = a
 

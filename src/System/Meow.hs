@@ -1,14 +1,33 @@
-{-# LANGUAGE TypeFamilies, DataKinds, DerivingVia #-}
+{-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, TemplateHaskell, UndecidableInstances #-}
 module System.Meow where
 
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
+import Control.Concurrent.Async
+import Control.Concurrent.STM
+import Control.Applicative
+import Control.Parallel.Strategies
 import System
+import System.General
 import Data.Kind
 import Data.Bifunctor
 import MeowBot.BotStructure
+import MeowBot.CommandRule
+import MeowBot.Parser
+import MeowBot.Update
 import Data.Time.Clock
-import Network.WebSockets
+import Data.Template
+import Data.Maybe
+import Data.Aeson
+import Network.WebSockets hiding (Response)
+import qualified Data.Set as S
+import qualified Data.ByteString.Lazy as BL
+
+import Module.LogDatabase
+import Module.Command
+import Module.Async
+
+import Utils.ByteString
 
 -- the hierarchy of types:
 --
@@ -22,7 +41,7 @@ import Network.WebSockets
 --
 -- SystemT r s mods m a = ReaderStateT (AllModuleGlobalStates mods, r)  (AllModuleLocalStates mods, s) (LoggingT m) a
 -- ModuleT r s l m a    = ReaderStateT (ModuleGlobalState l, r)         (ModuleLocalState l, s) (LoggingT m) a
--- CatT r mods m a      = ReaderStateT (AllModuleGlobalStates mods, r)  AllData (LoggingT m) a
+-- CatT r mods m a      = ReaderStateT (AllModuleGlobalStates mods, r)  (AllModuleLocalStates mods, AllData) (LoggingT m) a
 -- MeowT r mods m a     = ReaderStateT ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r)) (AllModuleLocalStates mods, OtherData) (LoggingT m) a
 --
 -- since ModuleT is not stronger than MeowT, we cannot run MeowT in ModuleT.
@@ -32,162 +51,53 @@ import Network.WebSockets
 -- 1. Deprecate ModuleT and use SystemT for all modules.
 -- 2. Restrict and add a weaker type for MeowT, so that it can be run in ModuleT.
 -- 3. Set a global state for the AsyncModule
+-- 4. Use ModuleT (r, AllModuleGlobalStates mods) (s, AllModuleLocalStates mods) l m a instead of ModuleT r s l m a
+-- 5. Define a MonadMeow class where you can run Meow in the monad, and derive a funcition that supports
+--    ModuleT r s l (MeowT r mods m) a -> SystemT r s mods m a
 
--- | The modules loaded into the bot
-type Mods   = '[]
-type Meow a = MeowT Connection Mods IO a
-type Cat  a = CatT  Connection Mods IO a
-
-newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
-  deriving newtype (Functor, Applicative, Monad, MonadIO)
-  deriving 
-    ( MonadReader (AllModuleGlobalStates mods, r)
-    , MonadState (AllModuleLocalStates mods, AllData)
-    ) via ReaderStateT (AllModuleGlobalStates mods, r) (AllModuleLocalStates mods, AllData) (LoggingT m)
--- ^ the monad that the bot runs in
--- running in this monad it is necessary to block other threads from modifying the data.
--- so avoid running long blocking operations in this monad, use async and staged actions instead.
--- type System mods = SystemT () AllData mods (LoggingT IO) ()
-
--- | The monad transformer that the bot runs in.
-newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT 
-  { runMeowT :: 
-      ReaderStateT 
-        ( (WholeChat, BotConfig)
-        , (AllModuleGlobalStates mods, r)
-        )
-        ( AllModuleLocalStates mods
-        , OtherData
-        )
-        (LoggingT m) -- ^ the monad to run in
-        a
+data MeowData = MeowData
+  { meowConnection :: Connection
+  , meowActions    :: !(TVar [Meow [BotAction]])
+  , meowCQMessage  :: !(TVar (Maybe CQMessage))
+  , meowRawMessage :: !(TVar (Maybe BL.ByteString))
   }
-  deriving newtype (Functor, Applicative, Monad, MonadIO)
-  deriving 
-    ( MonadReader ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
-    , MonadState (AllModuleLocalStates mods, OtherData)
-    ) via ReaderStateT ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r)) (AllModuleLocalStates mods, OtherData) (LoggingT m)
+-- | The modules loaded into the bot
+type Mods   = '[CommandModule, AsyncModule] --, LogDatabase]
+type Meow a = MeowT MeowData Mods IO a
+type Cat  a = CatT  MeowData Mods IO a
 
------------------------------------------------------------------------
-instance MonadTrans (MeowT r mods) where
-  lift = MeowT . lift . lift
-  {-# INLINE lift #-}
+instance HasSystemRead (TVar [Meow [BotAction]]) (MeowData) where
+  readSystem = meowActions
+  {-# INLINE readSystem #-}
 
-instance Monad m => MonadReadable BotConfig (MeowT r mods m) where
-  query = asks (snd . fst)
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable BotModules (MeowT r mods m) where
-  query = queries botModules
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable RunningMode (MeowT r mods m) where
-  query = queries runningMode
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable WholeChat (MeowT r mods m) where
-  query = asks (fst . fst)
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable BotName (MeowT r mods m) where
-  query = queries nameOfBot
-  {-# INLINE query #-}
-
--- instance Monad m => MonadReadable CQMessage (MeowT r mods m) where
---   query = asks (getNewMsg . fst . fst)
---   {-# INLINE query #-}
-
-instance MonadIO m => MonadReadable UTCTime (MeowT r mods m) where
-  query = liftIO getCurrentTime
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable (AllModuleGlobalStates mods) (MeowT r mods m) where
-  query = asks (fst . snd)
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable AllData (MeowT r mods m) where
-  query = do
-    (wc, bc) <- asks fst
-    (_, od) <- get
-    return $ AllData wc bc od
-  {-# INLINE query #-}
-
-instance Monad m => MonadReadable OtherData (MeowT r mods m) where
-  query = gets snd
-  {-# INLINE query #-}
-
-instance Monad m => MonadModifiable OtherData (MeowT r mods m) where
-  change f = modify $ second f
-  {-# INLINE change #-}
+instance HasSystemRead Connection (MeowData) where
+  readSystem = meowConnection
+  {-# INLINE readSystem #-}
 
 ------------------------------------------------------------------------
-instance MonadTrans (CatT r mods) where
-  lift = CatT . lift . lift
-  {-# INLINE lift #-}
+data BotAction 
+  = BASendPrivate
+      UserId     -- ^ the user to send to
+      Text       -- ^ Text, the message to send
+  | BASendGroup
+      GroupId    -- ^ the group chat to send to
+      Text       -- ^ Text, the message to send
+  | BARetractMsg
+      MessageId  -- ^ MessageId, the message to delete (retract)
+  | BAAsync
+      (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
+  | BAPureAsync
+      (Async [BotAction])        -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
 
-instance Monad m => MonadReadable AllData (CatT r mods m) where
-  query = gets snd
-  {-# INLINE query #-}
+instance Show (Async (Meow [BotAction])) where
+  show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
 
-instance Monad m => MonadModifiable AllData (CatT r mods m) where
-  change f = modify $ second f
-  {-# INLINE change #-}
+data BotCommand = BotCommand
+  { identifier :: CommandId
+  , command    :: Meow [BotAction]
+  }
 
--- the meow part should be able o read all global states and local states, i.e. running in the monad
--- 
--- -- ideally, the loop should look like this
--- botLoop :: System mods
--- botLoop = do
---   event <- receiveEvent
---   beforeMeow
---   meowHandleEvent event
---   afterMeow
---   botLoop
--- 
--- botClient :: BotModules -> RunningMode -> ClientApp ()
--- botClient mods mode connection = do
---   putStrLn "Connected to go-cqhttp WebSocket server."
---   initialData mods >>= void . runStateT (botLoop Nothing mods mode connection)
--- 
--- botServer :: BotModules -> RunningMode -> PendingConnection -> IO ()
--- botServer mods mode connection = do
---   conn <- acceptRequest connection
---   putStrLn "As server, connected to go-cqhttp WebSocket client."
---   initialData mods >>= void . runStateT (botLoop Nothing mods mode conn)
--- 
--- -- | changed the model to allow some concurrency
--- botLoop :: Maybe (Async BL.ByteString) -> BotModules -> RunningMode -> Connection -> StateT AllData IO never_returns
--- botLoop reuseAsyncMsgText mods mode conn = do
---   asyncMsgText    <- maybe (lift $ async $ traceModeWith DebugJson mode bsToString <$> receiveData conn) return reuseAsyncMsgText
---   asyncActionList <- gets (S.toList . asyncActions . otherdata)
---   prevData        <- get
---   result <- lift . atomically $ asum
---     [ Left <$> waitSTM asyncMsgText
---     , Right . Left  <$> asum [ (ba, ) <$> waitSTM ba | ba <- asyncActionList ]
---     , Right . Right <$> asum ( map receiveFromProxy (proxyTChans mods) )
---     ]
---   newAsyncMsg <- case result of
---     Left  msgBS                                  -> handleMessage mods mode conn msgBS >> return Nothing
---     Right (Left (completedAsync, meowBotAction)) -> handleCompletedAsync conn completedAsync meowBotAction >> return (Just asyncMsgText)
---     Right (Right proxyMsg)                       -> do
---       lift $ putStrLn $ fromMaybe "喵喵" (nameOfBot mods) ++ " <- Proxy : " ++ take 512 (bsToString proxyMsg)
---       lift $ sendTextData conn proxyMsg `cancelOnException` asyncMsgText
---       return (Just asyncMsgText)
---   saveData prevData
---   botLoop newAsyncMsg mods mode conn
--- 
--- -- | deregister the completed async action and do the bot action
--- handleCompletedAsync :: Connection -> Async (Meow [BotAction]) -> Meow [BotAction] -> StateT AllData IO ()
--- handleCompletedAsync conn completedAsync meowBotAction = do
---   -- remove the completed async action from the set
---   newAsyncSet <- gets (S.delete completedAsync . asyncActions . otherdata)
---   modify $ \ad -> ad { otherdata = (otherdata ad) { asyncActions = newAsyncSet } }
---   -- do the bot action in the Meow monad
---   globalizeMeow $ meowBotAction >>= mapM_ (doBotAction conn)
---   -- update the saved data if needed
---   updateSavedAdditionalData
--- 
--- -- | handle the message from the server, also handles proxy messages
+--------------------------------------------------------------------------------------------
 -- handleMessage :: BotModules -> RunningMode -> Connection -> BL.ByteString -> StateT AllData IO ()
 -- handleMessage mods mode conn msgBS = do
 --   let eCQmsg  = eitherDecode msgBS :: Either String CQMessage
@@ -227,4 +137,3 @@ instance Monad m => MonadModifiable AllData (CatT r mods m) where
 --               pending <- gets (pendingProxies . otherdata)
 --               lift . mapM_ (\pd -> runProxyWS pd headers) $ pending
 --               unless (null pending) $ modify $ \ad -> ad { otherdata = (otherdata ad) { pendingProxies = [] } }
--- 

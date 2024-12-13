@@ -3,24 +3,33 @@ module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
   , doBotAction
+  , extractBotActions
   , botT
   , restrictNumber
   , commandParserTransformByBotName
   ) where
 
-import MeowBot
 import MeowBot.CommandRule
 import Data.Aeson (encode)
 import qualified Data.Set as S
 import qualified Data.Text as T
+import Data.Text (Text, pack)
 import Network.WebSockets (Connection, sendTextData)
 
 import Module.Async
+import Module.AsyncInstance
+import System.Meow
+import System.General
+import Data.Bifunctor
+import Control.Monad.State
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser (tshow)
+import MeowBot.BotStructure
+import MeowBot.Update
+import Data.HList
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
@@ -43,7 +52,7 @@ doBotAction :: Connection -> BotAction -> Meow ()
 doBotAction conn (BASendPrivate uid txt) = query >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)   = query >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
-doBotAction _    (BAAsync act)      = modifyOneModuleAndState (Proxy @AsyncModule) $ S.insert act
+doBotAction _    (BAAsync act)      = modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)
 --change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
 
@@ -110,3 +119,6 @@ doBotCommands ::  Connection -> [BotCommand] -> Cat ()
 doBotCommands conn commands = globalizeMeow $ do
   actions <- permissionCheck `mapM` commands
   doBotAction conn `mapM_` concat actions
+
+extractBotActions :: [BotCommand] -> [Meow [BotAction]]
+extractBotActions = fmap command

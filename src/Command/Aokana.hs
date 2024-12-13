@@ -12,7 +12,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
 import MeowBot.CQCode
-import MeowBot.BotStructure
+import MeowBot
 import MeowBot.Parser (Parser, (<|>), Chars)
 import qualified MeowBot.Parser as MP
 

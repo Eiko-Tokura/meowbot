@@ -4,7 +4,7 @@ module Command.Retract
   ) where
 
 import Command
-import MeowBot.BotStructure
+import MeowBot
 import MeowBot.CQCode
 import MeowBot.Parser as MP
 

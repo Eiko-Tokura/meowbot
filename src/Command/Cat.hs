@@ -3,7 +3,7 @@ module Command.Cat where
 
 import Command
 import Command.Md
-import MeowBot.BotStructure
+import MeowBot
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import External.ChatAPI

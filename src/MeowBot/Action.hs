@@ -5,32 +5,11 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.Update
 import System.Meow
+import System.General
 import Control.Concurrent.Async (Async, asyncThreadId, async)
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 import Control.Monad.IO.Class
-
-data BotAction
-  = BASendPrivate
-      UserId     -- ^ the user to send to
-      Text       -- ^ Text, the message to send
-  | BASendGroup
-      GroupId    -- ^ the group chat to send to
-      Text       -- ^ Text, the message to send
-  | BARetractMsg
-      MessageId  -- ^ MessageId, the message to delete (retract)
-  | BAAsync
-      (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
-  | BAPureAsync
-      (Async [BotAction])        -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
-
-instance Show (Async (Meow [BotAction])) where
-  show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
-
-data BotCommand = BotCommand
-  { identifier :: CommandId
-  , command    :: Meow [BotAction]
-  }
 
 -- | Abstract representation of sending a message to a chat id.
 baSendToChatId :: ChatId -> Text -> BotAction
