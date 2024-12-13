@@ -11,7 +11,7 @@ import Control.Parallel.Strategies
 import Data.Bifunctor
 import Data.Coerce
 import Data.Additional
-import External.ProxyWS (ProxyData, cqhttpHeaders, Headers)
+import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
 import qualified MeowBot.Parser as MP
 import Debug.Trace

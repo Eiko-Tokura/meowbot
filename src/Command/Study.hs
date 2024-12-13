@@ -28,7 +28,6 @@ import Safe (atMay)
 
 import Command
 import MeowBot
-import MeowBot.Action
 import MeowBot.CQCode
 import MeowBot.Data.Book
 import MeowBot.Parser as MP

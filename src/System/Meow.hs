@@ -1,34 +1,19 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, TemplateHaskell, UndecidableInstances #-}
 module System.Meow where
 
-import Control.Monad.Trans.ReaderState
-import Control.Monad.Logger
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Applicative
-import Control.Parallel.Strategies
 import System
 import System.General
-import Data.Kind
-import Data.Bifunctor
 import MeowBot.BotStructure
 import MeowBot.CommandRule
-import MeowBot.Parser
-import MeowBot.Update
-import Data.Time.Clock
-import Data.Template
-import Data.Maybe
-import Data.Aeson
 import Network.WebSockets hiding (Response)
-import qualified Data.Set as S
 import qualified Data.ByteString.Lazy as BL
 
 import Module.LogDatabase
 import Module.Command
 import Module.Async
 import Module.ProxyWS
-
-import Utils.ByteString
 
 -- the hierarchy of types:
 --
@@ -64,7 +49,11 @@ data MeowData = MeowData
   }
 -- | The modules loaded into the bot
 type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
+
+-- | The monads the commands run in
 type Meow a = MeowT MeowData Mods IO a
+
+-- | The monad the bot instance runs in
 type Cat  a = CatT  MeowData Mods IO a
 
 instance HasSystemRead (TVar [Meow [BotAction]]) (MeowData) where

@@ -2,14 +2,12 @@
 module MeowBot.Action where
 
 import MeowBot.BotStructure
-import MeowBot.CommandRule
 import MeowBot.Update
 import System.Meow
 import System.General
-import Control.Concurrent.Async (Async, asyncThreadId, async)
+import Control.Concurrent.Async (Async, async)
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
-import Control.Monad.IO.Class
 
 -- | Abstract representation of sending a message to a chat id.
 baSendToChatId :: ChatId -> Text -> BotAction

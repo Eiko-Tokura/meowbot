@@ -19,7 +19,6 @@ import Control.Concurrent.STM
 import Data.Proxy
 import Data.Kind
 
-import Parser.Run
 import Parser.Except
 
 -- | The Module type.
