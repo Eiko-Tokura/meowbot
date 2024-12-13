@@ -120,6 +120,7 @@ library meowbot-lib
                    , Module.Command
                    , Module.CommandInstance
                    , Module.LogDatabase
+                   , Module.ProxyWS
                    , Probability.Foundation
                    , System
                    , System.Cat

@@ -21,6 +21,7 @@ instance MeowModule r AllData LogDatabase where
   data ModuleEvent       LogDatabase = LogDatabaseEvent
   data ModuleInitDataG   LogDatabase = LogDatabaseInitDataG { databasePath :: String }
   data ModuleInitDataL   LogDatabase = LogDatabaseInitDataL
+  data ModuleEarlyLocalState LogDatabase = LogDatabaseEarlyLocalState
 
   getInitDataG _ = (Just (LogDatabaseInitDataG "meowbot.db"), liftR1 just "--database" >> withE "--database needs a path argument" (LogDatabaseInitDataG <$> nonFlagString))
 
@@ -32,7 +33,9 @@ instance MeowModule r AllData LogDatabase where
     -- ^ run the migration, which will create the table if not exists, and add the columns if not exists.
     return $ LogDatabaseGlobalState pool
 
-  initModuleLocal _ _ _ _ = return LogDatabaseLocalState
+  initModuleLocal _ _ _ _ _ = return LogDatabaseLocalState
+
+  initModuleEarlyLocal _ _ _ = return LogDatabaseEarlyLocalState
 
   quitModule _ = do
     LogDatabaseGlobalState pool <- readModuleStateG (Proxy @LogDatabase)

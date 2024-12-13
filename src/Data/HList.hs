@@ -12,6 +12,11 @@ data FList (f :: Type -> Type) (ts :: [Type]) where
   (:**) :: f t -> FList f ts -> FList f (t : ts)
 infixr 5 :**
 
+data UList (f :: Type -> Type) (ts :: [Type]) where
+  UNil  :: UList f '[]
+  UHead :: f t -> UList f (t : ts)
+  UTail :: UList f ts -> UList f (t : ts)
+
 getEF :: Elem e l -> FList f l -> f e
 getEF  EZ    (x :** _)  = x
 getEF (ES n) (_ :** xs) = getEF n xs

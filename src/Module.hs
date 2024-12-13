@@ -56,7 +56,7 @@ instance HasSystemRead r' r => HasSystemRead r' (a, r) where
 --
 -- the default quitModule, beforeMeow, afterMeow does nothing. Override them to provide the functionality.
 class MeowModule r s mod | mod -> s where
-  {-# MINIMAL initModule, initModuleLocal, getInitDataG, getInitDataL #-}
+  {-# MINIMAL initModule, initModuleLocal, initModuleEarlyLocal, getInitDataG, getInitDataL #-}
 
   -- | The initial data of the module, given by the user for example coming from the config file or command line arguments.
   data ModuleInitDataG mod :: Type
@@ -67,6 +67,9 @@ class MeowModule r s mod | mod -> s where
   -- | The state of the module, local states are iniitalized for each instance
   -- for example the Proxy Websocket connection.
   data ModuleLocalState mod :: Type
+
+
+  data ModuleEarlyLocalState mod :: Type
 
   -- | Global state is shared among all bot instances for example database connection pool.
   -- since it has to be shared among threads, it cannot be put into StateT part
@@ -87,8 +90,13 @@ class MeowModule r s mod | mod -> s where
   -- | The function to initialize the module, return the read-only global state.
   initModule :: Proxy mod -> ModuleInitDataG mod -> LoggingT IO (ModuleGlobalState mod)
 
-  -- | The function to initialize the module local state in each instance / thread.
-  initModuleLocal :: Proxy mod -> r -> ModuleInitDataG mod -> ModuleInitDataL mod -> LoggingT IO (ModuleLocalState mod)
+  -- | The function to initialize the module local state in each instance / thread, before connection is established.
+  -- these will not be re-executed when the client / server is reconnected, only once.
+  initModuleEarlyLocal :: Proxy mod -> ModuleInitDataG mod -> ModuleInitDataL mod -> LoggingT IO (ModuleEarlyLocalState mod)
+
+  -- | The function to initialize the module local state in each instance / thread, after connection is established.
+  -- these will be re-executed when the client / server is reconnected.
+  initModuleLocal :: Proxy mod -> r -> ModuleInitDataG mod -> ModuleInitDataL mod -> ModuleEarlyLocalState mod -> LoggingT IO (ModuleLocalState mod)
 
   -- | Quit the module.
   quitModule :: Proxy mod -> ModuleT r s mod IO ()

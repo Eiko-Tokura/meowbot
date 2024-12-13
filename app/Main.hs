@@ -61,9 +61,9 @@ parseArgs = many (do
 --  you can run a debuger on port 2077
 --  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
 main :: IO () --runLoggingConcurrent (myLogger "meowbot.log") 
-main = runStdoutLoggingT $ do
+main = runLoggingConcurrent (myLogger [] ["meowbot.log"]) $ do
   args <- lift getArgs
-  $(logInfo) $ pack $ "Arguments: " ++ show args
+  $(logDebug) $ pack $ "Arguments: " ++ show args
   case runParserE argumentHelp parseArgs args of
     Left errMsg -> $(logError) (pack errMsg)
     Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] []] >> halt

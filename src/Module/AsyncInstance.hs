@@ -14,6 +14,7 @@ import MeowBot.BotStructure
 
 instance HasSystemRead (TVar [Meow [BotAction]]) r => MeowModule r AllData AsyncModule where
   data ModuleLocalState AsyncModule  = AsyncModuleL { asyncSet :: S.Set (Async (Meow [BotAction])) }
+  data ModuleEarlyLocalState AsyncModule = AsyncEarlyLocalState
   data ModuleGlobalState AsyncModule = AsyncModuleG
   data ModuleEvent AsyncModule       = AsyncEvent { completedAsync :: Async (Meow [BotAction]), meowAction :: Meow [BotAction] } -- ^ the (completed) async handle and the action to run
   data ModuleInitDataG AsyncModule   = AsyncInitDataG
@@ -25,7 +26,9 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => MeowModule r AllData Async
 
   initModule _ _ = return AsyncModuleG
 
-  initModuleLocal _ _ _ _ = return $ AsyncModuleL S.empty
+  initModuleLocal _ _ _ _ _ = return $ AsyncModuleL S.empty
+
+  initModuleEarlyLocal _ _ _ = return AsyncEarlyLocalState
 
   quitModule _ = do
     AsyncModuleL asyncs <- readModuleStateL (Proxy @AsyncModule)

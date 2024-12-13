@@ -26,6 +26,7 @@ import qualified Data.ByteString.Lazy as BL
 import Module.LogDatabase
 import Module.Command
 import Module.Async
+import Module.ProxyWS
 
 import Utils.ByteString
 
@@ -62,7 +63,7 @@ data MeowData = MeowData
   , meowRawMessage :: !(TVar (Maybe BL.ByteString))
   }
 -- | The modules loaded into the bot
-type Mods   = '[CommandModule, AsyncModule] --, LogDatabase]
+type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
 type Meow a = MeowT MeowData Mods IO a
 type Cat  a = CatT  MeowData Mods IO a
 
@@ -72,6 +73,14 @@ instance HasSystemRead (TVar [Meow [BotAction]]) (MeowData) where
 
 instance HasSystemRead Connection (MeowData) where
   readSystem = meowConnection
+  {-# INLINE readSystem #-}
+
+instance HasSystemRead (TVar (Maybe CQMessage)) (MeowData) where
+  readSystem = meowCQMessage
+  {-# INLINE readSystem #-}
+
+instance HasSystemRead (TVar (Maybe BL.ByteString)) (MeowData) where
+  readSystem = meowRawMessage
   {-# INLINE readSystem #-}
 
 ------------------------------------------------------------------------

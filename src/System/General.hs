@@ -3,21 +3,14 @@ module System.General where
 
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
-import Control.Concurrent.Async
-import Control.Concurrent.STM
-import Control.Applicative
 import System
 import Data.Kind
 import Data.Bifunctor
 import MeowBot.BotStructure
 import Data.Time.Clock
-import Data.Template
-import Data.Maybe
-import Data.Aeson
-import Network.WebSockets hiding (Response)
 
 newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
-  deriving newtype (Functor, Applicative, Monad, MonadIO)
+  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger)
   deriving 
     ( MonadReader (AllModuleGlobalStates mods, r)
     , MonadState (AllModuleLocalStates mods, AllData)

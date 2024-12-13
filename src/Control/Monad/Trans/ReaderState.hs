@@ -14,6 +14,7 @@ module Control.Monad.Trans.ReaderState
 
 import Data.Bifunctor
 import Control.Monad.State
+import Control.Monad.Logger
 import Control.Monad.Reader
 import Control.Monad.Trans.Maybe
 import Data.Monoid
@@ -50,6 +51,10 @@ instance MonadTrans (ReaderStateT r s) where
 instance Monad m => MonadState s (ReaderStateT r s m) where
   state f = ReaderStateT $ \_ s -> return (f s)
   {-# INLINE state #-}
+
+instance MonadLogger m => MonadLogger (ReaderStateT r s m) where
+  monadLoggerLog loc src lvl msg = lift $ monadLoggerLog loc src lvl msg
+  {-# INLINE monadLoggerLog #-}
 
 instance Monad m => MonadReader r (ReaderStateT r s m) where
   ask = ReaderStateT $ \r s -> return (r, s)

@@ -18,6 +18,7 @@ module System
   ( SystemT
   , Modules(..)
   , AllModuleLocalStates
+  , AllModuleEarlyLocalStates
   , AllModuleGlobalStates
   , AllModuleEvents
   , AllModuleInitDataG
@@ -27,6 +28,7 @@ module System
   ) where
 
 import Module
+import Control.Applicative
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
 import Control.Concurrent.STM
@@ -50,7 +52,8 @@ type AllModuleInitDataG    mods = FList ModuleInitDataG   mods
 type AllModuleInitDataL    mods = FList ModuleInitDataL   mods
 type AllModuleGlobalStates mods = FList ModuleGlobalState mods
 type AllModuleLocalStates  mods = FList ModuleLocalState  mods
-type AllModuleEvents       mods = FList ModuleEvent       mods
+type AllModuleEarlyLocalStates mods = FList ModuleEarlyLocalState mods
+type AllModuleEvents       mods = UList ModuleEvent       mods
 
 -- handleEvents :: (Modules mods, MonadIO m) => AllModuleEvents mods -> SystemT r s mods m ()
 
@@ -58,17 +61,26 @@ class Modules r s mods where
   listenToEvents  :: SystemT r s mods IO (STM (AllModuleEvents mods))
   handleEvents    :: AllModuleEvents mods    -> SystemT r s mods IO ()
   initAllModulesG :: AllModuleInitDataG mods -> LoggingT IO (AllModuleGlobalStates mods)
-  initAllModulesL :: r -> AllModuleInitDataG mods -> AllModuleInitDataL mods -> LoggingT IO (AllModuleLocalStates mods)
+  initAllModulesL :: r -> AllModuleInitDataG mods -> AllModuleInitDataL mods -> AllModuleEarlyLocalStates mods -> LoggingT IO (AllModuleLocalStates mods)
+  initAllModulesEL :: AllModuleInitDataG mods -> AllModuleInitDataL mods -> LoggingT IO (AllModuleEarlyLocalStates mods)
+  beforeMeowActions :: SystemT r s mods IO ()
+  afterMeowActions  :: SystemT r s mods IO ()
 
 instance Modules r s '[] where
-  listenToEvents = return $ return FNil
+  listenToEvents = return $ empty -- ^ should block forever
   {-# INLINE listenToEvents #-}
-  handleEvents FNil = return ()
+  handleEvents UNil = return ()
   {-# INLINE handleEvents #-}
   initAllModulesG _ = return FNil
   {-# INLINE initAllModulesG #-}
-  initAllModulesL _ _ _ = return FNil
+  initAllModulesL _ _ _ _ = return FNil
   {-# INLINE initAllModulesL #-}
+  initAllModulesEL _ _ = return FNil
+  {-# INLINE initAllModulesEL #-}
+  beforeMeowActions = return ()
+  {-# INLINE beforeMeowActions #-}
+  afterMeowActions = return ()
+  {-# INLINE afterMeowActions #-}
 
 moduleEnv :: (mod `In` mods, Monad m) => ModuleT r s mod m a -> SystemT r s mods m a
 moduleEnv = ReaderStateT 
@@ -91,11 +103,12 @@ instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) whe
   listenToEvents = do
     tailEvents <- inductiveEnv $ listenToEvents @r @s @mods
     headEvent <- moduleEnv $ moduleEvent @r @s @mod (Proxy @mod)
-    return $ (:**) <$> headEvent <*> tailEvents
+    return $ UHead <$> headEvent <|> UTail <$> tailEvents
   {-# INLINE listenToEvents #-}
 
-  handleEvents (x :** xs) = do
+  handleEvents (UHead x) = do
     moduleEnv $ moduleEventHandler (Proxy @mod) x 
+  handleEvents (UTail xs) =
     inductiveEnv $ handleEvents @r @s @mods xs
   {-# INLINE handleEvents #-}
 
@@ -105,8 +118,24 @@ instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) whe
     return (mg :** mgs)
   {-# INLINE initAllModulesG #-} 
 
-  initAllModulesL r (initG :** initGs) (initL :** initLs) = do
-    ml   <- initModuleLocal @r @s @mod (Proxy @mod) r initG initL
-    mls  <- initAllModulesL @r @s r initGs initLs
+  initAllModulesL r (initG :** initGs) (initL :** initLs) (initEL :** initELs) = do
+    ml   <- initModuleLocal @r @s @mod (Proxy @mod) r initG initL initEL
+    mls  <- initAllModulesL @r @s r initGs initLs initELs
     return (ml :** mls)
   {-# INLINE initAllModulesL #-}
+
+  initAllModulesEL (initG :** initGs) (initL :** initLs) = do
+    ml   <- initModuleEarlyLocal @r @s @mod (Proxy @mod) initG initL
+    mels <- initAllModulesEL @r @s initGs initLs
+    return (ml :** mels)
+  {-# INLINE initAllModulesEL #-}
+
+  beforeMeowActions = do
+    moduleEnv $ beforeMeow @r @s @mod (Proxy @mod)
+    inductiveEnv $ beforeMeowActions @r @s @mods
+  {-# INLINE beforeMeowActions #-}
+
+  afterMeowActions = do
+    moduleEnv $ afterMeow @r @s @mod (Proxy @mod)
+    inductiveEnv $ afterMeowActions @r @s @mods
+  {-# INLINE afterMeowActions #-}
