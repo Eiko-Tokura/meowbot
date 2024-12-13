@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 -- | This module provides some simple async related wrappers for MeowBot.
 module MeowBot.Async where
 
@@ -6,14 +7,19 @@ import Control.Monad.Trans
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad.Cont
+import Control.Monad.Logger
 import Control.Exception
 
 asyncPureIOBotAction :: IO [BotAction] -> Meow [BotAction]
-asyncPureIOBotAction = fmap (pure . BAPureAsync) . lift . async
+asyncPureIOBotAction ioba = do
+  $(logDebug) "asyncPureIOBotAction"
+  fmap (pure . BAPureAsync) . lift . async $ ioba
 {-# INLINE asyncPureIOBotAction #-}
 
 asyncMeowBotAction :: IO (Meow [BotAction]) -> Meow [BotAction]
-asyncMeowBotAction = fmap (pure . BAAsync) . lift . async
+asyncMeowBotAction ioba = do
+  $(logDebug) "asyncMeowBotAction"
+  fmap (pure . BAAsync) . lift . async $ ioba
 {-# INLINE asyncMeowBotAction #-}
 
 -- | Separate the action into async IO action and the function to convert the result of the IO action to a list of BotActions.

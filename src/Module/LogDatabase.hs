@@ -1,8 +1,10 @@
-{-# LANGUAGE TypeFamilies, OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies, TemplateHaskell, OverloadedStrings #-}
 -- | This is a module that provides the function of logging messages into database.
 module Module.LogDatabase where
 
 import Control.Monad.Trans.ReaderState
+import Control.Concurrent.STM
+import Control.Monad.Logger
 import Database.Persist.Sqlite
 import Data.PersistModel
 import Data.Pool
@@ -15,7 +17,9 @@ import Parser.Except
 --------------------------------------------------------------------------------------------------
 data LogDatabase -- ^ The module that tries to log all CQMessage received into the database.
 
-instance MeowModule r AllData LogDatabase where
+instance 
+  HasSystemRead (TVar (Maybe CQMessage)) r
+  => MeowModule r AllData LogDatabase where
   data ModuleGlobalState LogDatabase = LogDatabaseGlobalState { databasePool :: Pool SqlBackend }
   data ModuleLocalState  LogDatabase = LogDatabaseLocalState
   data ModuleEvent       LogDatabase = LogDatabaseEvent
@@ -28,7 +32,7 @@ instance MeowModule r AllData LogDatabase where
   getInitDataL _ = (Just LogDatabaseInitDataL, empty)
 
   initModule _ (LogDatabaseInitDataG path) = do
-    pool <- createSqlitePool (pack path) 2
+    pool <- createSqlitePool (pack path) 1
     runMigration migrateAll `runSqlPool` pool
     -- ^ run the migration, which will create the table if not exists, and add the columns if not exists.
     return $ LogDatabaseGlobalState pool
@@ -42,11 +46,17 @@ instance MeowModule r AllData LogDatabase where
     liftIO $ destroyAllResources pool
 
   afterMeow _ = do
+    -- | Only update when there is new message, avoids multiple insertions.
+    mcq         <- askSystem @(TVar (Maybe CQMessage)) >>= liftIO . atomically . readTVar
     botname     <- gets (nameOfBot . botModules . botConfig . snd)
     mNewMessage <- gets (cqMessageToChatMessage botname . getNewMsg . wholechat . snd)
-    case mNewMessage of
-      Nothing         -> return ()
-      Just newMessage -> readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool
+    case (mcq, mNewMessage) of
+      (Just _, Just newMessage) -> do
+        readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool
+        $(logDebug) "LogDatabase: Inserted a new message into the database."
+      _    -> do
+        $(logDebug) "LogDatabase: Nothing"
+        return ()
 
 --------------------------------------------------------------------------------------------------
 -- useful logging functions

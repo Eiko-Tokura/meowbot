@@ -74,9 +74,10 @@ Multiple bots can be started by using multiple sets of flags, starting with a ru
 - [ ] Adding TUI interface and control panel
 - [ ] ChatGPT Function Calling
 - [ ] Assistant And Notes Function
-- [ ] Using database to store user data and statistics
+- [x] Using database to store user data and statistics
 - [ ] Provide interesting statistics functions to users
 - [ ] Bring back the funny hangman game
-- [ ] Implement common data shared among concurrent bot instances
-- [ ] Proper logging system
+- [x] Implement common data shared among concurrent bot instances
+- [x] Proper logging system
+- [x] Modular system using type level programming and monad transformers
 - [ ] Upload `item` as a separate package to hackage

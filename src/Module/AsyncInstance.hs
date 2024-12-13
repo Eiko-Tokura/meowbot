@@ -1,10 +1,11 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
-{-# LANGUAGE TypeFamilies, UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.AsyncInstance where
 
 import Control.Monad.Trans.ReaderState
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Monad.Logger
 import Control.Applicative
 import qualified Data.Set as S
 import Module
@@ -39,6 +40,7 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => MeowModule r AllData Async
     return $ asum [ AsyncEvent ba <$> waitSTM ba | ba <- S.toList asyncs ]
 
   moduleEventHandler p (AsyncEvent completedAsync meowAct) = do
+    $(logDebug) "Async Event Completed"
     modifyModuleState p $ AsyncModuleL . S.delete completedAsync . asyncSet
     meowList <- asks (readSystem . snd)
     liftIO $ atomically $ modifyTVar meowList (++ [meowAct])

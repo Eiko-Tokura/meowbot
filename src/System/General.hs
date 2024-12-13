@@ -33,7 +33,7 @@ newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
         (LoggingT m) -- ^ the monad to run in
         a
   }
-  deriving newtype (Functor, Applicative, Monad, MonadIO)
+  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger)
   deriving 
     ( MonadReader ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
     , MonadState (AllModuleLocalStates mods, OtherData)

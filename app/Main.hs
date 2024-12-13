@@ -61,13 +61,14 @@ parseArgs = many (do
 --  you can run a debuger on port 2077
 --  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
 main :: IO () --runLoggingConcurrent (myLogger "meowbot.log") 
-main = runLoggingConcurrent (myLogger [] ["meowbot.log"]) $ do
-  args <- lift getArgs
-  $(logDebug) $ pack $ "Arguments: " ++ show args
-  case runParserE argumentHelp parseArgs args of
-    Left errMsg -> $(logError) (pack errMsg)
-    Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] []] >> halt
-    Right bots  -> runBots allInitDataG bots >> halt
+main = do
+  args <- getArgs
+  runLoggingConcurrent (myLogger [DebugCQMessage | "--debug-cqmsg" `elem` args] ["meowbot.log"]) $ do
+    $(logDebug) $ pack $ "Arguments: " ++ show args
+    case runParserE argumentHelp parseArgs args of
+      Left errMsg -> $(logError) (pack errMsg)
+      Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] []] >> halt
+      Right bots  -> runBots allInitDataG bots >> halt
   where halt = lift (threadDelay maxBound) >> halt
         argumentHelp = unlines
               [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]"

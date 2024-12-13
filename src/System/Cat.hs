@@ -24,12 +24,19 @@ import System.Directory
 import Data.Coerce
 import Data.Maybe
 
+-- type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
+
 botLoop :: Cat never_returns
 botLoop = do
   CatT beforeMeowActions
+
   CatT $ handleEvents =<< liftIO . atomically =<< listenToEvents
+
   performMeowActions
+
   CatT afterMeowActions
+
+  $(logDebug) "Bot loop finished"
   botLoop
 
 performMeowActions :: Cat ()

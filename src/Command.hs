@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, ImpredicativeTypes #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, ImpredicativeTypes #-}
 module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
@@ -13,16 +13,14 @@ import MeowBot.CommandRule
 import Data.Aeson (encode)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Text (Text, pack)
 import Network.WebSockets (Connection, sendTextData)
 
 import Module.Async
 import Module.AsyncInstance
 import System.Meow
 import System.General
-import Data.Bifunctor
 import Control.Monad.State
-import Control.Monad.Trans
+import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
@@ -52,7 +50,9 @@ doBotAction :: Connection -> BotAction -> Meow ()
 doBotAction conn (BASendPrivate uid txt) = query >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)   = query >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
-doBotAction _    (BAAsync act)      = modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)
+doBotAction _    (BAAsync act)      = do
+  $(logDebug) "BAAsync put into set"
+  modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)
 --change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
 

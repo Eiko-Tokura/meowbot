@@ -94,6 +94,7 @@ instance
       Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
       Right cqmsg -> do
         askSystem @(TVar (Maybe CQMessage)) >>= liftIO . atomically . (`writeTVar` (Just cqmsg))
+        $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
         case eventType cqmsg of
           LifeCycle -> updateSelfInfo cqmsg
           HeartBeat -> return ()

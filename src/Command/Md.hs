@@ -21,12 +21,15 @@ commandMd = BotCommand Md $ do
   mdParser' <- commandParserTransformByBotName mdParser
   case mess of
     Nothing -> return []
-    Just (msg, cid, _, _, _) -> asyncPureIOBotAction $ do
-      mEitherStrings <- mT $ runExceptT . markdownToImage <$> MP.runParser mdParser' msg
-      case mEitherStrings of
+    Just (msg, cid, _, _, _) -> 
+      case MP.runParser mdParser' msg of
         Nothing -> return []
-        Just (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
-        Just (Right fps) -> return [baSendToChatId cid (T.concat $ [embedCQCode $ CQImage $ T.pack $ useAbsPath outPath | outPath <- fps])]
+        Just md -> do
+          asyncPureIOBotAction $ do
+            mEitherStrings <- runExceptT . markdownToImage $ md
+            case mEitherStrings of
+              (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
+              (Right fps) -> return [baSendToChatId cid (T.concat $ [embedCQCode $ CQImage $ T.pack $ useAbsPath outPath | outPath <- fps])]
   where
     mdParser :: (Chars sb) => Parser sb Char Text
     mdParser = do

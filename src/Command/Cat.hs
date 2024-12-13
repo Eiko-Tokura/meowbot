@@ -14,6 +14,7 @@ import qualified MeowBot.Parser as MP
 import Control.Applicative
 
 import Control.Monad.Trans
+import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
@@ -35,6 +36,7 @@ commandCat = BotCommand Cat $ botT $ do
       ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
   asyncAction <- liftIO $ (if md then sendIOeToChatIdMdAsync else sendIOeToChatIdAsync) (msg, cid, uid, mid, sender) ioEChatResponse
+  $(logDebug) $ "created async: " <> T.pack (show asyncAction)
   return $ pure $ BAAsync $ asyncAction
   where checkAllowedCatUsers _  GPT3 anybody = return anybody
         checkAllowedCatUsers sd GPT4 g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
