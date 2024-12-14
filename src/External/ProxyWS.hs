@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 -- Author : Eiko chan >w<
 -- | In this module we define the functionalities to proxy over a WebSocket connection.
 --
@@ -19,6 +19,8 @@ import Control.Concurrent.STM.TBQueue
 import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Monad
+import Control.Monad.IO.Class
+import Control.Monad.Logger
 import Control.Exception
 import Control.Applicative
 import Data.Maybe (fromMaybe)
@@ -26,6 +28,7 @@ import Data.Maybe (fromMaybe)
 -- import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
 import Data.ByteString.Lazy (ByteString)
+import qualified Data.Text as T
 
 import Network.WebSockets
 
@@ -108,45 +111,48 @@ createProxyData addr port = do
 
 -- | Create a proxy client thread for a WebSocket connection, using the provided headers. It will avoid creating multiple proxies.
 -- wraps 'proxyClientForWS' and starts a new thread for it.
-runProxyWS :: ProxyData -> Headers -> IO ()
+runProxyWS :: ProxyData -> Headers -> LoggingT IO ()
 runProxyWS (ProxyData addr port chans running) headers = do
-  alreadyRunning <- atomically $ readTVar running
+  alreadyRunning <- liftIO . atomically $ readTVar running
   unless alreadyRunning $ do
-    atomically $ writeTVar running True
+    liftIO . atomically $ writeTVar running True
     void $ proxyClientForWS (Just chans) headers addr port
 
 -- | Create a proxy client for a WebSocket connection, using the provided headers and TBQueues.
-proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> IO (TBQueue a, TBQueue a)
+proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> LoggingT IO (TBQueue a, TBQueue a)
 proxyClientForWS ioChans headers address port = do
-  chanIn  <- maybe (newTBQueueIO 10) (return . fst) ioChans
-  chanOut <- maybe (newTBQueueIO 10) (return . snd) ioChans
-  proxyClient Nothing chanIn chanOut `forkFinally` \case
-    Left e  -> do
-      putStrLn $ "Connection to " ++ address ++ ":" ++ show port ++ " broken: " ++ show e
-      putStrLn "Restarting in 30 seconds owo"
-      threadDelay 30_000_000
+  chanIn  <- maybe (liftIO $ newTBQueueIO 10) (return . fst) ioChans
+  chanOut <- maybe (liftIO $ newTBQueueIO 10) (return . snd) ioChans
+  logger <- askLoggerIO
+  liftIO $ flip runLoggingT logger (proxyClient Nothing chanIn chanOut) `forkFinally` \case
+    Left e  -> flip runLoggingT logger $ do
+      $(logWarn) $ "Connection to " <> T.pack address <> ":" <> T.pack (show port) <> " broken: " <> T.pack (show e)
+      $(logWarn) "Restarting in 30 seconds owo"
+      liftIO $ threadDelay 30_000_000
       void $ proxyClientForWS (Just (chanIn, chanOut)) headers address port
     Right _ -> return ()
   return (chanIn, chanOut)
   where
-    proxyClient masync chanIn chanOut =
-      runClientWith address port "" defaultConnectionOptions headers $ \conn -> do
-        putStrLn $ "Connected to " ++ address ++ ":" ++ show port
-        putStrLn $ "Headers: " ++ show headers
+    proxyClient masync chanIn chanOut = do
+      logger <- askLoggerIO
+      liftIO . runClientWith address port "" defaultConnectionOptions headers $ \conn -> flip runLoggingT logger $ do
+        $(logInfo) $ "Connected to " <> T.pack address <> ":" <> T.pack (show port)
+        $(logInfo) $ "Headers: " <> T.pack (show headers)
         clientLoop masync conn (chanIn, chanOut)
-    clientLoop :: a ~ ByteString => Maybe (Async a) -> Connection -> (TBQueue a ,TBQueue a) -> IO never_returns
+    clientLoop :: a ~ ByteString => Maybe (Async a) -> Connection -> (TBQueue a ,TBQueue a) -> LoggingT IO never_returns
     clientLoop asyncReceiveData conn (chanIn, chanOut) = do
-      asyncReceiveData' <- fromMaybe (async $ receiveData conn) (return <$> asyncReceiveData)
-      inOrOut <- atomically $ Left <$> readTBQueue chanIn <|> Right <$> waitSTM asyncReceiveData'
+      asyncReceiveData' <- fromMaybe (liftIO . async $ receiveData conn) (return <$> asyncReceiveData)
+      inOrOut <- liftIO . atomically $ Left <$> readTBQueue chanIn <|> Right <$> waitSTM asyncReceiveData'
       case inOrOut of
         Left  msg -> do
+          logger <- askLoggerIO
           -- putStrLn "Sending message to proxy : " >> putStr (bsToString msg)
-          sendTextData conn msg `catch` \e -> do
-            putStrLn $ "Error sending message to proxy: " ++ show (e :: SomeException)
-            uninterruptibleCancel asyncReceiveData' -- cancel the async receive thread
-            throwIO e
+          liftIO $ (sendTextData conn msg) `catch` \e -> flip runLoggingT logger $ do
+            $(logError) $ "Error sending message to proxy: " <> T.pack (show (e :: SomeException))
+            liftIO $ uninterruptibleCancel asyncReceiveData' -- cancel the async receive thread
+            liftIO $ throwIO e
           clientLoop (Just asyncReceiveData') conn (chanIn, chanOut)
         Right msg -> do
           -- putStrLn "Received message from proxy : " >> putStr (bsToString msg)
-          atomically $ writeTBQueue chanOut msg
+          liftIO . atomically $ writeTBQueue chanOut msg
           clientLoop Nothing conn (chanIn, chanOut)

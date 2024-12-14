@@ -5,6 +5,7 @@ module Module.LogDatabase where
 import Control.Monad.Trans.ReaderState
 import Control.Concurrent.STM
 import Control.Monad.Logger
+import Control.Monad
 import Database.Persist.Sqlite
 import Data.PersistModel
 import Data.Pool
@@ -53,9 +54,8 @@ instance
     case (mcq, mNewMessage) of
       (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage]) $ do
         readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool
-        $(logDebug) "LogDatabase: Inserted a new message into the database."
+        $(logDebug) "Inserted a new message into the database."
       _    -> do
-        $(logDebug) "LogDatabase: Nothing"
         return ()
 
 --------------------------------------------------------------------------------------------------

@@ -9,12 +9,12 @@ import Network.WebSockets
 import qualified Data.ByteString.Lazy as BL
 import Utils.ByteString
 import Control.Monad.Logger
+import Control.Monad.Trans
 import Control.Monad
 import Parser.Run
 import Parser.Except
 import Data.Maybe
 import Control.Concurrent.STM
-import Control.Monad.IO.Class
 
 data ProxyWS
 
@@ -61,8 +61,8 @@ instance
     ProxyWSLS proxyDatas _ <- readModuleStateL (Proxy @ProxyWS)
     case (mcqmsg, mbs) of
       (Just cqmsg, Just bs) -> 
-        if eventType cqmsg `elem` [LifeCycle, PrivateMessage, GroupMessage]
-           && filterMsg cqmsg
+        if eventType cqmsg `elem` [LifeCycle] ||
+           eventType cqmsg `elem` [PrivateMessage, GroupMessage] && filterMsg cqmsg
           then do
             when (eventType cqmsg `elem` [PrivateMessage, GroupMessage]) $ $(logInfo) $ pack $ fromMaybe "喵喵" (maybeBotName name) <> " -> Proxy : " <> take 512 (bsToString bs)
             liftIO $ mapM_ (`sendToProxy` bs) proxyDatas
@@ -70,7 +70,7 @@ instance
               Nothing -> return ()
               Just headers -> do
                 pending <- pendingProxies <$> readModuleStateL (Proxy @ProxyWS)
-                liftIO . mapM_ (\pd -> runProxyWS pd headers) $ pending
+                lift . mapM_ (\pd -> runProxyWS pd headers) $ pending
                 unless (null pending) $ modifyModuleState (Proxy @ProxyWS) $ \s -> s { pendingProxies = [] }
           else return ()
       _ -> return ()

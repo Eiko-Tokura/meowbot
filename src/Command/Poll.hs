@@ -5,6 +5,7 @@ import Command
 import Command.Poll.PollData
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Trans.Maybe
+import Control.Monad.Logger
 import Control.Monad
 import Probability.Foundation
 import Data.Additional
@@ -85,7 +86,7 @@ getPollMap = do
     Nothing -> do
       let emptyMap = M.empty :: M.Map PollId PollData
       change @OtherData . modifyAdditionalData $ (:) $ AdditionalDataSaved emptyMap
-      liftIO $ putStrLn "Poll map initialized!"
+      $(logInfo) "Poll map initialized!"
       s <- getAdditionalData <$> query @OtherData
       liftIO $ print s
       return emptyMap

@@ -47,9 +47,9 @@ botT = fmap (fromMaybe []) . runMaybeT
 
 -- | Execute a BotAction, if it is a BAAsync, then put it into the asyncActions instead of waiting for it
 doBotAction :: Connection -> BotAction -> Meow ()
-doBotAction conn (BASendPrivate uid txt) = query >>= lift . sendPrivate conn uid txt . Just . pack . show . message_number
-doBotAction conn (BASendGroup gid txt)   = query >>= lift . sendGroup   conn gid txt . Just . pack . show . message_number
-doBotAction conn (BARetractMsg mid)      = lift $ deleteMsg conn mid
+doBotAction conn (BASendPrivate uid txt) = query >>= MeowT . lift . sendPrivate conn uid txt . Just . pack . show . message_number
+doBotAction conn (BASendGroup gid txt)   = query >>= MeowT . lift . sendGroup   conn gid txt . Just . pack . show . message_number
+doBotAction conn (BARetractMsg mid)      = MeowT . lift $ deleteMsg conn mid
 doBotAction _    (BAAsync act)      = do
   $(logDebug) "BAAsync put into set"
   modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)
@@ -57,22 +57,22 @@ doBotAction _    (BAAsync act)      = do
 doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
 
 -- | Low-level functions to send private messages
-sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> IO ()
+sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
 sendPrivate conn uid text mecho = do
-  sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) mecho)
-  putStrLn $ concat ["-> user ", show uid, ": ", T.unpack text]
+  lift . sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) mecho)
+  $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", text]
 
 -- | Low-level functions to send group messages
-sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> IO ()
+sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> LoggingT IO ()
 sendGroup conn gid text mecho = do
-  sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) mecho)
-  putStrLn $ concat ["-> group ", show gid, ": ", T.unpack text]
+  lift . sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) mecho)
+  $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", text]
 
 -- | Low-level functions to delete messages
-deleteMsg :: Connection -> MessageId -> IO ()
+deleteMsg :: Connection -> MessageId -> LoggingT IO ()
 deleteMsg conn mid = do
-  sendTextData conn $ encode (SendMessageForm "delete_msg" (DeleteParams mid) Nothing)
-  putStrLn $ "=> Delete message: " ++ show mid
+  lift . sendTextData conn $ encode (SendMessageForm "delete_msg" (DeleteParams mid) Nothing)
+  $(logInfo) $ "=> Delete message: " <> tshow mid
 
 -- | Check if the command is allowed, and execute it if it is
 permissionCheck :: BotCommand -> Meow [BotAction]

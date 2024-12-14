@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module MeowBot.Update where
 
 import MeowBot.BotStructure
@@ -7,6 +8,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.ReaderState
 import Control.Monad
+import Control.Monad.Logger
 import Control.Parallel.Strategies
 import Data.Bifunctor
 import Data.Coerce
@@ -31,9 +33,9 @@ updateSelfInfo cqmsg = do
 saveData :: MonadIO m => AllData -> CatT r mods m ()
 saveData prev_data = do
   new_data <- query @AllData
-  lift . liftIO $ when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) $ do
-    putStrLn "Saved data changed, I'm saving it to file! owo"
-    writeFile (savedDataPath . nameOfBot . botModules . botConfig $ new_data) $ show $ savedData (otherdata new_data)
+  when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) $ do
+    $(logDebug) "Saved data changed, I'm saving it to file! owo"
+    liftIO $ writeFile (savedDataPath . nameOfBot . botModules . botConfig $ new_data) $ show $ savedData (otherdata new_data)
 
 -- | Specify the path to save the data according to the bot name.
 savedDataPath :: BotName -> FilePath
