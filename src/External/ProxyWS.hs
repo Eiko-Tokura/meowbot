@@ -20,10 +20,10 @@ import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Logger
 import Control.Exception
 import Control.Applicative
 import Data.Maybe (fromMaybe)
+import Utils.Logging
 
 -- import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
@@ -123,9 +123,8 @@ proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers ->
 proxyClientForWS ioChans headers address port = do
   chanIn  <- maybe (liftIO $ newTBQueueIO 10) (return . fst) ioChans
   chanOut <- maybe (liftIO $ newTBQueueIO 10) (return . snd) ioChans
-  logger <- askLoggerIO
-  liftIO $ flip runLoggingT logger (proxyClient Nothing chanIn chanOut) `forkFinally` \case
-    Left e  -> flip runLoggingT logger $ do
+  proxyClient Nothing chanIn chanOut `logForkFinally` \case
+    Left e  -> do
       $(logWarn) $ "Connection to " <> T.pack address <> ":" <> T.pack (show port) <> " broken: " <> T.pack (show e)
       $(logWarn) "Restarting in 30 seconds owo"
       liftIO $ threadDelay 30_000_000
@@ -134,8 +133,7 @@ proxyClientForWS ioChans headers address port = do
   return (chanIn, chanOut)
   where
     proxyClient masync chanIn chanOut = do
-      logger <- askLoggerIO
-      liftIO . runClientWith address port "" defaultConnectionOptions headers $ \conn -> flip runLoggingT logger $ do
+      logThroughCont (runClientWith address port "" defaultConnectionOptions headers) $ \conn -> do
         $(logInfo) $ "Connected to " <> T.pack address <> ":" <> T.pack (show port)
         $(logInfo) $ "Headers: " <> T.pack (show headers)
         clientLoop masync conn (chanIn, chanOut)
@@ -145,9 +143,8 @@ proxyClientForWS ioChans headers address port = do
       inOrOut <- liftIO . atomically $ Left <$> readTBQueue chanIn <|> Right <$> waitSTM asyncReceiveData'
       case inOrOut of
         Left  msg -> do
-          logger <- askLoggerIO
           -- putStrLn "Sending message to proxy : " >> putStr (bsToString msg)
-          liftIO $ (sendTextData conn msg) `catch` \e -> flip runLoggingT logger $ do
+          liftIO (sendTextData conn msg) `logCatch` \e -> do
             $(logError) $ "Error sending message to proxy: " <> T.pack (show (e :: SomeException))
             liftIO $ uninterruptibleCancel asyncReceiveData' -- cancel the async receive thread
             liftIO $ throwIO e

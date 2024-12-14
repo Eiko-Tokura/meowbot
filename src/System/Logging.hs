@@ -1,5 +1,4 @@
-{-# OPTIONS_GHC -Wno-unused-matches #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-matches #-}{-# LANGUAGE OverloadedStrings #-}
 module System.Logging
   ( module Control.Monad.Logger
   , myLogger
@@ -9,6 +8,7 @@ module System.Logging
 
 import Control.Monad.Logger
 import Control.Concurrent
+import Control.Exception
 import Control.Concurrent.STM
 import Control.Monad.IO.Class
 import qualified Data.ByteString as B
@@ -40,10 +40,12 @@ myLogger _ fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = do
   let log = fromLogStr $ "[OTHER] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
+{-# INLINE myLogger #-}
 
 runMyLogging :: BotInstance -> LoggingT IO a -> IO a
 runMyLogging botin mlog = 
   runLoggingConcurrent (myLogger (botDebugFlags botin) [fp | LogFlag fp <- botLogFlags botin]) mlog
+{-# INLINE runMyLogging #-}
 
 -- | Run a logging action with a queue for logging. 
 -- Typically you should only run this function once, for example
@@ -62,4 +64,3 @@ concurrentLogger logger queue = do
   (logLoc, logSource, logLevel, logStr) <- atomically $ readTBQueue queue
   logger logLoc logSource logLevel logStr
   concurrentLogger logger queue
-
