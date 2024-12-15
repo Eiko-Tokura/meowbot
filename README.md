@@ -81,3 +81,4 @@ Multiple bots can be started by using multiple sets of flags, starting with a ru
 - [x] Proper logging system
 - [x] Modular system using type level programming and monad transformers
 - [ ] Upload `item` as a separate package to hackage
+- [ ] Refactor commands like `aokana` and `study` to use the database
