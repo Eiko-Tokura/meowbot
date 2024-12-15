@@ -105,11 +105,11 @@ instance
           PrivateMessage -> do
             updateStates nameBot cqmsg
             tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> extractBotActions pcmds)
+            liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow pcmds)
           GroupMessage -> do
             updateStates nameBot cqmsg
             tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> extractBotActions gcmds)
+            liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow gcmds)
           _ -> return ()
         where
           updateStates nameBot cqmsg = do

@@ -3,7 +3,7 @@ module Command
   ( BotCommand(..), CommandId(..)
   , doBotCommands
   , doBotAction
-  , extractBotActions
+  , botCommandsToMeow
   , botT
   , restrictNumber
   , commandParserTransformByBotName
@@ -120,5 +120,6 @@ doBotCommands conn commands = globalizeMeow $ do
   actions <- permissionCheck `mapM` commands
   doBotAction conn `mapM_` concat actions
 
-extractBotActions :: [BotCommand] -> [Meow [BotAction]]
-extractBotActions = fmap command
+-- | Extract the bot actions from a list of bot commands, checking the permissions
+botCommandsToMeow :: [BotCommand] -> [Meow [BotAction]]
+botCommandsToMeow = fmap permissionCheck
