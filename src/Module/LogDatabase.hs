@@ -18,7 +18,7 @@ import Parser.Except
 --------------------------------------------------------------------------------------------------
 data LogDatabase -- ^ The module that tries to log all CQMessage received into the database.
 
-instance 
+instance
   HasSystemRead (TVar (Maybe CQMessage)) r
   => MeowModule r AllData LogDatabase where
   data ModuleGlobalState LogDatabase = LogDatabaseGlobalState { databasePool :: Pool SqlBackend }

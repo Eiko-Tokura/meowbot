@@ -14,7 +14,7 @@
 -- which is conceptually simpler.
 --
 -- We will use the first method, although a bit hard, it is the most type-safe way!
-module System 
+module System
   ( SystemT
   , Modules(..)
   , AllModuleLocalStates
@@ -83,7 +83,7 @@ instance Modules r s '[] where
   {-# INLINE afterMeowActions #-}
 
 moduleEnv :: (mod `In` mods, Monad m) => ModuleT r s mod m a -> SystemT r s mods m a
-moduleEnv = ReaderStateT 
+moduleEnv = ReaderStateT
   . (\arrow (allGlob, r) (allLoc, s) ->
       let locmod  = getF allLoc
           globmod = getF allGlob
@@ -92,8 +92,8 @@ moduleEnv = ReaderStateT
   . runReaderStateT
 
 inductiveEnv :: Monad m => SystemT r s mods m a -> SystemT r s (mod ': mods) m a
-inductiveEnv = ReaderStateT 
-  . (\arrowms (_ :** allGlobms, r) (locm :** allLocms, s) -> 
+inductiveEnv = ReaderStateT
+  . (\arrowms (_ :** allGlobms, r) (locm :** allLocms, s) ->
       second (first (locm :**)) <$> arrowms (allGlobms, r) (allLocms, s)
     )
   . runReaderStateT
@@ -107,7 +107,7 @@ instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) whe
   {-# INLINE listenToEvents #-}
 
   handleEvents (UHead x) = do
-    moduleEnv $ moduleEventHandler (Proxy @mod) x 
+    moduleEnv $ moduleEventHandler (Proxy @mod) x
   handleEvents (UTail xs) =
     inductiveEnv $ handleEvents @r @s @mods xs
   {-# INLINE handleEvents #-}
@@ -116,7 +116,7 @@ instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) whe
     mg   <- initModule @r @s @mod (Proxy @mod) init
     mgs  <- initAllModulesG @r @s inits
     return (mg :** mgs)
-  {-# INLINE initAllModulesG #-} 
+  {-# INLINE initAllModulesG #-}
 
   initAllModulesL r (initG :** initGs) (initL :** initLs) (initEL :** initELs) = do
     ml   <- initModuleLocal @r @s @mod (Proxy @mod) r initG initL initEL

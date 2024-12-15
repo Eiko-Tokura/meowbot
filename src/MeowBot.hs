@@ -1,4 +1,4 @@
-module MeowBot 
+module MeowBot
   ( module MeowBot.BotStructure
   , module MeowBot.Action
   , module MeowBot.Update

@@ -21,7 +21,7 @@ commandMd = BotCommand Md $ do
   mdParser' <- commandParserTransformByBotName mdParser
   case mess of
     Nothing -> return []
-    Just (msg, cid, _, _, _) -> 
+    Just (msg, cid, _, _, _) ->
       case MP.runParser mdParser' msg of
         Nothing -> return []
         Just md -> do

@@ -3,7 +3,7 @@
 -- In this module we define what a meow-module is.
 --
 -- we want to make things modular, plug-and-play.
-module Module 
+module Module
   ( Proxy(..)
   , MeowModule(..)
   , ModuleT
@@ -78,7 +78,7 @@ class MeowModule r s mod | mod -> s where
   -- | The event type of the module, for example the event of a new message received.
   data ModuleEvent mod
 
-  -- | How to get the initalization data from the user, the first element is default value (optional), 
+  -- | How to get the initalization data from the user, the first element is default value (optional),
   -- the second element is a command line parser.
   getInitDataG :: Proxy mod -> (Maybe (ModuleInitDataG mod), ParserE [String] String String (ModuleInitDataG mod))
 

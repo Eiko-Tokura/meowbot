@@ -39,12 +39,12 @@ allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, 
 allGroupCommands :: [BotCommand]
 allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll]
 
-instance 
+instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions
   , HasSystemRead (TVar (Maybe CQMessage)) r     -- ^ other modules can use
   , HasSystemRead (TVar (Maybe BL.ByteString)) r -- ^ other modules can use
   , HasSystemRead Connection r                   -- ^ the connection to the server
-  ) 
+  )
   => MeowModule r AllData CommandModule where
 
   data ModuleLocalState  CommandModule = CommandL { msgAsync :: Async BL.ByteString }

@@ -11,7 +11,7 @@ import Data.Time.Clock
 
 newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger)
-  deriving 
+  deriving
     ( MonadReader (AllModuleGlobalStates mods, r)
     , MonadState (AllModuleLocalStates mods, AllData)
     ) via ReaderStateT (AllModuleGlobalStates mods, r) (AllModuleLocalStates mods, AllData) (LoggingT m)
@@ -22,8 +22,8 @@ newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
 
 -- | The monad transformer that the bot runs in.
 newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
-  { runMeowT :: 
-      ReaderStateT 
+  { runMeowT ::
+      ReaderStateT
         ( (WholeChat, BotConfig)
         , (AllModuleGlobalStates mods, r)
         )
@@ -34,7 +34,7 @@ newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
         a
   }
   deriving newtype (Functor, Applicative, Monad, MonadIO, MonadLogger)
-  deriving 
+  deriving
     ( MonadReader ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
     , MonadState (AllModuleLocalStates mods, OtherData)
     ) via ReaderStateT ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r)) (AllModuleLocalStates mods, OtherData) (LoggingT m)

@@ -73,7 +73,7 @@ instance HasSystemRead (TVar (Maybe BL.ByteString)) (MeowData) where
   {-# INLINE readSystem #-}
 
 ------------------------------------------------------------------------
-data BotAction 
+data BotAction
   = BASendPrivate
       UserId     -- ^ the user to send to
       Text       -- ^ Text, the message to send

@@ -32,7 +32,7 @@ instance
   data ModuleEvent ProxyWS = ProxyWSEvent { proxyEvent :: BL.ByteString }
 
   getInitDataG _ = (Just ProxyWSInitDataG, empty)
-  
+
   getInitDataL _ = (Nothing, liftR1 just "--proxy" >> withE "--proxy needs a list of addresses and ports" (ProxyWSInitDataL <$> many ((,) <$> nonFlagString <*> (read <$> nonFlagString))))
 
   initModule _ _ = return ProxyWSGS
@@ -41,7 +41,7 @@ instance
     proxyDatas <- liftIO $ mapM (uncurry createProxyData) addressesAndIps
     return $ ProxyWSELS proxyDatas
 
-  initModuleLocal _ _ _ _ (ProxyWSELS proxyDatas) = 
+  initModuleLocal _ _ _ _ (ProxyWSELS proxyDatas) =
     return $ ProxyWSLS proxyDatas proxyDatas
 
   moduleEvent _ = do
@@ -60,7 +60,7 @@ instance
     name  <- queries (nameOfBot . botModules . botConfig)
     ProxyWSLS proxyDatas _ <- readModuleStateL (Proxy @ProxyWS)
     case (mcqmsg, mbs) of
-      (Just cqmsg, Just bs) -> 
+      (Just cqmsg, Just bs) ->
         if eventType cqmsg `elem` [LifeCycle] ||
            eventType cqmsg `elem` [PrivateMessage, GroupMessage] && filterMsg cqmsg
           then do

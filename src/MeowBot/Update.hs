@@ -49,9 +49,9 @@ makeHeader = do
 
 -- | globalize MeowT to CatT r mods m a = SystemT r AllData mods m a
 globalizeMeow :: (Monad m) => MeowT r mods m a -> CatT r mods m a
-globalizeMeow 
-  = CatT . ReaderStateT 
-  . (\wbaraoo (allglob, r) (allloc, alld) -> 
+globalizeMeow
+  = CatT . ReaderStateT
+  . (\wbaraoo (allglob, r) (allloc, alld) ->
       let (wc, bc) = (wholechat alld, botConfig alld)
       in second (second (\o -> AllData wc bc o)) <$> wbaraoo ((wc, bc), (allglob, r)) (allloc, otherdata alld)
     )
