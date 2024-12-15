@@ -11,8 +11,10 @@ import Data.Kind
 -- | A type-level list applied to a type-level function, product
 data FList (f :: Type -> Type) (ts :: [Type]) where
   FNil  :: FList f '[]
-  (:**) :: f t -> FList f ts -> FList f (t : ts)
+  (:**) :: !(f t) -> FList f ts -> FList f (t : ts)
 infixr 5 :**
+
+-- the ! bang pattern here is to make it strict because it might cause trouble when putting in a stateful monad. Alternatively we can also write a strict version FList, SFList.
 
 -- | A type-level list applied to a type-level function, sum
 data UList (f :: Type -> Type) (ts :: [Type]) where

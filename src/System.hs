@@ -58,11 +58,11 @@ type AllModuleEvents       mods = UList ModuleEvent       mods
 -- handleEvents :: (Modules mods, MonadIO m) => AllModuleEvents mods -> SystemT r s mods m ()
 
 class Modules r s mods where
-  listenToEvents  :: SystemT r s mods IO (STM (AllModuleEvents mods))
-  handleEvents    :: AllModuleEvents mods    -> SystemT r s mods IO ()
-  initAllModulesG :: AllModuleInitDataG mods -> LoggingT IO (AllModuleGlobalStates mods)
-  initAllModulesL :: r -> AllModuleInitDataG mods -> AllModuleInitDataL mods -> AllModuleEarlyLocalStates mods -> LoggingT IO (AllModuleLocalStates mods)
-  initAllModulesEL :: AllModuleInitDataG mods -> AllModuleInitDataL mods -> LoggingT IO (AllModuleEarlyLocalStates mods)
+  listenToEvents    :: SystemT r s mods IO (STM (AllModuleEvents mods))
+  handleEvents      :: AllModuleEvents mods    -> SystemT r s mods IO ()
+  initAllModulesG   :: AllModuleInitDataG mods -> LoggingT IO (AllModuleGlobalStates mods)
+  initAllModulesL   :: r -> AllModuleInitDataG mods -> AllModuleInitDataL mods -> AllModuleEarlyLocalStates mods -> LoggingT IO (AllModuleLocalStates mods)
+  initAllModulesEL  :: AllModuleInitDataG mods -> AllModuleInitDataL mods -> LoggingT IO (AllModuleEarlyLocalStates mods)
   beforeMeowActions :: SystemT r s mods IO ()
   afterMeowActions  :: SystemT r s mods IO ()
 
@@ -93,7 +93,7 @@ moduleEnv = ReaderStateT
 
 inductiveEnv :: Monad m => SystemT r s mods m a -> SystemT r s (mod ': mods) m a
 inductiveEnv = ReaderStateT
-  . (\arrowms (_ :** allGlobms, r) (locm :** allLocms, s) ->
+  . (\arrowms (_ :** allGlobms, r) (!locm :** allLocms, s) ->
       second (first (locm :**)) <$> arrowms (allGlobms, r) (allLocms, s)
     )
   . runReaderStateT

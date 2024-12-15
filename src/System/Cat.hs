@@ -24,6 +24,7 @@ import System.Directory
 import Data.Coerce
 import Data.Maybe
 
+-- the modules loaded in the system are:
 -- type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
 
 botLoop :: Cat never_returns
@@ -48,9 +49,6 @@ performMeowActions = do
 
 type R = MeowData -- ^ the r parameter
 
--- initializeGlobal :: ModuleInitDataG LogDatabase -> LoggingT IO (AllModuleGlobalStates Mods)
--- initializeGlobal ld = initAllModulesG @R (CommandInitDataG :** AsyncInitDataG :** FNil) --ld :** FNil)
-
 -- the process of initialization:
 --
 -- in the outer layer, init all global states
@@ -60,10 +58,12 @@ type R = MeowData -- ^ the r parameter
 -- then initialize AllData, and run the botLoop
 
 allInitDataG :: AllModuleInitDataG Mods
-allInitDataG = CommandInitDataG :** AsyncInitDataG :** LogDatabaseInitDataG "meowbot.db" :** ProxyWSInitDataG :** FNil
+allInitDataG  = CommandInitDataG   :** AsyncInitDataG :** LogDatabaseInitDataG "meowbot.db" 
+              :** ProxyWSInitDataG :** FNil
 
 allInitDataL :: [ProxyFlag] -> AllModuleInitDataL Mods
-allInitDataL pf = CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] :** FNil
+allInitDataL pf =   CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL 
+                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] :** FNil
 
 runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()
 runBots initglobs bots = do
