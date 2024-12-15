@@ -57,7 +57,7 @@ instance
     botname     <- gets (nameOfBot . botModules . botConfig . snd)
     mNewMessage <- gets (cqMessageToChatMessage botname . getNewMsg . wholechat . snd)
     case (mcq, mNewMessage) of
-      (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage]) $ do
+      (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage, SelfMessage]) $ do
         readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool
         $(logDebug) "Inserted a new message into the database."
       _    -> do
