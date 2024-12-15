@@ -44,7 +44,8 @@ import Module.ProxyWS
 data MeowData = MeowData
   { meowConnection :: Connection
   , meowActions    :: !(TVar [Meow [BotAction]])
-  , meowCQMessage  :: !(TVar (Maybe CQMessage))
+  , meowSentCQMessage  :: !(TVar (Maybe SentCQMessage))
+  , meowReceCQMessage  :: !(TVar (Maybe ReceCQMessage))
   , meowRawMessage :: !(TVar (Maybe BL.ByteString))
   }
 -- | The modules loaded into the bot
@@ -64,8 +65,12 @@ instance HasSystemRead Connection (MeowData) where
   readSystem = meowConnection
   {-# INLINE readSystem #-}
 
-instance HasSystemRead (TVar (Maybe CQMessage)) (MeowData) where
-  readSystem = meowCQMessage
+instance HasSystemRead (TVar (Maybe SentCQMessage)) (MeowData) where
+  readSystem = meowSentCQMessage
+  {-# INLINE readSystem #-}
+
+instance HasSystemRead (TVar (Maybe ReceCQMessage)) (MeowData) where
+  readSystem = meowReceCQMessage
   {-# INLINE readSystem #-}
 
 instance HasSystemRead (TVar (Maybe BL.ByteString)) (MeowData) where

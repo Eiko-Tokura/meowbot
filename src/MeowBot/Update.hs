@@ -8,6 +8,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.ReaderState
 import Control.Monad
+import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Parallel.Strategies
 import Data.Bifunctor
@@ -18,6 +19,7 @@ import MeowBot.Parser (Tree(..), flattenTree)
 import qualified MeowBot.Parser as MP
 import Debug.Trace
 import System.General
+import Module
 
 forestSizeForEachChat = 128 -- ^ controls how many trees to keep in each chat room
 
@@ -144,12 +146,15 @@ attachRule msg1 =
     Just id -> Just (\m -> case messageId m of
       Nothing -> False
       Just mid -> mid == id)
+
+type InsertHistory r m = (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
-insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> MeowT r mods m ()
+-- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
+insertMyResponseHistory :: InsertHistory r m => ChatId -> MetaMessage -> MeowT r mods m ()
 insertMyResponseHistory (GroupChat gid) meta = do
   utc <- query
-  change $ \other_data ->
-      let my = emptyCQMessage
+  other_data <- query
+  let my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
             , absoluteId  = Just aid
@@ -157,18 +162,22 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , metaMessage = Just meta
             , echoR       = Just $ pack $ show aid
             }
-          (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-      in other' { sent_messages = my:sent_messages other_data }
+      (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
+  change $ \_ -> other' { sent_messages = my:sent_messages other_data }
+  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
   utc <- query
-  change $ \other_data ->
-    let my = emptyCQMessage
-          { eventType   = SelfMessage
-          , utcTime     = Just utc
-          , absoluteId  = Just aid
-          , userId      = Just $ coerce uid
-          , metaMessage = Just meta
-          , echoR       = Just $ pack $ show aid
-          }
-        (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-    in other' { sent_messages = my:sent_messages other_data }
+  other_data <- query
+  let my = emptyCQMessage
+            { eventType   = SelfMessage
+            , utcTime     = Just utc
+            , absoluteId  = Just aid
+            , userId      = Just $ coerce uid
+            , metaMessage = Just meta
+            , echoR       = Just $ pack $ show aid
+            }
+      (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
+  change $ \_ -> other' { sent_messages = my:sent_messages other_data }
+  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my

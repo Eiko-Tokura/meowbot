@@ -5,7 +5,9 @@ import MeowBot.BotStructure
 import MeowBot.Update
 import System.Meow
 import System.General
+import Module
 import Control.Concurrent.Async (Async, async)
+import Control.Concurrent.STM
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 
@@ -34,13 +36,13 @@ sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
     Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 -- | send message to a chat id, recording the message as reply.
-sendToChatId :: MonadIO m => EssentialContent -> Text -> MeowT r mods m [BotAction]
+sendToChatId :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) => EssentialContent -> Text -> MeowT r mods m [BotAction]
 sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] [] str
 --([baSendToChatId cid str], insertMyResponseHistory utc cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply (optional in Maybe MessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
-meowSendToChatIdFull :: MonadIO m => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT r mods m [BotAction]
+meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT r mods m [BotAction]
 meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- pure mid ] ++ items)
   insertMyResponseHistory cid meta

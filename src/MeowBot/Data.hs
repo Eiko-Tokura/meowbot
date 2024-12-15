@@ -7,6 +7,7 @@ module MeowBot.Data
   --, SavedData(..)
 
   , CQMessage(..), CQEventType(..)
+  , ReceCQMessage(..), SentCQMessage(..)
   , Sender(..), Role(..), ResponseData(..)
 
   , BotName(..)
@@ -104,6 +105,9 @@ data CQMessage = CQMessage
   , absoluteId   :: Maybe Int
   , metaMessage  :: Maybe MetaMessage
   } deriving (Show, Eq, Generic, NFData)
+
+newtype SentCQMessage = SentCQMessage CQMessage
+newtype ReceCQMessage = ReceCQMessage CQMessage
 
 instance HasAdditionalData CQMessage where
   getAdditionalData = maybe [] additionalData . metaMessage

@@ -9,6 +9,7 @@ import Control.Monad
 import Database.Persist.Sqlite
 import Data.PersistModel
 import Data.Pool
+import Data.Coerce
 import MeowBot.BotStructure
 import Module
 import Debug.Trace
@@ -19,8 +20,9 @@ import Parser.Except
 data LogDatabase -- ^ The module that tries to log all CQMessage received into the database.
 
 instance
-  HasSystemRead (TVar (Maybe CQMessage)) r
-  => MeowModule r AllData LogDatabase where
+  ( HasSystemRead (TVar (Maybe ReceCQMessage)) r
+  , HasSystemRead (TVar (Maybe SentCQMessage)) r
+  ) => MeowModule r AllData LogDatabase where
   data ModuleGlobalState LogDatabase = LogDatabaseGlobalState { databasePool :: Pool SqlBackend }
   data ModuleLocalState  LogDatabase = LogDatabaseLocalState
   data ModuleEvent       LogDatabase = LogDatabaseEvent
@@ -48,7 +50,10 @@ instance
 
   afterMeow _ = do
     -- | Only update when there is new message, avoids multiple insertions.
-    mcq         <- askSystem @(TVar (Maybe CQMessage)) >>= liftIO . atomically . readTVar
+    -- record both received and sent messages.
+    mrcq        <- askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . readTVar
+    mscq        <- askSystem @(TVar (Maybe SentCQMessage)) >>= liftIO . atomically . readTVar
+    let mcq = coerce mrcq <|> coerce mscq
     botname     <- gets (nameOfBot . botModules . botConfig . snd)
     mNewMessage <- gets (cqMessageToChatMessage botname . getNewMsg . wholechat . snd)
     case (mcq, mNewMessage) of

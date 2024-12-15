@@ -14,12 +14,13 @@ import Control.Monad
 import Parser.Run
 import Parser.Except
 import Data.Maybe
+import Data.Coerce
 import Control.Concurrent.STM
 
 data ProxyWS
 
 instance
-  ( HasSystemRead (TVar (Maybe CQMessage)) r
+  ( HasSystemRead (TVar (Maybe ReceCQMessage)) r
   , HasSystemRead (TVar (Maybe BL.ByteString)) r
   , HasSystemRead Connection r
   ) => MeowModule r AllData ProxyWS where
@@ -55,7 +56,7 @@ instance
     liftIO $ sendTextData conn bs
 
   afterMeow _ = do
-    mcqmsg <- askSystem @(TVar (Maybe CQMessage)) >>= liftIO . atomically . readTVar
+    mcqmsg <- askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . fmap coerce . readTVar
     mbs    <- askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . readTVar
     name  <- queries (nameOfBot . botModules . botConfig)
     ProxyWSLS proxyDatas _ <- readModuleStateL (Proxy @ProxyWS)

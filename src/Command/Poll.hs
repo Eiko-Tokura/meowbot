@@ -91,7 +91,7 @@ getPollMap = do
       liftIO $ print s
       return emptyMap
 
-doPollCommand :: (MonadIO m) => EssentialContent -> PollCommand -> MeowT r mods m [BotAction]
+doPollCommand :: InsertHistory r m => EssentialContent -> PollCommand -> MeowT r mods m [BotAction]
 doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list

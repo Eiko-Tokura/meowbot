@@ -41,7 +41,8 @@ allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, 
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions
-  , HasSystemRead (TVar (Maybe CQMessage)) r     -- ^ other modules can use
+  , HasSystemRead (TVar (Maybe ReceCQMessage)) r     -- ^ other modules can use
+  , HasSystemRead (TVar (Maybe SentCQMessage)) r     -- ^ other modules can use
   , HasSystemRead (TVar (Maybe BL.ByteString)) r -- ^ other modules can use
   , HasSystemRead Connection r                   -- ^ the connection to the server
   )
@@ -68,10 +69,12 @@ instance
   initModuleEarlyLocal _ _ _ = return CommandEarlyLocalState
 
   beforeMeow _ = do -- ^ clear the tvars in each loop
-    tvarCQmsg <- askSystem @(TVar (Maybe CQMessage))
-    tvarBS    <- askSystem @(TVar (Maybe BL.ByteString))
-    liftIO . atomically $ writeTVar tvarCQmsg Nothing
-    liftIO . atomically $ writeTVar tvarBS    Nothing
+    tvarRCQmsg <- askSystem @(TVar (Maybe ReceCQMessage))
+    tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+    tvarBS     <- askSystem @(TVar (Maybe BL.ByteString))
+    liftIO . atomically $ writeTVar tvarRCQmsg Nothing
+    liftIO . atomically $ writeTVar tvarSCQmsg Nothing
+    liftIO . atomically $ writeTVar tvarBS     Nothing
 
   moduleEvent _ = do
     CommandL asyncMessage <- readModuleStateL (Proxy @CommandModule)
@@ -93,7 +96,7 @@ instance
     case eCQmsg of
       Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
       Right cqmsg -> do
-        askSystem @(TVar (Maybe CQMessage)) >>= liftIO . atomically . (`writeTVar` (Just cqmsg))
+        askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
         $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
         case eventType cqmsg of
           LifeCycle -> updateSelfInfo cqmsg

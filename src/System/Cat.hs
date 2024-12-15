@@ -92,7 +92,7 @@ runBotServer ip port bot initglobs glob el = do
     conn <- lift $ acceptRequest pendingconn
     logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
       $(logInfo) $ "Connected to client"
-      meowData <- liftIO $ MeowData conn <$> newTVarIO [] <*> newTVarIO Nothing <*> newTVarIO Nothing
+      meowData <- liftIO $ initMeowData conn
       local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
       void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
     ) `logForkFinally` (rerunBot initglobs glob el bot)
@@ -104,10 +104,13 @@ runBotClient ip port bot initglobs glob el = do
   alldata  <- initAllData botconfig
   void $ (logThroughCont (runClient ip port "") $ \conn -> do
     $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
-    meowData <- liftIO $ MeowData conn <$> newTVarIO [] <*> newTVarIO Nothing <*> newTVarIO Nothing
+    meowData <- liftIO $ initMeowData conn
     local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
     runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
     ) `logForkFinally` rerunBot initglobs glob el bot
+
+initMeowData :: Connection -> IO MeowData
+initMeowData conn = MeowData conn <$> newTVarIO [] <*> newTVarIO Nothing <*> newTVarIO Nothing <*> newTVarIO Nothing
 
 rerunBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> AllModuleEarlyLocalStates Mods -> BotInstance -> Either SomeException a -> LoggingT IO ()
 rerunBot initglobs glob el bot (Left e) = do
