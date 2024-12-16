@@ -112,10 +112,10 @@ doHangman cid _ _ (Right ViewGlobalRanking) = do
   return [baSendToChatId cid $ T.unlines $ restrictNumber 20 $ showRanking <$> ranking]
 doHangman cid nickName uid (Right ViewPersonalRanking) = do
   (totalPP, rank) <- updateTotalPP uid nickName
-  return [baSendToChatId cid $ "PP: " <> tshow totalPP <> ", Rank: " <> tshow rank]
+  return [baSendToChatId cid $ "PP: " <> tshowfloat totalPP <> ", Rank: " <> tshow rank]
 
 showRanking :: HangmanRanking -> Text
-showRanking r = hangmanRankingUserNickName r <> " " <> tshow (hangmanRankingUserId r) <> " " <> tshow (hangmanRankingTotalPP r) <> "pp"
+showRanking r = hangmanRankingUserNickName r <> " " <> tshow (hangmanRankingUserId r) <> " " <> tshowfloat (hangmanRankingTotalPP r) <> "pp"
   -- "#" <> tshow (hangmanRankingRank r) <> " " <> 
 
 tshowfloat :: Double -> Text

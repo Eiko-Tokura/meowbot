@@ -234,7 +234,7 @@ hangmanScoring s
             else missCount s + S.size (wordDedupMod s)
           )
         )
-    / fromIntegral (S.size $ wordDedupMod s)
+    / fromIntegral (S.size $ wordDedup (hangmanWord s))
   where onlyIf x True  = x
         onlyIf _ False = 0
 
