@@ -48,9 +48,9 @@ instance
     LogDatabaseGlobalState pool <- readModuleStateG (Proxy @LogDatabase)
     liftIO $ destroyAllResources pool
 
+  -- | Only update when there is new message, avoids multiple insertions.
+  -- record both received and sent messages.
   afterMeow _ = do
-    -- | Only update when there is new message, avoids multiple insertions.
-    -- record both received and sent messages.
     mrcq        <- askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . readTVar
     mscq        <- askSystem @(TVar (Maybe SentCQMessage)) >>= liftIO . atomically . readTVar
     let mcq = coerce mrcq <|> coerce mscq

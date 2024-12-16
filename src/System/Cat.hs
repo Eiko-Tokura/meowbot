@@ -37,8 +37,7 @@ botLoop = do
 
   CatT afterMeowActions
 
-  $(logDebug) "Bot loop finished"
-  botLoop
+  $(logDebug) "Bot loop finished" >> botLoop
 
 performMeowActions :: Cat ()
 performMeowActions = do
@@ -84,7 +83,7 @@ runBot initglobs glob bot = do
       runBotServer ip port bot initglobs glob earlyLocal
 
 runBotServer ip port bot initglobs glob el = do
-  $(logInfo) $ "Listening on " <> tshow ip <> ":" <> tshow port
+  $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
   alldata  <- initAllData botconfig
@@ -98,7 +97,7 @@ runBotServer ip port bot initglobs glob el = do
     ) `logForkFinally` (rerunBot initglobs glob el bot)
 
 runBotClient ip port bot initglobs glob el = do
-  $(logInfo) $ "Connecting to " <> tshow ip <> ":" <> tshow port
+  $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
   alldata  <- initAllData botconfig
