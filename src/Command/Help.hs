@@ -5,6 +5,7 @@ import Command
 import Command.Random (helpRandom)
 import Command.Study (helpStudy)
 import Command.Poll (helpPoll)
+import Command.Hangman (helpHangman)
 import MeowBot
 import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
@@ -50,6 +51,7 @@ helpList =
   , ("random", helpRandom)
   , ("study", helpStudy)
   , ("poll", helpPoll)
+  , ("hangman", helpHangman)
   ]
   where replyHelp = "您可以回复我的消息以使用上下文。回复会以Tree的数据结构组织，您可以回复任何一个节点，但有长度限制。回复时可以指定:cat,:supercat,:mdcat等指令，不指定时默认使用:cat回复。"
 

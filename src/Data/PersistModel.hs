@@ -45,7 +45,15 @@ HangmanRecord
   hp             Int
   startTime      UTCTime
   ended          Bool
-  score          Double       Maybe
+  score          Double        Maybe
+
+HangmanRanking
+  userId         UserId
+  UniqueUserId   userId
+  userNickName   Text
+  totalPP        Double
+  rank           Int
+  deriving Show
 |]
 
 cqMessageToChatMessage :: BotName -> CQMessage -> Maybe ChatMessage

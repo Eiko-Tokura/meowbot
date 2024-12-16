@@ -1,9 +1,11 @@
 module Utils.RunDB
   ( runDB
   , module Database.Persist.Sql
+  , module Database.Persist
   ) where
 
 import Control.Monad.Reader
+import Database.Persist
 import Database.Persist.Sql hiding (In)
 import Data.HList
 import Module.LogDatabase

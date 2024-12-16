@@ -13,6 +13,7 @@ module Command.Hangman.Model
   ) where
 
 import Data.Text (Text)
+import Text.Printf
 import qualified Data.Text as T
 import qualified Data.Set as S
 import Data.Time
@@ -66,7 +67,7 @@ instance Typeable u => IsAdditionalData (AllHangmanStates u)
 generateDisplayText :: (MonadUniform m) => HangmanState -> m Text
 generateDisplayText s = T.pack . concat <$> sequence (
   [ (<>) <$> displayChar s c <*> displaySpace s | c <- T.unpack $ hangmanWord s ]
-  <> [ return "\n", displayMods s, displayHP s ]
+  <> [ return "\n", displayHP s, return " ", displayMods s ]
   <> [ return "\n", displayHistory s ]
   )
   where displaySpace s
@@ -85,7 +86,7 @@ generateDisplayText s = T.pack . concat <$> sequence (
             HangmanModInitial     -> "I"
             HangmanLanguageExpert -> "L"
           ) $ S.toList $ hangmanMods s
-        displayHP s = return $ replicate (hangmanHP s) '♥'
+        displayHP s = return $ show (hangmanHP s) <> "♥"
         displayHistory s = return $ "Used: " <> reverse (hangmanGuessed s)
 
 ----------------------------------------------------------------------------------------------------
@@ -112,8 +113,8 @@ updateHangman (u, HangmanGuess c) = gets (M.lookup u) >>= \case
         then do
           let score = fromMaybe (hangmanScoring s) $ hangmanScore s
               win = not $ uncompletedPlay s
-              text | win       = "好厉害！猜对啦！这个单词是" <> hangmanWord s <> "!\n" <> "你的分数是" <> T.pack (show score) <> " owo"
-                   | otherwise = "Oh no, 机会用光了>.< 这个单词其实是" <> hangmanWord s <> "哦 owo" <> "\n" <> "不过你仍然获得了" <> T.pack (show score) <> "分！"
+              text | win       = "好厉害！猜对啦！这个单词是" <> hangmanWord s <> "!\n" <> "你的分数是" <> T.pack (printf "%.4f" score) <> " owo"
+                   | otherwise = "Oh no, 机会用光了>.< 这个单词其实是" <> hangmanWord s <> "哦 owo" <> "\n" <> "不过你仍然获得了" <> T.pack (printf "%.4f" score) <> "分！"
           modify $ M.delete u
           return $ Right $ HangmanEnd (text, s { hangmanScore = Just score })
         else do
