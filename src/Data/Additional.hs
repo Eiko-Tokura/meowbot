@@ -7,6 +7,9 @@ import Control.DeepSeq
 
 class Typeable a => IsAdditionalData a
 
+-- | Warning:
+-- 1. dynamic type can be dangerous, check the code carefully
+-- 2. to use saved additional type, add an instance at Data.Additional.Saved
 data AdditionalData
   = forall a. (Typeable a, Show a, Eq a, IsAdditionalData a)         => AdditionalData a
   | forall a. (Typeable a, Show a, Eq a, IsAdditionalData a, Read a) => AdditionalDataSaved a

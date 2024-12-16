@@ -27,6 +27,7 @@ import Command.Random (commandRandom)
 import Command.Retract
 import Command.Study
 import Command.Poll
+import Command.Hangman
 
 import Module.Command
 import Module
@@ -34,10 +35,10 @@ import Module
 import Utils.ByteString
 
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll]
+allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll]
+allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions

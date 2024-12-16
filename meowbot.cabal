@@ -89,11 +89,16 @@ library meowbot-lib
                    , Command.SetSysMessage
                    , Command.Study
                    , Command.User
+                   , Command.Hangman.Model
+                   , Command.Hangman.Data
+                   , Command.Hangman.Ranking
+                   , Command.Hangman
                    , Control.Monad.IOe
                    , Control.Monad.MaybeHints
                    , Control.Monad.Readable
                    , Control.Monad.Trans.ReaderState
                    , Data.Additional
+                   , Data.Additional.Default
                    , Data.Additional.Saved
                    , Data.FilePathFor
                    , Data.HList
@@ -130,6 +135,7 @@ library meowbot-lib
                    , Utils.ByteString
                    , Utils.Persist
                    , Utils.Logging
+                   , Utils.RunDB
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -164,6 +170,7 @@ library meowbot-lib
                  , text
                  , time
                  , transformers
+                 , vector
                  , websockets
                  , wuss
     -- Directories containing source files.

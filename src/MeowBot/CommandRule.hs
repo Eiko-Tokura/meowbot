@@ -5,6 +5,7 @@ import Data.Aeson
 import Control.DeepSeq
 import Database.Persist
 import Database.Persist.Sqlite
+import Data.Typeable
 
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
@@ -46,8 +47,8 @@ data CommandObject
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
 
-data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll
-  deriving (Show, Eq, Ord, Read, Enum, Bounded)
+data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman
+  deriving (Show, Eq, Ord, Read, Enum, Bounded, Typeable)
 
 safeCommandGroup :: CommandObject
 safeCommandGroup = CGroup [Cat, Help, Md, Random]

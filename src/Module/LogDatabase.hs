@@ -65,7 +65,7 @@ instance
 
 --------------------------------------------------------------------------------------------------
 -- useful logging functions
---
+
 -- | A tracing function that will only print the message when the flag is in the list.
 traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
 traceModeWith flag ls f a
