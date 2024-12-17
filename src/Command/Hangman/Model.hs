@@ -78,7 +78,7 @@ generateDisplayText s = T.pack . concat <$> sequence (
           | HangmanModDark   `S.member` hangmanMods s = return ""
           | HangmanModHidden `S.member` hangmanMods s = uniformElemS [" ", "  "]
           | otherwise = return "_"
-        displayMods s = return $ concatMap (\case 
+        displayMods s = return $ concatMap (\case
             HangmanModEasy        -> "E"
             HangmanModHidden      -> "H"
             HangmanModDark        -> "D"
@@ -109,7 +109,7 @@ updateHangman (u, HangmanGuess c) = gets (M.lookup u) >>= \case
     case guessChar c s of
       Left  e -> return $ Left e
       Right s -> do
-        if gameEnded s 
+        if gameEnded s
         then do
           let score = fromMaybe (hangmanScoring s) $ hangmanScore s
               win = not $ uncompletedPlay s
@@ -136,7 +136,7 @@ updateHangman (u, HangmanNewGame mods) = gets (M.lookup u) >>= \case
 guessChar :: Char -> HangmanState -> Either Text HangmanState
 guessChar c s
   | c `notElem` ['a'..'z'] = Left "Please guess a character from a to z o.o!"
-  | c `elem` hangmanGuessed s = Left "You have already guessed this character o.o" -- && not (HangmanModPrecise `S.member` hangmanMods s) 
+  | c `elem` hangmanGuessed s = Left "You have already guessed this character o.o" -- && not (HangmanModPrecise `S.member` hangmanMods s)
   | c `S.member` wordDedup (hangmanWord s) = Right $ markIfEnded $ s { hangmanGuessed = c : hangmanGuessed s }
   | otherwise = Right $ markIfEnded $ s { hangmanHP = hangmanHP s - 1, hangmanGuessed = c : hangmanGuessed s }
 
@@ -179,7 +179,7 @@ wordDedup :: Text -> S.Set Char
 wordDedup = S.fromList . T.unpack
 {-# INLINE wordDedup #-}
 
--- | the same as wordDedup except that remove the **second** letter 
+-- | the same as wordDedup except that remove the **second** letter
 -- apple -> ale
 wordDedupEZ :: Text -> S.Set Char
 wordDedupEZ w = S.delete (T.index w 1) $ wordDedup w
@@ -207,8 +207,9 @@ completedPlay = not . uncompletedPlay
 
 modsMultiplier :: [HangmanMod] -> Double
 modsMultiplier [] = 1
-modsMultiplier (HangmanModHidden:ms) = 1.12 * modsMultiplier ms
-modsMultiplier (HangmanModDark:ms) = 1.3 * modsMultiplier ms
+modsMultiplier (HangmanModHidden:ms)  = 1.12 * modsMultiplier ms
+modsMultiplier (HangmanModDark:ms)    = 1.3 * modsMultiplier ms
+modsMultiplier (HangmanModInitial:ms) = 1.03 * modsMultiplier ms
 --modsMultiplier (HangmanModPrecise:ms) = 1.25 * modsMultiplier ms -- need to determine later
 modsMultiplier (_:ms) = modsMultiplier ms
 
@@ -221,15 +222,15 @@ extraPoints (HangmanModInitial:ms) = 5 + extraPoints ms
 extraPoints (_:ms) = extraPoints ms
 
 hangmanScoring :: HangmanState -> Double
-hangmanScoring s 
+hangmanScoring s
   = difficultyPoints (hangmanWord s) `onlyIf` completedPlay s
   + extraPoints (S.toList $ hangmanMods s) `onlyIf` completedPlay s
-  + modsMultiplier (S.toList $ hangmanMods s) * (-57) 
-    * log 
-        (subStringSum 
+  + modsMultiplier (S.toList $ hangmanMods s) * (-57)
+    * log
+        (subStringSum
           (filter (`S.member` wordDedupMod s) $ hangmanGuessed s)
-          S.empty 
-          (if uncompletedPlay s 
+          S.empty
+          (if uncompletedPlay s
             then hangmanInitialHP (hangmanMods s)
             else missCount s + S.size (wordDedupMod s)
           )

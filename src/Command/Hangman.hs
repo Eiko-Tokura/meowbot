@@ -27,10 +27,10 @@ data HangmanUnit = HangmanUnit deriving (Show, Eq, Read, Typeable)
 instance IsAdditionalData HangmanUnit
 
 hangmanParser :: (Chars sb) => Parser sb Char (Either HangmanAction ViewRanking)
-hangmanParser = Left <$> asum 
+hangmanParser = Left <$> asum
   [ do
       headCommand "hangman" <|> headCommand "hm" <|> headCommand "猜单词"
-      (opt_ (commandSeparator >> $(stringQ_ "new"))) >> opt_ commandSeparator >> HangmanNewGame . S.fromList <$> 
+      (opt_ (commandSeparator >> $(stringQ_ "new"))) >> opt_ commandSeparator >> HangmanNewGame . S.fromList <$>
         (many (asumE
           [ $(stringQ_ "easy")     <|> void (itemIn "eE") >> return HangmanModEasy
           , $(stringQ_ "hidden")   <|> void (itemIn "hH") >> return HangmanModHidden
@@ -73,7 +73,7 @@ helpHangman = T.unlines
   , "easy(E): 增加1HP，开局提示你第二个字母 (分数降低)"
   , "hidden(H): 下划线变成(不稳定的)空格 (分数×1.12 +4)"
   , "dark(D): 不显示任何下划线或者空格 (分数×1.3 +8)"
-  , "initial(I): 不显示第一个字母 (分数 +5)"
+  , "initial(I): 不显示第一个字母 (分数×1.03 +5)"
   , "language(L): 开启后可以遇到更多单词"
   , "可以同时使用多个mods"
   , ""
@@ -116,7 +116,7 @@ doHangman cid nickName uid (Right ViewPersonalRanking) = do
 
 showRanking :: HangmanRanking -> Text
 showRanking r = hangmanRankingUserNickName r <> " " <> tshow (hangmanRankingUserId r) <> " " <> tshowfloat (hangmanRankingTotalPP r) <> "pp"
-  -- "#" <> tshow (hangmanRankingRank r) <> " " <> 
+  -- "#" <> tshow (hangmanRankingRank r) <> " " <>
 
 tshowfloat :: Double -> Text
 tshowfloat = T.pack . printf "%.4f"
@@ -135,5 +135,5 @@ hangmanTreeParser = do
   maybe zero return $ runParser (replyHangmanParser) (maybe "" onlyMessage $ metaMessage umsg)
   where
     replyHangmanParser
-      = spaces0 >> HangmanGuess <$> 
+      = spaces0 >> HangmanGuess <$>
           (opt_ (asum $ headCommand <$> ["hm", "hangman", ""]) >> opt_ (asum $ string <$> ["猜", "guess", "g"]) >> itemIn ['a'..'z'] <* end)

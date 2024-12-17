@@ -57,11 +57,11 @@ type R = MeowData -- ^ the r parameter
 -- then initialize AllData, and run the botLoop
 
 allInitDataG :: AllModuleInitDataG Mods
-allInitDataG  = CommandInitDataG   :** AsyncInitDataG :** LogDatabaseInitDataG "meowbot.db" 
+allInitDataG  = CommandInitDataG   :** AsyncInitDataG :** LogDatabaseInitDataG "meowbot.db"
               :** ProxyWSInitDataG :** FNil
 
 allInitDataL :: [ProxyFlag] -> AllModuleInitDataL Mods
-allInitDataL pf =   CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL 
+allInitDataL pf =   CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL
                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] :** FNil
 
 runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()

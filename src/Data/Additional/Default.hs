@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
-module Data.Additional.Default 
+module Data.Additional.Default
   ( getTypeWithDef
   , module Data.Additional
   , Typeable
