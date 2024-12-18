@@ -53,6 +53,10 @@ HangmanRanking
   userNickName   Text
   totalPP        Double
   rank           Int
+  totalMiss      Int           
+  totalGuess     Int           
+  passCount      Int          
+  playcount      Int         
   deriving Show
 |]
 
@@ -87,4 +91,15 @@ hangmanStateToRecord uid hs = HangmanRecord
   , hangmanRecordStartTime = hangmanStartTime hs
   , hangmanRecordEnded    = hangmanEnded hs
   , hangmanRecordScore    = hangmanScore hs
+  }
+
+hangmanRecordToState :: HangmanRecord -> HangmanState
+hangmanRecordToState hr = HangmanState
+  { hangmanWord     = hangmanRecordWord hr
+  , hangmanGuessed  = hangmanRecordGuessed hr
+  , hangmanMods     = S.fromList $ hangmanRecordMods hr
+  , hangmanHP       = hangmanRecordHp hr
+  , hangmanStartTime = hangmanRecordStartTime hr
+  , hangmanEnded    = hangmanRecordEnded hr
+  , hangmanScore    = hangmanRecordScore hr
   }

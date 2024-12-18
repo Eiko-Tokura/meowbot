@@ -9,6 +9,8 @@ module Command.Hangman.Model
   , gameEnded
 
   , updateHangman
+  , completedPlay
+  , accuracyPair
 
   ) where
 
@@ -42,7 +44,7 @@ data HangmanMod
   = HangmanModEasy    -- ^ the mode that hints you the second letter and gives you an extra life
   | HangmanModHidden  -- ^ the mode that hides the underlines
   | HangmanModDark    -- ^ the mode that hides all the spaces
-  -- | HangmanModPrecise -- ^ the mode that you must guess the word precisely, if there are repeating letters you need to repeat them
+  | HangmanModPrecise -- ^ the mode that you must guess the word precisely, if there are repeating letters you need to repeat them
   | HangmanModInitial -- ^ the mode that the first letter will always not be shown
   | HangmanLanguageExpert -- ^ the mode that the word goes wild, difficult words will appear
   deriving (Show, Read, Eq, Ord, Bounded, Enum)
@@ -66,9 +68,8 @@ instance Typeable u => IsAdditionalData (AllHangmanStates u)
 
 generateDisplayText :: (MonadUniform m) => HangmanState -> m Text
 generateDisplayText s = T.pack . concat <$> sequence (
-  [ (<>) <$> displayChar s c <*> displaySpace s | c <- T.unpack $ hangmanWord s ]
-  <> [ return "\n", displayHP s, return " ", displayMods s ]
-  <> [ return "\n", displayHistory s ]
+  [ (<>) <$> displayChar s c <*> displaySpace s | c <- modification $ T.unpack $ hangmanWord s ]
+  <> [ return "\n", displayHP s, return " ", displayMods s, return " ", displayHistory s ]
   )
   where displaySpace s
           | HangmanModDark   `S.member` hangmanMods s = return ""
@@ -82,12 +83,13 @@ generateDisplayText s = T.pack . concat <$> sequence (
             HangmanModEasy        -> "E"
             HangmanModHidden      -> "H"
             HangmanModDark        -> "D"
-            --HangmanModPrecise     -> "P"
+            HangmanModPrecise     -> "P"
             HangmanModInitial     -> "I"
             HangmanLanguageExpert -> "L"
           ) $ S.toList $ hangmanMods s
         displayHP s = return $ show (hangmanHP s) <> "♥"
         displayHistory s = return $ "Used: " <> reverse (hangmanGuessed s)
+        modification = if HangmanModInitial `S.member` hangmanMods s then drop 1 else id
 
 ----------------------------------------------------------------------------------------------------
 -- Stateful
@@ -113,8 +115,8 @@ updateHangman (u, HangmanGuess c) = gets (M.lookup u) >>= \case
         then do
           let score = fromMaybe (hangmanScoring s) $ hangmanScore s
               win = not $ uncompletedPlay s
-              text | win       = "好厉害！猜对啦！这个单词是" <> hangmanWord s <> "!\n" <> "你的分数是" <> T.pack (printf "%.4f" score) <> " owo"
-                   | otherwise = "Oh no, 机会用光了>.< 这个单词其实是" <> hangmanWord s <> "哦 owo" <> "\n" <> "不过你仍然获得了" <> T.pack (printf "%.4f" score) <> "分！"
+              text | win       = "好厉害！猜对啦！这个单词是" <> hangmanWord s <> "!\n" <> "你的分数是" <> T.pack (printf "%.2f" score) <> " owo"
+                   | otherwise = "Oh no, 机会用光了>.< 这个单词其实是" <> hangmanWord s <> "哦 owo" <> "\n" <> "不过你仍然获得了" <> T.pack (printf "%.2f" score) <> "分！"
           modify $ M.delete u
           return $ Right $ HangmanEnd (text, s { hangmanScore = Just score })
         else do
@@ -192,7 +194,7 @@ wordDedupMod s
 {-# INLINE wordDedupMod #-}
 
 missCount :: HangmanState -> Int
-missCount s = length (hangmanGuessed s) - S.size (wordDedup $ hangmanWord s)
+missCount s = length $ filter (not . (`S.member` wordDedup (hangmanWord s))) (hangmanGuessed s)
 {-# INLINE missCount #-}
 
 uncompletedPlay :: HangmanState -> Bool
@@ -203,21 +205,26 @@ completedPlay :: HangmanState -> Bool
 completedPlay = not . uncompletedPlay
 {-# INLINE completedPlay #-}
 
+-- | Return the pair of (miss count, number of guesses)
+accuracyPair :: HangmanState -> (Int, Int)
+accuracyPair s = (missCount s, length (hangmanGuessed s) - if HangmanModEasy `S.member` hangmanMods s then 1 else 0)
+{-# INLINE accuracyPair #-}
+
 --historyMod :: HangmanState -> S.Set Char
 
 modsMultiplier :: [HangmanMod] -> Double
 modsMultiplier [] = 1
-modsMultiplier (HangmanModHidden:ms)  = 1.12 * modsMultiplier ms
-modsMultiplier (HangmanModDark:ms)    = 1.3 * modsMultiplier ms
+modsMultiplier (HangmanModHidden:ms)  = 1.1  * modsMultiplier ms
+modsMultiplier (HangmanModDark:ms)    = 1.3  * modsMultiplier ms
 modsMultiplier (HangmanModInitial:ms) = 1.03 * modsMultiplier ms
---modsMultiplier (HangmanModPrecise:ms) = 1.25 * modsMultiplier ms -- need to determine later
+modsMultiplier (HangmanModPrecise:ms) = 1.24 * modsMultiplier ms -- need to determine later
 modsMultiplier (_:ms) = modsMultiplier ms
 
 extraPoints :: [HangmanMod] -> Double
 extraPoints [] = 0
 extraPoints (HangmanModHidden:ms)  = 4 + extraPoints ms
 extraPoints (HangmanModDark:ms)    = 8 + extraPoints ms
---extraPoints (HangmanModPrecise:ms) = 8 + extraPoints ms
+extraPoints (HangmanModPrecise:ms) = 8 + extraPoints ms
 extraPoints (HangmanModInitial:ms) = 5 + extraPoints ms
 extraPoints (_:ms) = extraPoints ms
 

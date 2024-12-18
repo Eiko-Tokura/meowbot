@@ -17,6 +17,7 @@ import Control.Monad.State
 import Control.Monad.Readable
 import Control.Monad.Trans.Maybe
 import Data.Maybe
+import Data.Coerce
 import MeowBot.Data
 import MeowBot
 import Utils.RunDB
@@ -55,6 +56,7 @@ hangmanParser = Left <$> asum
     commandSeparator
     asumE [ ($(stringQ_ "ranking") <|> $(stringQ_ "rank")) >> return ViewGlobalRanking
           , $(stringQ_ "info") >> return ViewPersonalRanking
+          , $(stringQ_ "update all ranking") >> return UpdateAllRanking
           ]
 
 helpHangman :: Text
@@ -71,7 +73,7 @@ helpHangman = T.unlines
   , ""
   , "Mods简介"
   , "easy(E): 增加1HP，开局提示你第二个字母 (分数降低)"
-  , "hidden(H): 下划线变成(不稳定的)空格 (分数×1.12 +4)"
+  , "hidden(H): 下划线变成(不稳定的)空格 (分数×1.1 +4)"
   , "dark(D): 不显示任何下划线或者空格 (分数×1.3 +8)"
   , "initial(I): 不显示第一个字母 (分数×1.03 +5)"
   , "language(L): 开启后可以遇到更多单词"
@@ -96,30 +98,49 @@ doHangman :: ChatId -> Text -> UserId -> Either HangmanAction ViewRanking -> Meo
 doHangman cid _ uid (Left hmact) = do
   allHangman <- getTypeWithDef (M.empty :: AllHangmanStates UserId)
   runStateT (updateHangman (uid, hmact)) allHangman >>= \case
+
     (Left  txt, _) -> return [baSendToChatId cid txt]
+
     (Right (HangmanContinue txt), alls) -> do
       change @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
       meowSendToChatIdFull cid Nothing [AdditionalData HangmanUnit] [] txt
+
     (Right (HangmanEnd (txt, s)), alls) -> do
       moldUserRank <- getUserRank uid
       runDB $ insert_ (hangmanStateToRecord uid s)
       nickname <- queries $ senderNickname <=< sender . getNewMsg
-      (newpp, newrank) <- updateTotalPP uid (fromMaybe "" nickname)
+      (newpp, newrank, _, _) <- updateTotalPP uid nickname
       change @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
       return [baSendToChatId cid (txt <> rankChange moldUserRank newpp newrank)]
+
 doHangman cid _ _ (Right ViewGlobalRanking) = do
   ranking <- getRanking
   return [baSendToChatId cid $ T.unlines $ restrictNumber 20 $ showRanking <$> ranking]
+
 doHangman cid nickName uid (Right ViewPersonalRanking) = do
-  (totalPP, rank) <- updateTotalPP uid nickName
-  return [baSendToChatId cid $ "PP: " <> tshowfloat totalPP <> ", Rank: " <> tshow rank]
+  (totalPP, rank, (tMiss, tGuess), (pass, pc)) <- updateTotalPP uid (Just nickName)
+  return [baSendToChatId cid $ "PP: " <> tshowfloat totalPP <> ", Rank: " <> tshow rank
+          <> "\nTotal Guess: " <> tshow tGuess
+          <> "\nTotal Miss: "  <> tshow tMiss
+          <> "\nAccuracy: "    <> tshowfloat (1 - fromIntegral tMiss / fromIntegral tGuess)
+          <> "\nPlaycount: "   <> tshow pc
+          <> "\nPasscount: "   <> tshow pass
+          <> "\nPassrate: "    <> tshowfloat (fromIntegral pass / fromIntegral pc)
+         ]
+
+doHangman cid _ _ (Right UpdateAllRanking) = do
+  updateAllRanking
+  return [ baSendToChatId cid "All ranking updated!" ]
 
 showRanking :: HangmanRanking -> Text
-showRanking r = hangmanRankingUserNickName r <> " " <> tshow (hangmanRankingUserId r) <> " " <> tshowfloat (hangmanRankingTotalPP r) <> "pp"
-  -- "#" <> tshow (hangmanRankingRank r) <> " " <>
+showRanking r 
+  =  hangmanRankingUserNickName r <> " (" <> tshow (coerce @_ @Int $ hangmanRankingUserId r) <> ") " 
+  <> tshowfloat (hangmanRankingTotalPP r) <> "pp" 
+  <> " acc:" <> tshowfloat (1 - fromIntegral (hangmanRankingTotalMiss r) / fromIntegral (hangmanRankingTotalGuess r)) 
+  <> " pc:" <> tshow (hangmanRankingPassCount r) <> "/" <> tshow (hangmanRankingPlaycount r)
 
 tshowfloat :: Double -> Text
-tshowfloat = T.pack . printf "%.4f"
+tshowfloat = T.pack . printf "%.2f"
 
 rankChange :: Maybe (Double, Int) -> Double -> Int -> Text
 rankChange Nothing newpp newrank = "\nPP: " <> tshowfloat newpp <> ", Rank: " <> tshow newrank
