@@ -136,6 +136,7 @@ library meowbot-lib
                    , Utils.Persist
                    , Utils.Logging
                    , Utils.RunDB
+                   , Utils.ToText
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
