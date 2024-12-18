@@ -404,7 +404,7 @@ instance FromJSON CQMessage where
                 (RequestEvent, Just "friend"       , _                 ) -> Just $ RequestFriend comment flag
                 (RequestEvent, Just "group"        , Just "add"        ) -> Just $ RequestGroup RequestGroupAdd comment flag
                 (RequestEvent, Just "group"        , Just "invite"     ) -> Just $ RequestGroup RequestGroupInvite comment flag
-                _ -> Nothing )
+                _                                                        -> Nothing )
                 
 
 

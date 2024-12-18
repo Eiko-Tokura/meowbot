@@ -38,6 +38,7 @@ commandParserTransformByBotName cp = do
     Nothing -> cp
 {-# INLINE commandParserTransformByBotName #-}
 
+-- | A utility function to restrict the number of lines to show
 restrictNumber :: Int -> [Text] -> [Text]
 restrictNumber _ [] = ["什么也没找到 o.o"]
 restrictNumber n xs =  [tshow i <> " " <> x | (i, x) <- zip [1 :: Int ..] $ take n xs]

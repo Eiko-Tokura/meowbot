@@ -3,7 +3,9 @@
 module Module.CommandInstance where
 
 import Control.Monad.Trans.ReaderState
+import Control.Monad
 import Control.Monad.Logger
+import Control.Monad.Trans.Maybe
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Applicative
@@ -33,6 +35,7 @@ import Module.Command
 import Module
 
 import Utils.ByteString
+import Utils.ToText
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]
@@ -114,6 +117,7 @@ instance
             updateStates nameBot cqmsg
             tmeow <- readSystem <$> asks snd
             liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow gcmds)
+          RequestEvent -> handleRequestEvent conn nameBot cqmsg
           _ -> return ()
         where
           updateStates nameBot cqmsg = do
@@ -125,3 +129,13 @@ instance
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
 
+handleRequestEvent :: Connection -> String -> CQMessage -> ModuleT r s CommandModule IO ()
+handleRequestEvent conn str cqmsg = do
+  $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
+  case requestType cqmsg of
+    Just (RequestFriend mcomment (Just flag)) -> void $ runMaybeT $ do
+      uid <- MaybeT $ return $ userId cqmsg
+      $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
+      $(logInfo) $ " -> Approving the request."
+      lift . lift $ actionAPI conn $ ActionForm (SetFriendAddRequest uid flag "") Nothing
+    _ -> return ()

@@ -111,39 +111,6 @@ rseqWholeChat (AllData wc m od) = do
   od' <- rseq od
   return $ AllData wc' m od'
 
--- data SendMessageForm = SendMessageForm
---   { action :: Text
---   , params :: Params
---   , echo   :: Maybe Text
---   } deriving (Generic, Show, ToJSON)
--- 
--- data Params
---   = PrivateParams
---     { user_id     :: UserId
---     , messageText :: Text
---     }
---   | GroupParams
---     { group_id    :: GroupId
---     , messageText :: Text
---     }
---   | DeleteParams
---     { messageIdDelete  :: MessageId
---     }
---   deriving (Show)
--- 
--- instance ToJSON Params where
---   toJSON (PrivateParams uid msg) =
---     object [ "user_id" .= uid
---            , "message" .= msg
---            ]
---   toJSON (GroupParams gid msg) =
---     object [ "group_id" .= gid
---            , "message" .= msg
---            ]
---   toJSON (DeleteParams mid) =
---     object [ "message_id" .= mid
---            ]
-
 getNewMsg :: WholeChat -> CQMessage
 getNewMsg [] = emptyCQMessage
 getNewMsg wholechat = snd $ largestInTree (fromMaybe 0 . absoluteId) (getFirstTree wholechat)
