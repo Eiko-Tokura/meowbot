@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, ImpredicativeTypes #-}
 module Command
   ( BotCommand(..), CommandId(..)
+  , actionAPI
   , doBotCommands
   , doBotAction
   , botCommandsToMeow
@@ -59,20 +60,26 @@ doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAc
 -- | Low-level functions to send private messages
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
 sendPrivate conn uid text mecho = do
-  lift . sendTextData conn $ encode (SendMessageForm "send_private_msg" (PrivateParams uid text) mecho)
+  lift . sendTextData conn $ encode (ActionForm (SendPrivateMessage uid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", text]
 
 -- | Low-level functions to send group messages
 sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> LoggingT IO ()
 sendGroup conn gid text mecho = do
-  lift . sendTextData conn $ encode (SendMessageForm "send_group_msg" (GroupParams gid text) mecho)
+  lift . sendTextData conn $ encode (ActionForm (SendGroupMessage gid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", text]
 
 -- | Low-level functions to delete messages
 deleteMsg :: Connection -> MessageId -> LoggingT IO ()
 deleteMsg conn mid = do
-  lift . sendTextData conn $ encode (SendMessageForm "delete_msg" (DeleteParams mid) Nothing)
+  lift . sendTextData conn $ encode (ActionForm (DeleteMessage mid) Nothing)
   $(logInfo) $ "=> Delete message: " <> tshow mid
+
+-- | Low-level functions to send any action
+actionAPI :: Connection -> ActionForm -> LoggingT IO ()
+actionAPI conn af = do
+  lift . sendTextData conn $ encode af
+  $(logInfo) $ "=> Action: " <> tshow af
 
 -- | Check if the command is allowed, and execute it if it is
 permissionCheck :: BotCommand -> Meow [BotAction]

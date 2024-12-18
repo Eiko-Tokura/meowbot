@@ -10,6 +10,12 @@ module MeowBot.Data
   , ReceCQMessage(..), SentCQMessage(..)
   , Sender(..), Role(..), ResponseData(..)
 
+  , Flag(..)
+  , NoticeType(..), NoticeSubType(..), GroupDecreaseSubType(..), GroupIncreaseSubType(..)
+  , RequestType(..), RequestGroupSubType(..)
+
+  , ActionAPI(..), ActionForm(..)
+
   , BotName(..)
   , BotModules(..)
   , BotInstance(..)
@@ -26,8 +32,8 @@ import MeowBot.CommandRule
 import MeowBot.MetaMessage
 import GHC.Generics
 import Control.DeepSeq (NFData)
-import Data.Aeson (FromJSON(..), withObject, withText)
-import Data.Aeson.Types (Parser, (.:?))
+import Data.Aeson -- (FromJSON(..), withObject, withText, ToJSON(..))
+import Data.Aeson.Types (Parser)
 import Data.Additional
 import qualified MeowBot.Parser as MP
 import Data.Text (Text, unpack, pack)
@@ -76,7 +82,7 @@ data BotModules = BotModules
   , botInstance           :: BotInstance
   } deriving (Show)
 
-data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage
+data CQEventType = GroupMessage | PrivateMessage | Response | HeartBeat | LifeCycle | SelfMessage | UnknownMessage | RequestEvent | NoticeEvent
   deriving (Show, Eq, Read, Generic, NFData, Bounded, Enum)
 
 instance PersistField ChatId where
@@ -89,6 +95,193 @@ instance PersistField ChatId where
       else return $ PrivateChat (UserId (-gid))
 
 instance PersistFieldSql ChatId where sqlType _ = SqlInt64
+
+-------------------------------------------------------------------------------------------
+-- Notifcation and Request
+data NoticeType 
+  = NoticeGroupUpload 
+  | NoticeGroupAdmin 
+  | NoticeGroupDecrease GroupDecreaseSubType 
+  | NoticeGroupIncrease GroupIncreaseSubType 
+  | NoticeGroupBan 
+  | NoticeGroupAdd 
+  | NoticeFriendAdd 
+  | NoticeGroupRecall 
+  | NoticeFriendRecall 
+  | NoticeNotify NoticeSubType 
+  deriving (Show, Eq, Read)
+
+data NoticeSubType = NoticeSubTypePoke | NoticeSubTypeLuckyKing | NoticeSubTypeHonor
+  deriving (Show, Eq, Read)
+
+data GroupDecreaseSubType = GroupDecreaseLeave | GroupDecreaseKick | GroupDecreaseKickMe
+  deriving (Show, Eq, Read)
+
+data GroupIncreaseSubType = GroupIncreaseApprove | GroupIncreaseInvite
+  deriving (Show, Eq, Read)
+
+newtype Flag = Flag { unFlag :: Text }
+  deriving (Show, Eq, Read, FromJSON, ToJSON) via Text
+
+data RequestType 
+  = RequestFriend
+    { requestComment :: Maybe Text
+    , requestFlag    :: Maybe Flag
+    }
+  | RequestGroup
+    { requestGroupSubType :: RequestGroupSubType
+    , requestComment :: Maybe Text
+    , requestFlag    :: Maybe Flag
+    }
+  deriving (Show, Eq, Read)
+
+data RequestGroupSubType = RequestGroupAdd | RequestGroupInvite
+  deriving (Show, Eq, Read)
+
+-------------------------------------------------------------------------------------------
+-- Action API
+data ActionAPI
+  = SendPrivateMessage
+    { sendPrivateUserId     :: UserId
+    , sendPrivateMessage    :: Text
+    , sendPrivateAutoEscape :: Maybe Bool
+    }
+  | SendGroupMessage
+    { sendGroupGroupId      :: GroupId
+    , sendGroupMessage      :: Text
+    , sendGroupAutoEscape   :: Maybe Bool
+    }
+  | DeleteMessage
+    { deleteMessageMessageId :: MessageId
+    }
+  | GetMessage
+    { getMessageMessageId    :: MessageId
+    }
+  | SendLike
+    { sendLikeUserId         :: UserId
+    , sendLikeTimes          :: Int
+    }
+  | SetGroupKick
+    { setGroupKickGroupId    :: GroupId
+    , setGroupKickUserId     :: UserId
+    , setGroupKickRejectAdd  :: Bool
+    }
+  | SetGroupBan
+    { setGroupBanGroupId     :: GroupId
+    , setGroupBanUserId      :: UserId
+    , setGroupBanDuration    :: Int
+    }
+  | SetGroupCard
+    { setGroupCardGroupId    :: GroupId
+    , setGroupCardUserId     :: UserId
+    , setGroupCardCard       :: Text
+    }
+  | SetGroupLeave
+    { setGroupLeaveGroupId   :: GroupId
+    , setGroupLeaveIsDismiss :: Bool
+    }
+  | SetGroupSpecialTitle
+    { setGroupSpecialTitleGroupId :: GroupId
+    , setGroupSpecialTitleUserId  :: UserId
+    , setGroupSpecialTitleTitle   :: Text
+    }
+  | SetFriendAddRequest
+    { setFriendAddRequestId     :: UserId
+    , setFriendAddRequestFlag   :: Flag
+    , setFriendAddRequestRemark :: Text
+    }
+  | SetGroupAddRequest
+    { setGroupAddRequestId      :: UserId
+    , setGroupAddRequestFlag    :: Flag
+    , setGroupAddRequestReason  :: Text
+    }
+  -- | GetFriendList
+  deriving (Show, Eq, Read, Generic)
+
+instance ToJSON ActionAPI where
+  toJSON (SendPrivateMessage uid msg auto) = object
+    [ "user_id" .= uid
+    , "message" .= msg
+    , "auto_escape" .= auto
+    ]
+  toJSON (SendGroupMessage gid msg auto) = object
+    [ "group_id" .= gid
+    , "message" .= msg
+    , "auto_escape" .= auto
+    ]
+  toJSON (DeleteMessage mid) = object
+    [ "message_id" .= mid
+    ]
+  toJSON (GetMessage mid) = object
+    [ "message_id" .= mid
+    ]
+  toJSON (SendLike uid times) = object
+    [ "user_id" .= uid
+    , "times" .= times
+    ]
+  toJSON (SetGroupKick gid uid rej) = object
+    [ "group_id" .= gid
+    , "user_id" .= uid
+    , "reject_add_request" .= rej
+    ]
+  toJSON (SetGroupBan gid uid dur) = object
+    [ "group_id" .= gid
+    , "user_id" .= uid
+    , "duration" .= dur
+    ]
+  toJSON (SetGroupCard gid uid card) = object
+    [ "group_id" .= gid
+    , "user_id" .= uid
+    , "card" .= card
+    ]
+  toJSON (SetGroupLeave gid dis) = object
+    [ "group_id" .= gid
+    , "is_dismiss" .= dis
+    ]
+  toJSON (SetGroupSpecialTitle gid uid title) = object
+    [ "group_id" .= gid
+    , "user_id" .= uid
+    , "special_title" .= title
+    ]
+  toJSON (SetFriendAddRequest uid flag remark) = object
+    [ "user_id" .= uid
+    , "flag" .= flag
+    , "remark" .= remark
+    ]
+  toJSON (SetGroupAddRequest uid flag reason) = object
+    [ "user_id" .= uid
+    , "flag" .= flag
+    , "reason" .= reason
+    ]
+
+actionString :: ActionAPI -> Text
+actionString SendPrivateMessage{}   = "send_private_msg"
+actionString SendGroupMessage{}     = "send_group_msg"
+actionString DeleteMessage{}        = "delete_msg"
+actionString GetMessage{}           = "get_msg"
+actionString SendLike{}             = "send_like"
+actionString SetGroupKick{}         = "set_group_kick"
+actionString SetGroupBan{}          = "set_group_ban"
+actionString SetGroupCard{}         = "set_group_card"
+actionString SetGroupLeave{}        = "set_group_leave"
+actionString SetGroupSpecialTitle{} = "set_group_special_title"
+actionString SetFriendAddRequest{}  = "set_friend_add_request"
+actionString SetGroupAddRequest{}   = "set_group_add_request"
+
+data ActionForm = ActionForm
+  { action :: ActionAPI
+  , echo   :: Maybe Text
+  } deriving (Show, Eq, Read, Generic)
+
+instance ToJSON ActionForm where
+  toJSON (ActionForm act mecho) = object
+    [ "action" .= actionString act
+    , "params" .= act
+    , "echo"   .= mecho
+    ]
+
+-------------------------------------------------------------------------------------------
+-- CQMessage
 
 data CQMessage = CQMessage
   { eventType    :: CQEventType
@@ -104,7 +297,9 @@ data CQMessage = CQMessage
   , echoR        :: Maybe Text
   , absoluteId   :: Maybe Int
   , metaMessage  :: Maybe MetaMessage
-  } deriving (Show, Eq, Generic, NFData)
+  , noticeType   :: Maybe NoticeType
+  , requestType  :: Maybe RequestType
+  } deriving (Show, Eq, Generic)
 
 newtype SentCQMessage = SentCQMessage CQMessage
 newtype ReceCQMessage = ReceCQMessage CQMessage
@@ -137,7 +332,7 @@ instance FromJSON Role where
     _ -> return RUnknown
 
 emptyCQMessage :: CQMessage
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -157,12 +352,20 @@ instance FromJSON CQMessage where
     dataObj       <- obj .:? "data"
     message       <- obj .:? "raw_message"
     timeUnixSec   <- obj .:? "time"            :: Parser (Maybe Int)
+    noticeType    <- obj .:? "notice_type"     :: Parser (Maybe Text)
+    noticeSubType <- obj .:? "sub_type"        :: Parser (Maybe Text)
+    requestType   <- obj .:? "request_type"    :: Parser (Maybe Text)
+    requestSubType<- obj .:? "sub_type"        :: Parser (Maybe Text)
+    comment       <- obj .:? "comment"         :: Parser (Maybe Text)
+    flag          <- obj .:? "flag"            :: Parser (Maybe Flag)
     let eventType = case (postType, metaEventType, messageType, dataObj) of
           (Just "message"    , _                , Just "private" , _      ) -> PrivateMessage
           (Just "message"    , _                , Just "group"   , _      ) -> GroupMessage
           (Nothing           , _                , Nothing        , Just _ ) -> Response
           (Just "meta_event" , Just "heartbeat" , Nothing        , Nothing) -> HeartBeat
           (_                 , Just "lifecycle" , _              , _      ) -> LifeCycle
+          (Just "notice"     , _                , _              , _      ) -> NoticeEvent
+          (Just "request"    , _                , _              , _      ) -> RequestEvent
           _                                                                 -> UnknownMessage
         timeUTC = posixSecondsToUTCTime . fromIntegral <$> timeUnixSec
     CQMessage <$> pure eventType
@@ -180,6 +383,30 @@ instance FromJSON CQMessage where
               <*> pure ( case message of
                 Nothing -> Nothing
                 Just _ -> MP.runParser cqmsg $ fromMaybe "" message )
+              <*> pure ( case (eventType, noticeType, noticeSubType) of
+                (NoticeEvent , Just "group_upload"   , _                 ) -> Just NoticeGroupUpload
+                (NoticeEvent , Just "group_admin"    , _                 ) -> Just NoticeGroupAdmin
+                (NoticeEvent , Just "group_decrease" , Just "leave"      ) -> Just $ NoticeGroupDecrease GroupDecreaseLeave
+                (NoticeEvent , Just "group_decrease" , Just "kick"       ) -> Just $ NoticeGroupDecrease GroupDecreaseKick
+                (NoticeEvent , Just "group_decrease" , Just "kick_me"    ) -> Just $ NoticeGroupDecrease GroupDecreaseKickMe
+                (NoticeEvent , Just "group_increase" , Just "approve"    ) -> Just $ NoticeGroupIncrease GroupIncreaseApprove
+                (NoticeEvent , Just "group_increase" , Just "invite"     ) -> Just $ NoticeGroupIncrease GroupIncreaseInvite
+                (NoticeEvent , Just "group_ban"      , _                 ) -> Just NoticeGroupBan
+                (NoticeEvent , Just "group_recall"   , _                 ) -> Just NoticeGroupRecall
+                (NoticeEvent , Just "group_add"      , _                 ) -> Just NoticeGroupAdd
+                (NoticeEvent , Just "friend_add"     , _                 ) -> Just NoticeFriendAdd
+                (NoticeEvent , Just "friend_recall"  , _                 ) -> Just NoticeFriendRecall
+                (NoticeEvent , Just "notify"         , Just "poke"       ) -> Just $ NoticeNotify NoticeSubTypePoke
+                (NoticeEvent , Just "notify"         , Just "lucky_king" ) -> Just $ NoticeNotify NoticeSubTypeLuckyKing
+                (NoticeEvent , Just "notify"         , Just "honor"      ) -> Just $ NoticeNotify NoticeSubTypeHonor
+                _ -> Nothing )
+              <*> pure ( case (eventType, requestType, requestSubType) of
+                (RequestEvent, Just "friend"       , _                 ) -> Just $ RequestFriend comment flag
+                (RequestEvent, Just "group"        , Just "add"        ) -> Just $ RequestGroup RequestGroupAdd comment flag
+                (RequestEvent, Just "group"        , Just "invite"     ) -> Just $ RequestGroup RequestGroupInvite comment flag
+                _ -> Nothing )
+                
+
 
 showCQ :: CQMessage -> String
 showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderName, senderCard', ": ", MP.htmlDecodeFunction messageContent] --, mcqcodes]

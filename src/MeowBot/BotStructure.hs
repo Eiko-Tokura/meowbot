@@ -15,7 +15,6 @@ module MeowBot.BotStructure
   --, BotAction(..)
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
   , UserGroup(..), GroupGroup(..)
-  , SendMessageForm(..), Params(..)
   , MetaMessageItem(..)
   --, gIncreaseAbsoluteId, increaseAbsoluteId
   --, updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, updateSavedAdditionalData
@@ -43,14 +42,12 @@ import Control.Monad.IOe
 import Control.Monad.Readable
 import Control.Monad.Trans.ReaderState
 import Command.Aokana.Scripts
-import Data.Aeson (object, ToJSON, toJSON, (.=))
 import Data.Additional
 import Data.Maybe
 import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
 import Data.Additional.Saved
 import Data.Ord (comparing, Down(..))
-import GHC.Generics (Generic)
 import MeowBot.Parser (ChatSetting(..))
 import MeowBot.Data.Book
 import MeowBot.Parser (Tree(..), flattenTree)
@@ -114,38 +111,38 @@ rseqWholeChat (AllData wc m od) = do
   od' <- rseq od
   return $ AllData wc' m od'
 
-data SendMessageForm = SendMessageForm
-  { action :: Text
-  , params :: Params
-  , echo   :: Maybe Text
-  } deriving (Generic, Show, ToJSON)
-
-data Params
-  = PrivateParams
-    { user_id     :: UserId
-    , messageText :: Text
-    }
-  | GroupParams
-    { group_id    :: GroupId
-    , messageText :: Text
-    }
-  | DeleteParams
-    { messageIdDelete  :: MessageId
-    }
-  deriving (Show)
-
-instance ToJSON Params where
-  toJSON (PrivateParams uid msg) =
-    object [ "user_id" .= uid
-           , "message" .= msg
-           ]
-  toJSON (GroupParams gid msg) =
-    object [ "group_id" .= gid
-           , "message" .= msg
-           ]
-  toJSON (DeleteParams mid) =
-    object [ "message_id" .= mid
-           ]
+-- data SendMessageForm = SendMessageForm
+--   { action :: Text
+--   , params :: Params
+--   , echo   :: Maybe Text
+--   } deriving (Generic, Show, ToJSON)
+-- 
+-- data Params
+--   = PrivateParams
+--     { user_id     :: UserId
+--     , messageText :: Text
+--     }
+--   | GroupParams
+--     { group_id    :: GroupId
+--     , messageText :: Text
+--     }
+--   | DeleteParams
+--     { messageIdDelete  :: MessageId
+--     }
+--   deriving (Show)
+-- 
+-- instance ToJSON Params where
+--   toJSON (PrivateParams uid msg) =
+--     object [ "user_id" .= uid
+--            , "message" .= msg
+--            ]
+--   toJSON (GroupParams gid msg) =
+--     object [ "group_id" .= gid
+--            , "message" .= msg
+--            ]
+--   toJSON (DeleteParams mid) =
+--     object [ "message_id" .= mid
+--            ]
 
 getNewMsg :: WholeChat -> CQMessage
 getNewMsg [] = emptyCQMessage
