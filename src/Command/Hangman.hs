@@ -16,7 +16,6 @@ import Control.Monad
 import Control.Monad.State
 import Control.Monad.Readable
 import Control.Monad.Trans.Maybe
-import Data.Maybe
 import Data.Coerce
 import MeowBot.Data
 import MeowBot

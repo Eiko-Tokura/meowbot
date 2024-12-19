@@ -29,7 +29,7 @@ updateTotalPP uid mnick = do
       accPairs@(totalMiss, totalGuess) 
         = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0) 
         $ accuracyPair . hangmanRecordToState . entityVal <$> listScores
-  runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank (totalMiss) (totalGuess) (pass) (pc)) 
+  runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc) 
           ( [ HangmanRankingTotalPP =. totalPP
             , HangmanRankingRank =. rank
             , HangmanRankingTotalMiss =. totalMiss
@@ -44,7 +44,7 @@ updateTotalPP uid mnick = do
 -- the total pp it the maximal 50 consecutive weighted sum of the scores
 computePP :: [Double] -> Double
 computePP = maximum . map (sum . zipWith (*) [lambda^n | n<- [0..l]] . take l) . tails
-  where lambda = 0.98
+  where lambda = 0.97
         l = 50
 
 -- | get the ranking of the hangman game
