@@ -1,15 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Command.Hangman.Ranking where
 
-import Utils.RunDB
-import Data.PersistModel
-import System.Meow
-import Data.Maybe
-import Data.List (tails)
+import Command.Hangman.Model
 import Control.Monad
+import Data.List (tails, inits, maximumBy)
+import Data.Ord
+import Data.Maybe
+import Data.PersistModel
 import qualified Data.Set as S
 import MeowBot.Data
-import Command.Hangman.Model
+import System.Meow
+import Utils.RunDB
 
 data ViewRanking = ViewPersonalRanking | ViewGlobalRanking | UpdateAllRanking
 
@@ -18,7 +19,7 @@ type PlayCount = (Int, Int) -- pass count and total play count
 
 updateTotalPP
   :: UserId             -- ^ user id
-  -> Maybe Text               -- ^ user nickname
+  -> Maybe Text         -- ^ user nickname
   -> Meow (Double, Int, AccPair, PlayCount) -- ^ returns total pp and rank
 updateTotalPP uid mnick = do
   listScores <- runDB $ selectList [HangmanRecordUserId ==. uid] [Desc HangmanRecordId]
@@ -42,10 +43,37 @@ updateTotalPP uid mnick = do
   return (totalPP, rank, accPairs, (pass, pc))
 
 -- the total pp it the maximal 50 consecutive weighted sum of the scores
+-- computePP :: [Double] -> Double
+-- computePP = maximum . map (sum . zipWith (*) [lambda^n | n<- [0..l]] . take l) . tails
+--   where lambda = 0.97
+--         l = 50
+
 computePP :: [Double] -> Double
-computePP = maximum . map (sum . zipWith (*) [lambda^n | n<- [0..l]] . take l) . tails
-  where lambda = 0.97
-        l = 50
+computePP = (c *) . weightedSum lambda . map fst . greedyGrouping g
+  where c      = 100 * (1 - lambda) / fromIntegral g
+        lambda = 0.85
+        g      = 7
+
+weightedSum :: Double -> [Double] -> Double
+weightedSum lambda = sum . zipWith (*) (map (lambda^) [0::Int ..])
+
+greedyGrouping :: Int -> [Double] -> [(Double, [Double])]
+greedyGrouping _ [] = []
+greedyGrouping groupSize l | length l <= groupSize = [(sum l, l)]
+greedyGrouping groupSize l =
+  let (restLeft, maxSumGroup, restRight) = getMaxSumGroup groupSize l
+  in maxSumGroup : mergeBySum (greedyGrouping groupSize restLeft) (greedyGrouping groupSize restRight)
+  where mergeBySum [] r = r
+        mergeBySum l [] = l
+        mergeBySum (x:xs) (y:ys) | fst x > fst y = x : mergeBySum xs (y:ys)
+                                 | otherwise     = y : mergeBySum (x:xs) ys
+
+getMaxSumGroup :: Int -> [Double] -> ([Double], (Double, [Double]), [Double])
+getMaxSumGroup groupSize l = maximumBy (comparing $ (\(_,(s,_),_) -> s)) $ 
+  [ (left, (sum group, group), right) | (left, rest) <- zip (inits l) (tails l)
+                         , let group = take groupSize rest
+                               right = drop groupSize rest
+                         ]
 
 -- | get the ranking of the hangman game
 getRanking :: Meow [HangmanRanking]
