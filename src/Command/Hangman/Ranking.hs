@@ -42,17 +42,11 @@ updateTotalPP uid mnick = do
           )
   return (totalPP, rank, accPairs, (pass, pc))
 
--- the total pp it the maximal 50 consecutive weighted sum of the scores
--- computePP :: [Double] -> Double
--- computePP = maximum . map (sum . zipWith (*) [lambda^n | n<- [0..l]] . take l) . tails
---   where lambda = 0.97
---         l = 50
-
 computePP :: [Double] -> Double
 computePP = (c *) . weightedSum lambda . map fst . greedyGrouping g
   where c      = 100 * (1 - lambda) / fromIntegral g
-        lambda = 0.85
-        g      = 7
+        lambda = 0.8
+        g      = 10
 
 weightedSum :: Double -> [Double] -> Double
 weightedSum lambda = sum . zipWith (*) (map (lambda^) [0::Int ..])
