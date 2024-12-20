@@ -9,6 +9,7 @@ It was my first Haskell project and was not well written. But I have now revisit
 - [x] Generating Chat output in Markdown and display in pictures
 - [x] Generating Random Variables
 - [x] Polling
+- [x] Funny Hangman Game
 - [x] User, group and command management
 - [x] Automatic retract user messages in group
 - [x] Proxy WebSocket connection to connect to external servers
@@ -76,7 +77,7 @@ Multiple bots can be started by using multiple sets of flags, starting with a ru
 - [ ] Assistant And Notes Function
 - [x] Using database to store user data and statistics
 - [ ] Provide interesting statistics functions to users
-- [ ] Bring back the funny hangman game
+- [x] Bring back the funny hangman game
 - [x] Implement common data shared among concurrent bot instances
 - [x] Proper logging system
 - [x] Modular system using type level programming and monad transformers

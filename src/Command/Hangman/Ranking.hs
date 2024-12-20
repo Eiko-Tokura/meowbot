@@ -31,12 +31,12 @@ updateTotalPP uid mnick = do
         = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0) 
         $ accuracyPair . hangmanRecordToState . entityVal <$> listScores
   runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc) 
-          ( [ HangmanRankingTotalPP =. totalPP
-            , HangmanRankingRank =. rank
-            , HangmanRankingTotalMiss =. totalMiss
+          ( [ HangmanRankingTotalPP    =. totalPP
+            , HangmanRankingRank       =. rank
+            , HangmanRankingTotalMiss  =. totalMiss
             , HangmanRankingTotalGuess =. totalGuess
-            , HangmanRankingPassCount =. pass
-            , HangmanRankingPlaycount =. pc
+            , HangmanRankingPassCount  =. pass
+            , HangmanRankingPlaycount  =. pc
             ] <>
             [ HangmanRankingUserNickName =. nick | Just nick <- [mnick] ]
           )
@@ -63,7 +63,7 @@ greedyGrouping groupSize l =
                                  | otherwise     = y : mergeBySum (x:xs) ys
 
 getMaxSumGroup :: Int -> [Double] -> ([Double], (Double, [Double]), [Double])
-getMaxSumGroup groupSize l = maximumBy (comparing $ (\(_,(s,_),_) -> s)) $ 
+getMaxSumGroup groupSize l = maximumBy (comparing (\(_,(s,_),_) -> s)) $ 
   [ (left, (sum group, group), right) | (left, rest) <- zip (inits l) (tails l)
                          , let group = take groupSize rest
                                right = drop groupSize rest
