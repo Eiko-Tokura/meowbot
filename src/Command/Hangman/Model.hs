@@ -152,10 +152,10 @@ newHangman :: (MonadUniform m, MonadIO m) => S.Set HangmanMod -> m HangmanState
 newHangman mods = do
   let range | HangmanLanguageExpert `S.member` mods = V.length wordLib
             | otherwise                             = V.length wordLib `div` 2
-  wid <- getUniformR (0, range - 1)
+  word <- getWord range
   time <- liftIO getCurrentTime
   let s = HangmanState
-        { hangmanWord      = wordLib V.! wid
+        { hangmanWord      = word
         , hangmanGuessed   = []
         , hangmanMods      = validateMods mods
         , hangmanHP        = hangmanInitialHP mods
@@ -166,6 +166,11 @@ newHangman mods = do
   if HangmanModEasy `S.member` mods
   then return $ fromRight s $ guessChar (T.index (hangmanWord s) 1) s
   else return s
+  where getWord range = do
+          word <- (wordLib V.!) <$> getUniformR (0, range - 1)
+          if word `S.member` wordBlacklist
+            then getWord range
+            else return word
 
 validateMods :: S.Set HangmanMod -> S.Set HangmanMod
 validateMods mods
@@ -232,7 +237,7 @@ hangmanScoring :: HangmanState -> Double
 hangmanScoring s
   = difficultyPoints (hangmanWord s) `onlyIf` completedPlay s
   + extraPoints (S.toList $ hangmanMods s) `onlyIf` completedPlay s
-  + modsMultiplier (S.toList $ hangmanMods s) * (-57)
+  + multIf (completedPlay s) (modsMultiplier (S.toList $ hangmanMods s)) * (-57)
     * log
         (subStringSum
           (filter (`S.member` wordDedupMod s) $ hangmanGuessed s)
@@ -242,9 +247,12 @@ hangmanScoring s
             else missCount s + S.size (wordDedupMod s)
           )
         )
-    / fromIntegral (S.size $ wordDedup (hangmanWord s))
+    / sqrt (fromIntegral (S.size $ wordDedup (hangmanWord s)) * fromIntegral (S.size $ wordDedupMod s))
   where onlyIf x True  = x
         onlyIf _ False = 0
+        multIf True  c = c
+        multIf False c | c > 1 = c**0.5
+                       | otherwise = c
 
 difficultyPoints :: Text -> Double
 difficultyPoints w = fromMaybe 0 $ do

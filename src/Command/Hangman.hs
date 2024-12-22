@@ -56,6 +56,7 @@ hangmanParser = Left <$> asum
     asumE [ ($(stringQ_ "ranking") <|> $(stringQ_ "rank")) >> return ViewGlobalRanking
           , $(stringQ_ "info") >> return ViewPersonalRanking
           , $(stringQ_ "update all ranking") >> return UpdateAllRanking
+          , $(stringQ_ "update all scores") >> return UpdateAllScores
           ]
 
 helpHangman :: Text
@@ -130,6 +131,10 @@ doHangman cid nickName uid (Right ViewPersonalRanking) = do
 doHangman cid _ _ (Right UpdateAllRanking) = do
   updateAllRanking
   return [ baSendToChatId cid "All ranking updated!" ]
+
+doHangman cid _ _ (Right UpdateAllScores) = do
+  recalculateAllScores
+  return [ baSendToChatId cid "All scores recalculated!" ]
 
 showRanking :: HangmanRanking -> Text
 showRanking r 

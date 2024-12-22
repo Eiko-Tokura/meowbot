@@ -182,7 +182,7 @@ library meowbot-lib
 executable meowbot
     main-is:          Main.hs
 
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -finfo-table-map -fdistinct-constructor-tables -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A12m -with-rtsopts=-xn
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -finfo-table-map -fdistinct-constructor-tables -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m -with-rtsopts=-xn
 
     hs-source-dirs:   app
 

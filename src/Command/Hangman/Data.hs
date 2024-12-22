@@ -6,11 +6,15 @@ import Data.Text (Text)
 import qualified Data.Map as M
 import qualified Data.Vector.Unboxed as U
 import qualified Data.Vector as V
+import qualified Data.Set as S
 ----------------------------------------------------------------------------------------------------
 -- Data
 
 charFreq :: U.Vector Double
 charFreq = U.fromList [ 8.06995892709077E-02, 0.012276878973113, 3.98002275400605E-02, 3.18491807915052E-02, 8.46011942639336E-02, 1.57221183079761E-02, 3.05829267822364E-02, 2.38788509869711E-02, 6.94961337472763E-02, 2.52608033321121E-03, 9.80222012251168E-03, 5.80677092372266E-02, 3.38289078719862E-02, 7.61616434305842E-02, 6.84805594657308E-02, 3.48187714122267E-02, 2.68677246636714E-03, 8.25957564421476E-02, 6.70343302673274E-02, 7.79935337485618E-02, 4.25191384330589E-02, 1.34274346465094E-02, 1.17498087763615E-02, 3.99802027291952E-03, 2.23812003059578E-02, 3.02101210333147E-03 ]
+
+wordBlacklist :: S.Set Text
+wordBlacklist = S.fromList [ "git", "bonaparte", "walter", "jane", "john" ]
 
 wordFreqMap :: M.Map Text Int
 wordFreqMap = M.fromList $ zip (V.toList wordLib) (U.toList wordFreq)

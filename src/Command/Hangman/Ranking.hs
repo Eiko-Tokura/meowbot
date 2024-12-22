@@ -12,7 +12,7 @@ import MeowBot.Data
 import System.Meow
 import Utils.RunDB
 
-data ViewRanking = ViewPersonalRanking | ViewGlobalRanking | UpdateAllRanking
+data ViewRanking = ViewPersonalRanking | ViewGlobalRanking | UpdateAllRanking | UpdateAllScores deriving (Show, Eq)
 
 type AccPair = (Int, Int) -- miss count and total guess count
 type PlayCount = (Int, Int) -- pass count and total play count
@@ -42,10 +42,20 @@ updateTotalPP uid mnick = do
           )
   return (totalPP, rank, accPairs, (pass, pc))
 
+recalculateAllScores :: Meow ()
+recalculateAllScores = do
+  allScores <- runDB $ selectList [] [Desc HangmanRecordId]
+  let newAllScores = (\score -> 
+        let scoreRec = entityVal $ score
+            state = hangmanRecordToState scoreRec
+        in (scoreRec { hangmanRecordScore = Just $ hangmanScoring state }, entityKey score)
+        ) <$> allScores
+  runDB $ forM_ newAllScores $ \(score, key) -> replace key score
+
 computePP :: [Double] -> Double
 computePP = (c *) . weightedSum lambda . map fst . greedyGrouping g
   where c      = 100 * (1 - lambda) / fromIntegral g
-        lambda = 0.8
+        lambda = 0.66
         g      = 10
 
 weightedSum :: Double -> [Double] -> Double
