@@ -6,7 +6,7 @@ module Utils.Persist
   ) where
 
 import Database.Persist
-import Database.Persist.Sqlite
+import Database.Persist.Sql
 import Data.Bifunctor
 import Control.Monad
 import Text.Read

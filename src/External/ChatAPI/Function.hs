@@ -20,12 +20,12 @@ data Function = Function
   { name        :: Text
   , description :: Text
   , parameters  :: [Parameter]
-  } deriving (Show, Generic, ToJSON)
+  } deriving (Show, Generic)
 
 data Parameter = Parameter
   { paramType  :: Text
   , properties :: Properties
-  , required   :: [PropertyName]
+  , required   :: [Property]
   , additionalProperties :: Bool
   } deriving (Show, Generic)
 
@@ -47,11 +47,19 @@ instance ToJSON Tool where
     , "functions" .= functions t
     ]
 
+instance ToJSON Function where
+  toJSON f = object
+    [ "name"        .= name f
+    , "description" .= description f
+    --, "parameters"  .= object
+      
+    ]
+
 instance ToJSON Parameter where
   toJSON p = object
     [ "type"                 .= paramType p
     , "properties"           .= properties p
-    , "required"             .= required p
+    , "required"             .= map propName (required p)
     , "additionalProperties" .= additionalProperties p
     ]
 
