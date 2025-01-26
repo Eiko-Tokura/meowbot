@@ -59,10 +59,12 @@ newtype MaybeTy t = MaybeTy (Maybe (ParamToData t)) -- ^ Maybe type wrapper, cal
 data ObjectT name exp (params :: [Parameter Symbol Symbol]) where
   ObjTNil  :: ObjectT name exp '[]
   (:@*)    :: ParamToData t -> ObjectT name exp ts -> ObjectT name exp (t ': ts)
+infixr 5 :@*
 
 data ObjectT0 (params :: [Parameter Symbol Symbol]) where
   ObjT0Nil :: ObjectT0 '[]
   (:%*)    :: ParamToData t -> ObjectT0 ts -> ObjectT0 (t ': ts)
+infixr 5 :%*
 
 type ParamExample
   = '[ StringP "city" "city to query"
@@ -130,12 +132,24 @@ instance (FromJSON (ObjectT0 ts), FromJSON (ParamToData t), HasName t) => FromJS
 class HasName t where
   getName :: String
 
-instance KnownSymbol t => HasName (StringP t d)    where getName = symbolVal (Proxy @t)
-instance KnownSymbol t => HasName (IntP t d)       where getName = symbolVal (Proxy @t)
-instance KnownSymbol t => HasName (BoolP t d)      where getName = symbolVal (Proxy @t)
-instance KnownSymbol t => HasName (FloatP t d)     where getName = symbolVal (Proxy @t)
-instance KnownSymbol t => HasName (ObjectP t d ps) where getName = symbolVal (Proxy @t)
-instance KnownSymbol t => HasName (MaybeP t d p)   where getName = symbolVal (Proxy @t)
+instance KnownSymbol t => HasName (StringP t d)    where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (IntP t d)       where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (BoolP t d)      where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (FloatP t d)     where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (ObjectP t d ps) where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (MaybeP t d p)   where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
 
 --------------------------------Param Explanation--------------------------------
 
