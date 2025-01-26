@@ -68,6 +68,7 @@ userParser =
                                 ]
         userGroupParser = MP.asumE [ $(MP.stringQ "admin") >> return Admin
                                    , $(MP.stringQ "allowed") >> return Allowed
+                                   , $(MP.stringQ "denied") >> return Denied
                                    , CustomUserGroup <$> MP.word
                                    ]
         groupGroupParser = ($(MP.stringQ "allowed") >> return AllowedGroup)
