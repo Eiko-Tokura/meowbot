@@ -84,7 +84,7 @@ data Message
   = SystemMessage    { content :: Text }
   | UserMessage      { content :: Text }
   | AssistantMessage { content :: Text }
-  | ToolMessage      { content :: Text, toolMeta :: ToolMeta }
+  | ToolMessage      { content :: Text, toolMeta :: Maybe ToolMeta }
   deriving (Generic, Eq, Ord, Read, NFData)
 
 deriving instance Show Message
@@ -108,20 +108,27 @@ instance FromJSON Message where
       "user"      -> UserMessage      <$> v .: "content"
       "assistant" -> AssistantMessage <$> v .: "content"
       "tool"      -> do
-          ToolMessage <$> (v .: "content") <*> (v .: "tool_metadata")
+          ToolMessage <$> (v .: "content") <*> v .:? "toolMeta"
       _           -> error "Invalid role in message"
+
+-- | Warning: due to the deepseek model unable to recognize the role "tool", we use "assistant" instead
+instance ToJSON Message where
+  toJSON (SystemMessage    c)   = A.object ["role" .= ("system" :: Text), "content" .= c]
+  toJSON (UserMessage      c)   = A.object ["role" .= ("user" :: Text), "content" .= c]
+  toJSON (AssistantMessage c)   = A.object ["role" .= ("assistant" :: Text), "content" .= c]
+  toJSON (ToolMessage      c _) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
+  --("tool" :: Text), "content" .= c]
 
 apiKeyFile :: FilePath
 apiKeyFile = "apiKey"
 
 data ChatRequest = ChatRequest
-  { model :: Text
+  { model    :: Text
   , messages :: [Message]
   , temperature :: Double
   , stream :: Maybe Bool
   } deriving (Show, Generic)
 
-instance ToJSON Message
 instance ToJSON ChatRequest where
   toJSON chatReq = A.object $
     [ "model" .= model chatReq
@@ -270,20 +277,16 @@ agent = do
       response <- liftE . ExceptT $ fetchChatCompletionResponse apiKeys params prevMsgs
       firstChoice <- liftE . pureEMsg "No response in choices" $ listToMaybe (choices response)
       let msg = message firstChoice
-      case extractToolCall msg of
+      case parseToolCall (content msg) of
         Nothing -> return $ content $ msg
-        Just (toolName, args, md) -> do
-          toolmsg <- handleToolCall toolName args md
+        Just (ToolCallPair toolName args) -> do
+          toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
           modify $ \st -> st
-            { chatStatusToolDepth      = chatStatusToolDepth st - 1
+            { chatStatusToolDepth      = chatStatusToolDepth st + 1
             , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
             , chatStatusMessages       = chatStatusMessages st <> [toolmsg]
             }
           agent
-  where
-    extractToolCall msg = case parseToolCall (content msg) of
-        Just (ToolCallPair tname args) -> Just (tname, args, ToolMeta "tool_call_id" tname 0)
-        Nothing -> Nothing
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
@@ -323,7 +326,7 @@ handleToolCall toolCallName args md = do
         { content = case output of
             String t -> t
             _ -> decodeUtf8 (BL.toStrict $ encode output)
-        , toolMeta = md
+        , toolMeta = Just md
             { toolCallId = "dummy_toolcall_id" -- T.pack (show (hash prevMsgs))  -- Simple ID generation
             , toolAttempt = toolAttempt md + 1
             }

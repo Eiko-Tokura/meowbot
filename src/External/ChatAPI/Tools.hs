@@ -29,6 +29,7 @@ import Data.String (IsString, fromString)
 import GHC.TypeLits
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Lazy as TL
 import Data.ByteString.Lazy (ByteString)
@@ -54,16 +55,20 @@ data Parameter name description
   | FloatP  name description
   | ObjectP name description [Parameter Symbol Symbol]
   | MaybeP  name description (Parameter Symbol Symbol)
+  | ObjectP0 [Parameter Symbol Symbol] -- ^ outermost object type, no name
 
-newtype StringT t = StringT Text
-newtype IntT t    = IntT Int
-newtype BoolT t   = BoolT Bool
-newtype FloatT t  = FloatT Double
-newtype UnitT t   = UnitT ()
-newtype MaybeT t  = MaybeT (Maybe (ParamToData t))
-data ObjectT name (params :: [Parameter Symbol Symbol]) where
-  (:@.)  :: ObjectT name '[]
-  (:@*) :: ParamToData t -> ObjectT name ts -> ObjectT name (t ': ts)
+newtype StringT n e = StringT Text
+newtype IntT    n e = IntT Int
+newtype BoolT   n e = BoolT Bool
+newtype FloatT  n e = FloatT Double
+newtype UnitT   n e = UnitT ()
+newtype MaybeTy t = MaybeTy (Maybe (ParamToData t)) -- ^ Maybe type wrapper, called MaybeTy to avoid conflict with MaybeT transformer
+data ObjectT name exp (params :: [Parameter Symbol Symbol]) where
+  (:@.) :: ObjectT name exp '[]
+  (:@*) :: ParamToData t -> ObjectT name exp ts -> ObjectT name exp (t ': ts)
+data ObjectT0 (params :: [Parameter Symbol Symbol]) where
+  (:%.) :: ObjectT0 '[]
+  (:%*) :: ParamToData t -> ObjectT0 ts -> ObjectT0 (t ': ts)
 
 type ParamExample
   = '[ StringP "city" "city to query"
@@ -76,48 +81,57 @@ type ParamExample
 
 --------------------------------FromJSON/ToJSON--------------------------------
 
-instance KnownSymbol t => FromJSON (StringT t) where
+instance (KnownSymbol t, KnownSymbol e) => FromJSON (StringT t e) where
   parseJSON = fmap StringT . parseJSON
 
-instance KnownSymbol t => ToJSON (StringT t) where
+instance (KnownSymbol t, KnownSymbol e) => ToJSON (StringT t e) where
   toJSON (StringT t) = String t
 
-instance KnownSymbol t => FromJSON (IntT t) where
+instance (KnownSymbol t, KnownSymbol e) => FromJSON (IntT t e) where
   parseJSON = fmap IntT . parseJSON
 
-instance KnownSymbol t => ToJSON (IntT t) where
+instance (KnownSymbol t, KnownSymbol e) => ToJSON (IntT t e) where
   toJSON (IntT i) = Number $ fromIntegral i
 
-instance KnownSymbol t => FromJSON (BoolT t) where
+instance (KnownSymbol t, KnownSymbol e) => FromJSON (BoolT t e) where
   parseJSON = fmap BoolT . parseJSON
 
-instance KnownSymbol t => ToJSON (BoolT t) where
+instance (KnownSymbol t, KnownSymbol e) => ToJSON (BoolT t e) where
   toJSON (BoolT b) = Bool b
 
-instance KnownSymbol t => FromJSON (FloatT t) where
+instance (KnownSymbol t, KnownSymbol e) => FromJSON (FloatT t e) where
   parseJSON = fmap FloatT . parseJSON
 
-instance KnownSymbol t => ToJSON (FloatT t) where
+instance (KnownSymbol t, KnownSymbol e) => ToJSON (FloatT t e) where
   toJSON (FloatT f) = Number $ realToFrac f
 
-instance FromJSON (UnitT t) where
+instance FromJSON (UnitT t e) where
   parseJSON _ = return $ UnitT ()
 
-instance ToJSON (UnitT t) where
+instance ToJSON (UnitT t e) where
   toJSON _ = Null
 
-instance FromJSON (ParamToData t) => FromJSON (MaybeT t) where
-  parseJSON Null = return $ MaybeT Nothing
-  parseJSON v    = fmap MaybeT $ Just <$> parseJSON v
+instance FromJSON (ParamToData t) => FromJSON (MaybeTy t) where
+  parseJSON Null = return $ MaybeTy Nothing
+  parseJSON v    = fmap MaybeTy $ Just <$> parseJSON v
 
-instance FromJSON (ObjectT name '[]) where
+instance FromJSON (ObjectT name e '[]) where
   parseJSON _ = return (:@.)
 
-instance (FromJSON (ObjectT name ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT name (t ': ts)) where
+instance FromJSON (ObjectT0 '[]) where
+  parseJSON _ = return (:%.)
+
+instance (FromJSON (ObjectT name e ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT name e (t ': ts)) where
   parseJSON = withObject "ObjectT" $ \o -> do
     t <- parseJSON =<< o .: fromString (getName @t)
     ts <- parseJSON (Object o)
     return (t :@* ts)
+
+instance (FromJSON (ObjectT0 ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT0 (t ': ts)) where
+  parseJSON = withObject "ObjectT0" $ \o -> do
+    t <- parseJSON =<< o .: fromString (getName @t)
+    ts <- parseJSON (Object o)
+    return (t :%* ts)
 
 class HasName t where
   getName :: String
@@ -173,7 +187,23 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (StringP n d) where
     ]
   {-# INLINE printParamExplanation #-}
 
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (StringT n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n)
+    , ": (type string) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntP n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n) 
+    , ": (type integer) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntT n d) where
   printParamExplanation = prints $ mconcat
     [ toText $ symbolVal (Proxy @n) 
     , ": (type integer) "
@@ -189,7 +219,23 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolP n d) where
     ]
   {-# INLINE printParamExplanation #-}
 
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolT n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n) 
+    , ": (type boolean) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatP n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n) 
+    , ": (type float) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatT n d) where
   printParamExplanation = prints $ mconcat
     [ toText $ symbolVal (Proxy @n) 
     , ": (type float) "
@@ -204,10 +250,28 @@ instance (KnownSymbol n, KnownSymbol d, ParamExplained ps) => ParamExplained (Ob
       , ": (type object) "
       , toText $ symbolVal (Proxy @d)
       ]
+    prints "This object contains the following parameters:"
+    indentInc
+    printParamExplanation @ps
+    indentDec
+  {-# INLINE printParamExplanation #-}
+
+instance (KnownSymbol n, KnownSymbol d, ParamExplained ps) => ParamExplained (ObjectT n d ps) where
+  printParamExplanation = do
+    prints $ mconcat
+      [ toText $ symbolVal (Proxy @n)
+      , ": (type object) "
+      , toText $ symbolVal (Proxy @d)
+      ]
     indentInc
     prints "This object contains the following parameters:"
     printParamExplanation @ps
     indentDec
+  {-# INLINE printParamExplanation #-}
+
+instance (ParamExplained ps) => ParamExplained (ObjectT0 ps) where
+  printParamExplanation = do
+    printParamExplanation @ps
   {-# INLINE printParamExplanation #-}
 
 instance (ParamExplained '[]) where
@@ -224,13 +288,12 @@ instance (ParamExplained p, ParamExplained ps) => ParamExplained (p ': ps) where
 
 -- | Convert parameter type to data type
 type family ParamToData p :: Type where
-  ParamToData (StringP n _)           = StringT n
-  ParamToData (IntP n _)              = IntT n
-  ParamToData (BoolP n _)             = BoolT n
-  ParamToData (FloatP n _)            = FloatT n
-  ParamToData (ObjectP n _ '[])       = ObjectT n '[]
-  ParamToData (ObjectP n _ '[p])      = ObjectT n '[p]
-  ParamToData (ObjectP n _ (p ': ps)) = ObjectT n (p ': ps)
+  ParamToData (StringP n e)           = StringT n e
+  ParamToData (IntP n e)              = IntT n e
+  ParamToData (BoolP n e)             = BoolT n e
+  ParamToData (FloatP n e)            = FloatT n e
+  ParamToData (ObjectP n e l)       = ObjectT n e l
+  ParamToData (ObjectP0 l)          = ObjectT0 l
 
 -- | A class for tools
 class
@@ -241,7 +304,7 @@ class
   ) 
   => ToolClass a where
   type ToolInput  a :: Type
-  data ToolOutput a :: Type
+  type ToolOutput a :: Type
   data ToolError  a :: Type
   toolName          :: Proxy a -> Text
   toolDescription   :: Proxy a -> Text
@@ -301,106 +364,60 @@ instance FromJSON ToolMeta
 ---------------------------------
 appendToolPrompts :: ConstraintList ToolClass ts => Proxy ts -> Text -> Text
 appendToolPrompts clist sep
-  = ( T.unlines 
+  | null toolExplainList = ""
+  | otherwise = 
+    ( T.unlines
       [ sep
       , "## Available Tools"
+      , "If you need to use tool, output a message with a JSON object without any other content."
       , "Format tool calls as JSON with 'tool' and 'args' fields."
       , "Example: {\"tool\": \"weather\", \"args\": {\"city\": \"Paris\"}}"
       , sep
       , "### TOOLS LIST:"
       , ""
-      ] 
+      ]
     <>
-    ) 
-  . T.unlines $ useConstraint (Proxy @ToolClass) clist (\t -> toolExplain t <> sep)
+    )
+    . T.unlines $ toolExplainList
+  where toolExplainList = useConstraint (Proxy @ToolClass) clist (\t -> toolExplain t <> sep)
 
--- -- | Generate system prompt with tool descriptions
--- generateSystemPrompt :: ChatParams -> Text
--- generateSystemPrompt params
---   | null (chatTools params) = basePrompt
---   | otherwise               = basePrompt <> "\n\n" <> toolPrompt
---   where
---     basePrompt = case systemMessage (chatSetting params) of
---       Just (Message _ txt _) -> txt
---       Nothing -> "You are a helpful assistant."
---     
---     toolPrompt = T.intercalate "\n"
---       [ "---"
---       , "AVAILABLE TOOLS:"
---       , "Format tool calls as JSON with 'tool' and 'args' fields."
---       , "Example: {\"tool\": \"weather\", \"args\": {\"city\": \"Paris\"}}"
---       , "---"
---       , "TOOLS LIST:"
---       , T.intercalate "\n" (map describeTool $ chatTools params)
---       ]
---     
---     describeTool tool = T.intercalate " "
---       [ "- Name:", toolName tool
---       , "\n  Description:", toolDescription tool
---       , "\n  Parameters:", describeParams (toolParameters tool)
---       ]
---     
---     describeParams = T.intercalate ", " . map paramDesc
---       where
---         paramDesc p = T.intercalate " "
---           [ paramName p
---           , "(" <> paramTypeDesc (paramType p) <> ")"
---           , "-" <> paramDesc p
---           ]
---         
---         paramTypeDesc = \case
---           StringT -> "string"
---           IntT -> "integer"
---           BoolT -> "boolean"
---           FloatT -> "float"
---           ObjectT ps -> "object {" <> T.intercalate ", " (map paramName ps) <> "}"
--- 
--- -- | Parse potential tool call from message content
--- parseToolCall :: Text -> Maybe (Text, Value)
--- parseToolCall txt = case A.eitherDecode (BL.fromStrict $ encodeUtf8 txt) of
---   Right (Object o) -> do
---     tool <- o .: "tool"
---     args <- o .: "args"
---     return (tool, args)
---   _ -> Nothing
--- 
--- -- | Handle tool execution and recursion
--- handleToolCall :: ChatParams -> [Message] -> Text -> Value -> ToolMetadata -> ExceptT Text IO Text
--- handleToolCall params prevMsgs toolName args md = do
---   -- Find matching tool
---   tool <- case find (\t -> toolName == toolName t) (chatTools params) of
---     Just t -> return t
---     Nothing -> throwE $ "Unknown tool: " <> toolName
---   
---   -- Execute tool
---   result <- liftIO (toolHandler tool args) >>= \case
---     ToolSuccess val -> return val
---     ToolError err -> throwE $ "Tool error: " <> err
---   
---   -- Build updated message history
---   let toolMsg = Message
---         { role = "tool"
---         , content = case result of
---             String t -> t
---             _ -> decodeUtf8 (BL.toStrict $ encode result)
---         , toolMetadata = Just md
---             { toolCallId = T.pack (show (hash prevMsgs))  -- Simple ID generation
---             , toolAttempt = toolAttempt md + 1
---             }
---         }
---   
---   -- Recursive call with updated params and history
---   messageChat params { maxToolDepth = maxToolDepth params - 1 } 
---     (prevMsgs ++ [toolMsg])
--- 
--- -- | Smart constructor for chat requests with tool-aware prompts
--- generateRequestBody :: ChatParams -> [Message] -> BL.ByteString
--- generateRequestBody params msgs = encode $
---   ChatRequest
---     { model = modelString (chatModel params)
---     , messages = systemMessage : msgs
---     , temperature = fromMaybe 0.5 (systemTemp $ chatSetting params)
---     , stream = Just False
---     }
---   where
---     systemMessage = Message "system" (generateSystemPrompt params) Nothing
+--------------------------------- example tool ---------------------------------
+
+data FibonacciTool
+
+instance ToolClass FibonacciTool where
+  type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 1000000]"])
+  type ToolOutput FibonacciTool = ParamToData (StringP "result" "Calculated Fibonacci number")
+  data ToolError  FibonacciTool = FibonacciError Text deriving (Show)
+  toolName _ = "fibonacci"
+  toolDescription _ = "Calculate the nth Fibonacci number"
+  toolHandler _ ((IntT n) :%* (:%.))
+    | n < 0     = do
+        liftIO $ putStrLn $ "[TOOL]Negative Fibonacci number " <> show n
+        throwE $ FibonacciError "Negative Fibonacci number"
+    | n > 1000000 = do
+        liftIO $ putStrLn $ "[TOOL]Fibonacci number " <> show n <> " too large"
+        throwE $ FibonacciError "Fibonacci number too large"
+    | otherwise = do
+        liftIO $ putStrLn $ "[TOOL]Calculating Fibonacci number " <> show n
+        liftIO $ putStrLn $ "[TOOL]The result is " <> show (fib n)
+        return $ StringT $ toText $ fib n
+    where fib :: Int -> Integer
+          fib n = go n 0 1
+          go 0 a _ = a
+          go n a b = go (n-1) b (a+b)
+
+-- | Check dummy input output json parsing
+sanityCheckFibonacciTool :: IO ()
+sanityCheckFibonacciTool = do
+  let input = "{\"n\": 10}"
+  let inputVal = either (error "input not work") id $ jsonToInput (Proxy @FibonacciTool) =<< first toText (eitherDecode input)
+  case inputVal of
+    IntT 10 :%* (:%.) -> putStrLn "input ok"
+    _ -> error "input not ok"
+  res <- runExceptT $ toolHandlerTextError (Proxy @FibonacciTool) inputVal
+  case res of
+    Right v -> -- print its json
+      TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
+    _ -> error "output not ok"
+  

@@ -68,10 +68,10 @@ instance ConstraintList c '[] where
   {-# INLINE pickConstraint #-}
 
 instance (c t, ConstraintList c ts) => ConstraintList c (t : ts) where
-  useConstraint pc pts f = f (Proxy @t) : useConstraint pc pts f
-  pickConstraint pc pts predicate
+  useConstraint pc _ f = f (Proxy @t) : useConstraint pc (Proxy @ts) f
+  pickConstraint pc _ predicate
     | predicate (Proxy :: Proxy t) = Just $ \f -> f (Proxy @t)
-    | otherwise = pickConstraint pc pts predicate
+    | otherwise = pickConstraint pc (Proxy @ts) predicate
   {-# INLINE useConstraint #-}
   {-# INLINE pickConstraint #-}
 

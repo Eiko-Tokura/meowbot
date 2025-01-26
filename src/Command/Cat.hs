@@ -6,6 +6,7 @@ import MeowBot
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import External.ChatAPI
+import External.ChatAPI.Tools
 import MeowBot.Parser (Parser, Chars)
 import Parser.Definition (IsStream)
 import qualified MeowBot.Parser as MP
@@ -17,7 +18,7 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
-type MeowTools = '[]
+type MeowTools = '[FibonacciTool]
 
 modelCat :: ChatModel
 modelCat = DeepSeek DeepSeekChat
