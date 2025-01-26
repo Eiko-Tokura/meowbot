@@ -61,13 +61,13 @@ doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAc
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
 sendPrivate conn uid text mecho = do
   lift . sendTextData conn $ encode (ActionForm (SendPrivateMessage uid text Nothing) mecho)
-  $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", text]
+  $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to send group messages
 sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> LoggingT IO ()
 sendGroup conn gid text mecho = do
   lift . sendTextData conn $ encode (ActionForm (SendGroupMessage gid text Nothing) mecho)
-  $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", text]
+  $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to delete messages
 deleteMsg :: Connection -> MessageId -> LoggingT IO ()

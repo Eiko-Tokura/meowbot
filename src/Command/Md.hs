@@ -40,13 +40,16 @@ commandMd = BotCommand Md $ do
       MP.commandSeparator
       MP.some' MP.item
 
+-- | Turn a markdown text into a cq code image, base64 encoded.
 turnMdCQCode :: Text -> ExceptT Text IO Text
-turnMdCQCode md = fmap
-  (\fps -> T.concat [embedCQCode (CQImage filepath) | filepath <- fps]) $
+turnMdCQCode md = do
+  fps <-
     ExceptT $
       first ((<> "\n Showing the original message: " <> md) . ("Error o.o occurred while rendering markdown pictures o.o " <>) . tshow) <$>
         runExceptT
           (map (T.pack . useAnyPath) <$> markdownToImage md)
+  eb64s <- lift $ mapM (readFileBase64 . unpack) fps
+  return $ T.concat [either pack (embedCQCode . CQImage64) b64 | b64 <- eb64s]
 
 sendIOeToChatIdMd :: EssentialContent -> ExceptT Text IO Text -> Meow [BotAction]
 --OtherData -> IO ([BotAction], OtherData)

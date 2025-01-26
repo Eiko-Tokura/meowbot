@@ -35,6 +35,8 @@ class TextUtils t where
 
   textToByteString :: t -> CorrespondingByteString t
 
+  restrictLength :: Int -> t -> t
+
   tshow :: Show a => a -> t
   tshow = pack . show
   {-# INLINE tshow #-}
@@ -45,6 +47,7 @@ instance TextUtils T.Text where
   unpack           = T.unpack
   putTextLn        = TIO.putStrLn
   textToByteString = TE.encodeUtf8
+  restrictLength n = T.take n
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
   {-# INLINE putTextLn #-}
@@ -55,6 +58,7 @@ instance TextUtils LazyText where
   unpack           = TL.unpack
   putTextLn        = TLIO.putStrLn
   textToByteString = TLE.encodeUtf8
+  restrictLength n = TL.take (fromIntegral n)
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
   {-# INLINE putTextLn #-}
