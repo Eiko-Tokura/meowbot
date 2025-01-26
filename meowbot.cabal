@@ -106,7 +106,8 @@ library meowbot-lib
                    , Data.PersistModel
                    , Data.Template
                    , External.ChatAPI
-                   , External.ChatAPI.Tools
+                   , External.ChatAPI.Tool
+                   , External.ChatAPI.Tool.Search
                    , External.ChatAPI.Function
                    , External.MarkdownImage
                    , External.ProxyWS
@@ -170,6 +171,8 @@ library meowbot-lib
                  , random
                  , resource-pool
                  , safe
+                 , servant
+                 , servant-client
                  , stm
                  , template-haskell
                  , text
@@ -215,6 +218,8 @@ executable meowbot
                  , random
                  , resource-pool
                  , safe
+                 , servant
+                 , servant-client
                  , stm
                  , template-haskell
                  , text

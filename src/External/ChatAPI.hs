@@ -26,7 +26,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.ByteString.Lazy as BL
 import GHC.Generics (Generic)
 import Control.DeepSeq
-import External.ChatAPI.Tools
+import External.ChatAPI.Tool
 
 data ChatModel = 
   OpenAI OpenAIModel | DeepSeek DeepSeekModel deriving (Show, Eq)
@@ -116,7 +116,7 @@ instance ToJSON Message where
   toJSON (SystemMessage    c)   = A.object ["role" .= ("system" :: Text), "content" .= c]
   toJSON (UserMessage      c)   = A.object ["role" .= ("user" :: Text), "content" .= c]
   toJSON (AssistantMessage c)   = A.object ["role" .= ("assistant" :: Text), "content" .= c]
-  toJSON (ToolMessage      c _) = A.object ["role" .= ("system" :: Text), "content" .= c]
+  toJSON (ToolMessage      c _) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
   --("tool" :: Text), "content" .= c]
 
 apiKeyFile :: FilePath
@@ -197,7 +197,7 @@ getApiKeyByModel (DeepSeek _) apiKey = apiKeyDeepSeek apiKey
 
 fetchChatCompletionResponse :: ConstraintList ToolClass ts => APIKey -> ChatParams ts -> [Message] -> IO (Either Text ChatCompletionResponse)
 fetchChatCompletionResponse apiKey model msg = do
-  let customTimeout = 40 * 1000000 -- 40 seconds in microseconds
+  let customTimeout = 60 * 1000000 -- 60 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
   manager <- newManager customManagerSettings
   request <- parseRequest (modelEndpoint $ chatModel model)
@@ -320,7 +320,7 @@ handleToolCall toolCallName args md = do
     case pickConstraint (Proxy @ToolClass) (Proxy @ts) ((== toolCallName) . toolName) of
       Just toolCont -> toolCont $ \tool -> do
         input  <-  liftE . ExceptT $ pure (jsonToInput tool args)
-        toJSON <$> liftE (toolHandlerTextError tool input) -- Execute tool
+        wrapToolOutput <$> liftE (toolHandlerTextError tool input) -- Execute tool
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
   
   -- Build updated message history
@@ -333,5 +333,5 @@ handleToolCall toolCallName args md = do
             , toolAttempt = toolAttempt md + 1
             }
         }
-  -- Recursive call with updated params and history
   return toolMsg
+  where wrapToolOutput t = A.object ["tool_output" .= t]
