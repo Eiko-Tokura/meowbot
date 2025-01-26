@@ -29,11 +29,19 @@ import Data.Maybe
 
 botLoop :: Cat never_returns
 botLoop = do
+  $(logDebug) "Bot loop started"
+
   CatT beforeMeowActions
+  
+  $(logDebug) "Listening and handling events"
 
   CatT $ handleEvents =<< liftIO . atomically =<< listenToEvents
 
+  $(logDebug) "Performing meow actions"
+
   performMeowActions
+
+  $(logDebug) "After meow actions"
 
   CatT afterMeowActions
 
@@ -92,7 +100,9 @@ runBotServer ip port bot initglobs glob el = do
     logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
       $(logInfo) $ "Connected to client"
       meowData <- liftIO $ initMeowData conn
+      $(logDebug) $ "initMeowData finished"
       local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
+      $(logDebug) $ "initAllModulesL finished, entering bot loop"
       void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
     ) `logForkFinally` (rerunBot initglobs glob el bot)
 

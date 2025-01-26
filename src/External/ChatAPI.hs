@@ -111,12 +111,12 @@ instance FromJSON Message where
           ToolMessage <$> (v .: "content") <*> v .:? "toolMeta"
       _           -> error "Invalid role in message"
 
--- | Warning: due to the deepseek model unable to recognize the role "tool", we use "assistant" instead
+-- | Warning: due to the deepseek model unable to recognize the role "tool", we use "system" instead
 instance ToJSON Message where
   toJSON (SystemMessage    c)   = A.object ["role" .= ("system" :: Text), "content" .= c]
   toJSON (UserMessage      c)   = A.object ["role" .= ("user" :: Text), "content" .= c]
   toJSON (AssistantMessage c)   = A.object ["role" .= ("assistant" :: Text), "content" .= c]
-  toJSON (ToolMessage      c _) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
+  toJSON (ToolMessage      c _) = A.object ["role" .= ("system" :: Text), "content" .= c]
   --("tool" :: Text), "content" .= c]
 
 apiKeyFile :: FilePath
@@ -276,15 +276,17 @@ agent = do
   else do
       response <- liftE . ExceptT $ fetchChatCompletionResponse apiKeys params prevMsgs
       firstChoice <- liftE . pureEMsg "No response in choices" $ listToMaybe (choices response)
-      let msg = message firstChoice
-      case parseToolCall (content msg) of
-        Nothing -> return $ content $ msg
+      let amsg = message firstChoice
+      liftIO $ print amsg
+      case parseToolCall (content amsg) of
+        Nothing -> return $ content $ amsg
         Just (ToolCallPair toolName args) -> do
           toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
+          liftIO $ print toolmsg
           modify $ \st -> st
             { chatStatusToolDepth      = chatStatusToolDepth st + 1
             , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
-            , chatStatusMessages       = chatStatusMessages st <> [toolmsg]
+            , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
             }
           agent
 

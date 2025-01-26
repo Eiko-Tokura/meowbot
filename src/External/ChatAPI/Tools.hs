@@ -19,6 +19,7 @@ module External.ChatAPI.Tools where
 
 -- ... existing imports ...
 import Control.Monad.State
+import Control.Applicative
 import Data.Aeson
 import Data.Aeson.Types
 import Data.Bifunctor
@@ -41,13 +42,6 @@ import Utils.ToText
 
 type TextLazy = TL.Text
 
--- -- | Defines a parameter for tool calls
--- data Parameter (pt :: ParameterType) = Parameter
---   { paramName :: Text           -- ^ Parameter name
---   , paramType :: ParameterType  -- ^ Expected data type
---   , paramDesc :: Text           -- ^ Description for LLM prompting
---   } deriving (Show, Eq, Generic)
-
 data Parameter name description
   = StringP name description
   | IntP    name description
@@ -63,12 +57,14 @@ newtype BoolT   n e = BoolT Bool
 newtype FloatT  n e = FloatT Double
 newtype UnitT   n e = UnitT ()
 newtype MaybeTy t = MaybeTy (Maybe (ParamToData t)) -- ^ Maybe type wrapper, called MaybeTy to avoid conflict with MaybeT transformer
+
 data ObjectT name exp (params :: [Parameter Symbol Symbol]) where
-  (:@.) :: ObjectT name exp '[]
-  (:@*) :: ParamToData t -> ObjectT name exp ts -> ObjectT name exp (t ': ts)
+  ObjTNil  :: ObjectT name exp '[]
+  (:@*)    :: ParamToData t -> ObjectT name exp ts -> ObjectT name exp (t ': ts)
+
 data ObjectT0 (params :: [Parameter Symbol Symbol]) where
-  (:%.) :: ObjectT0 '[]
-  (:%*) :: ParamToData t -> ObjectT0 ts -> ObjectT0 (t ': ts)
+  ObjT0Nil :: ObjectT0 '[]
+  (:%*)    :: ParamToData t -> ObjectT0 ts -> ObjectT0 (t ': ts)
 
 type ParamExample
   = '[ StringP "city" "city to query"
@@ -116,10 +112,10 @@ instance FromJSON (ParamToData t) => FromJSON (MaybeTy t) where
   parseJSON v    = fmap MaybeTy $ Just <$> parseJSON v
 
 instance FromJSON (ObjectT name e '[]) where
-  parseJSON _ = return (:@.)
+  parseJSON _ = return ObjTNil
 
 instance FromJSON (ObjectT0 '[]) where
-  parseJSON _ = return (:%.)
+  parseJSON _ = return ObjT0Nil
 
 instance (FromJSON (ObjectT name e ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT name e (t ': ts)) where
   parseJSON = withObject "ObjectT" $ \o -> do
@@ -288,12 +284,12 @@ instance (ParamExplained p, ParamExplained ps) => ParamExplained (p ': ps) where
 
 -- | Convert parameter type to data type
 type family ParamToData p :: Type where
-  ParamToData (StringP n e)           = StringT n e
-  ParamToData (IntP n e)              = IntT n e
-  ParamToData (BoolP n e)             = BoolT n e
-  ParamToData (FloatP n e)            = FloatT n e
-  ParamToData (ObjectP n e l)       = ObjectT n e l
-  ParamToData (ObjectP0 l)          = ObjectT0 l
+  ParamToData (StringP n e)   = StringT n e
+  ParamToData (IntP n e)      = IntT n e
+  ParamToData (BoolP n e)     = BoolT n e
+  ParamToData (FloatP n e)    = FloatT n e
+  ParamToData (ObjectP n e l) = ObjectT n e l
+  ParamToData (ObjectP0 l)    = ObjectT0 l
 
 -- | A class for tools
 class
@@ -322,7 +318,9 @@ class
   jsonToInput _ = first toText . parseEither parseJSON
 
   toolExplain :: Proxy a -> Text
-  toolExplain _ = getExplanation @(ToolInput a)
+  toolExplain pa = "Tool Name: " <> toolName pa <> "\n" <>
+                   "Description: " <> toolDescription pa <> "\n" <>
+                   getExplanation @(ToolInput a)
 
 class EncodeUtf8LazyByteString a where
   encodeUtf8LBS :: a -> ByteString
@@ -341,10 +339,14 @@ instance FromJSON ToolCallPair where
     <*> o .: "args"
 
 -- | Parse potential tool call from message content
-parseToolCall :: EncodeUtf8LazyByteString text => text -> Maybe ToolCallPair
-parseToolCall txt = case eitherDecode (encodeUtf8LBS txt) of
-  Right tc -> Just tc
-  _        -> Nothing
+parseToolCall :: (text ~ Text, EncodeUtf8LazyByteString text) => text -> Maybe ToolCallPair
+parseToolCall txt = decode (encodeUtf8LBS txt) <|> (parseToolCallText txt)
+  where parseToolCallText txt
+          | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":", "```json"]
+             = let start = T.drop 7 $ T.dropWhile (/= '`') txt
+                   mid = T.dropWhileEnd (== '`') $ start
+               in decode $ encodeUtf8LBS mid
+          | otherwise = Nothing
 
 -- | A unique identifier for tool call tracking
 newtype ToolCallId = ToolCallId { unToolCallId :: Text }
@@ -369,11 +371,10 @@ appendToolPrompts clist sep
     ( T.unlines
       [ sep
       , "## Available Tools"
-      , "If you need to use tool, output a message with a JSON object without any other content."
-      , "Format tool calls as JSON with 'tool' and 'args' fields."
+      , "If you need to use tool, format output as JSON with 'tool' and 'args' fields, no other text."
       , "Example: {\"tool\": \"weather\", \"args\": {\"city\": \"Paris\"}}"
       , sep
-      , "### TOOLS LIST:"
+      , "### Tools List"
       , ""
       ]
     <>
@@ -386,16 +387,16 @@ appendToolPrompts clist sep
 data FibonacciTool
 
 instance ToolClass FibonacciTool where
-  type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 1000000]"])
+  type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 100000]"])
   type ToolOutput FibonacciTool = ParamToData (StringP "result" "Calculated Fibonacci number")
   data ToolError  FibonacciTool = FibonacciError Text deriving (Show)
   toolName _ = "fibonacci"
   toolDescription _ = "Calculate the nth Fibonacci number"
-  toolHandler _ ((IntT n) :%* (:%.))
+  toolHandler _ ((IntT n) :%* ObjT0Nil)
     | n < 0     = do
         liftIO $ putStrLn $ "[TOOL]Negative Fibonacci number " <> show n
         throwE $ FibonacciError "Negative Fibonacci number"
-    | n > 1000000 = do
+    | n > 100000 = do
         liftIO $ putStrLn $ "[TOOL]Fibonacci number " <> show n <> " too large"
         throwE $ FibonacciError "Fibonacci number too large"
     | otherwise = do
@@ -413,11 +414,10 @@ sanityCheckFibonacciTool = do
   let input = "{\"n\": 10}"
   let inputVal = either (error "input not work") id $ jsonToInput (Proxy @FibonacciTool) =<< first toText (eitherDecode input)
   case inputVal of
-    IntT 10 :%* (:%.) -> putStrLn "input ok"
+    IntT 10 :%* ObjT0Nil -> putStrLn "input ok"
     _ -> error "input not ok"
   res <- runExceptT $ toolHandlerTextError (Proxy @FibonacciTool) inputVal
   case res of
     Right v -> -- print its json
       TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
     _ -> error "output not ok"
-  

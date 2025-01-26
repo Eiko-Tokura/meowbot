@@ -103,7 +103,10 @@ instance
         askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
         $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
         case eventType cqmsg of
-          LifeCycle -> updateSelfInfo cqmsg
+          LifeCycle -> do
+            $(logDebug) $ "LifeCycle event."
+            updateSelfInfo cqmsg
+            $(logDebug) $ "self info updated."
           HeartBeat -> return ()
           Response -> do
             change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
