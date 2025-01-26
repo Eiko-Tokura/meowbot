@@ -108,7 +108,7 @@ doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
     [ "Poll created! owo"
     , "Poll ID: " <> tshow newPollId
     , "Title: " <> title
-    ] ++ [ tshow @Int i <> ". " <> option | (i, option) <- zip [0..] options ]
+    ] ++ [ tshow @_ @Int i <> ". " <> option | (i, option) <- zip [0..] options ]
     ++
     [ "---"
     ] ++

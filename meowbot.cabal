@@ -138,7 +138,8 @@ library meowbot-lib
                    , Utils.Persist
                    , Utils.Logging
                    , Utils.RunDB
-                   , Utils.ToText
+                   , Utils.Base64
+                   , Utils.Text
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -148,6 +149,7 @@ library meowbot-lib
     build-depends: base >=4.7 && <5
                  , aeson
                  , async
+                 , base64-bytestring
                  , bytestring
                  , containers
                  , deepseq
@@ -192,6 +194,7 @@ executable meowbot
                  , meowbot-lib
                  , aeson
                  , async
+                 , base64-bytestring
                  , bytestring
                  , containers
                  , deepseq

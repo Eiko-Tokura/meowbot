@@ -25,7 +25,6 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromMaybe)
 import qualified MeowBot.Parser as MP
-import MeowBot.Parser (tshow)
 import MeowBot.BotStructure
 import MeowBot.Update
 import Data.HList

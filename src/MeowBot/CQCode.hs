@@ -11,6 +11,8 @@ import Control.DeepSeq
 import GHC.Generics
 import Data.Text (Text, pack)
 import qualified Data.Text as T
+import Utils.ByteString
+import Utils.Base64
 import Utils.Persist
 
 data CQCode
@@ -18,6 +20,7 @@ data CQCode
   | CQReply Int
   | CQRecord Text
   | CQImage Text
+  | CQImage64 Base64
   | CQOther Text [(Text, Text)]
   deriving (Show, Read, Eq, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CQCode)
@@ -28,5 +31,6 @@ embedCQCode :: CQCode -> Text
 embedCQCode (CQAt qq)     = "[CQ:at,qq=" <> pack (show qq) <> "]"
 embedCQCode (CQReply id)  = "[CQ:reply,id=" <> pack (show id) <> "]"
 embedCQCode (CQImage str) = "[CQ:image,file=file://" <> str <> "]"
+embedCQCode (CQImage64 str) = "[CQ:image,file=base64://" <> bsToText (runBase64 str) <> "]"
 embedCQCode (CQRecord str)= "[CQ:record,file=file://" <> str <> "]"
 embedCQCode (CQOther str list) = "[CQ:" <> str <> T.intercalate "," [ key <> "=" <> val | (key, val) <- list] <> "]"

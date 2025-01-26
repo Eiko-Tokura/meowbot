@@ -20,8 +20,6 @@ module MeowBot.Parser
   , ChatSetting(..)
   , Text
 
-  , tshow
-
   ) where
 
 import Parser.Run
@@ -34,12 +32,6 @@ import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Either(lefts, rights, fromRight)
 import Data.Text (Text)
-import qualified Data.Text as T
-
--- | Convert a value to 'Text' using 'show'.
-tshow :: Show a => a -> Text
-tshow = T.pack . show
-{-# INLINE tshow #-}
 
 data Tree a = EmptyTree | Node a [Tree a] deriving Show
   deriving (Generic, NFData)

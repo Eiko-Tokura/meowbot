@@ -8,9 +8,10 @@ import External.MarkdownImage (markdownToImage)
 import MeowBot
 import MeowBot.CQCode
 import MeowBot.Async
-import MeowBot.Parser (Parser, tshow, Chars)
+import MeowBot.Parser (Parser, Chars)
 import qualified MeowBot.Parser as MP
 import qualified Data.Text as T
+import Utils.Base64
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
@@ -29,7 +30,9 @@ commandMd = BotCommand Md $ do
             mEitherStrings <- runExceptT . markdownToImage $ md
             case mEitherStrings of
               (Left err) -> return [baSendToChatId cid (T.pack $ "Error o.o occurred while rendering markdown pictures o.o " ++ show err)]
-              (Right fps) -> return [baSendToChatId cid (T.concat $ [embedCQCode $ CQImage $ T.pack $ useAbsPath outPath | outPath <- fps])]
+              (Right fps) -> do
+                eb64s <- mapM (readFileBase64 . useAbsPath) fps
+                return [baSendToChatId cid (T.concat $ [either pack (embedCQCode . CQImage64) b64 | b64 <- eb64s])]
   where
     mdParser :: (Chars sb) => Parser sb Char Text
     mdParser = do

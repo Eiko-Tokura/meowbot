@@ -9,10 +9,10 @@ module Control.Monad.ExceptionReturn
 -- this package creates modular and reusable functions that deals errors more easily,
 -- you can use different error producing functions Either, Maybe, [] all embedded in ExceptT
 
-import Data.Text (Text, append)
+import Data.Text (append)
 import Control.Monad.Trans.Except
 import Data.Bifunctor (first)
-import Utils.ToText
+import Utils.Text
 
 class ExceptionReturn f emsg where
   -- | The only function you need to implement to make a new instance of UniversalExceptionReturn
@@ -55,7 +55,7 @@ class ExceptionReturn f emsg where
   pureEMsg msg = effectEMsg msg . return
   {-# INLINE pureEMsg #-}
 
-instance ToText e => ExceptionReturn (Either e) Text where
+instance ToText e Text => ExceptionReturn (Either e) Text where
   conversionToEither Nothing     = first toText
   conversionToEither (Just msg)  = first $ (msg `append`) . toText
   {-# INLINE conversionToEither #-}
@@ -66,9 +66,9 @@ instance ExceptionReturn Maybe Text where
   {-# INLINE conversionToEither #-}
 
 instance ExceptionReturn [] Text where
-  conversionToEither Nothing []    = Left "Returned Empty List"
-  conversionToEither Nothing xs    = Right (head xs)
-  conversionToEither (Just msg) [] = Left msg
-  conversionToEither (Just _) xs   = Right (head xs)
+  conversionToEither Nothing []     = Left "Returned Empty List"
+  conversionToEither Nothing (x:_)  = Right x
+  conversionToEither (Just msg) []  = Left msg
+  conversionToEither (Just _) (x:_) = Right x
   {-# INLINE conversionToEither #-}
 

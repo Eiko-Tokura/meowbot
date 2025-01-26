@@ -23,7 +23,7 @@ module MeowBot.Data
   --, CommandValue
   , EssentialContent
 
-  , Text, pack, unpack
+  , module Utils.Text
 
   , showCQ, cqmsgToEssentialContent, emptyCQMessage
   ) where
@@ -36,12 +36,12 @@ import Data.Aeson -- (FromJSON(..), withObject, withText, ToJSON(..))
 import Data.Aeson.Types (Parser)
 import Data.Additional
 import qualified MeowBot.Parser as MP
-import Data.Text (Text, unpack, pack)
 import MeowBot.Parser (cqmsg)
 import Data.Maybe
 import External.ProxyWS (ProxyData)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX
+import Utils.Text
 
 import Database.Persist.Sqlite
 

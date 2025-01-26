@@ -132,9 +132,6 @@ rerunBot initglobs glob el bot (Left e) = do
 rerunBot _ _ _ _ (Right _) = do
   $(logInfo) $ "Bot instance finished successfully."
 
-tshow :: Show a => a -> Text
-tshow = pack . show
-
 botInstanceToModule :: BotInstance -> LoggingT IO BotModules
 botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags) = do
     $(logInfo) $ "\n### Starting bot instance: " <> tshow bot

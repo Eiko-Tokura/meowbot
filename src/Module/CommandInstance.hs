@@ -35,7 +35,6 @@ import Module.Command
 import Module
 
 import Utils.ByteString
-import Utils.ToText
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]

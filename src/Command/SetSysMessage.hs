@@ -5,7 +5,7 @@ module Command.SetSysMessage
   ) where
 
 import Command
-import MeowBot.Parser ((|+|), (<|>), tshow)
+import MeowBot.Parser ((|+|), (<|>))
 import qualified MeowBot.Parser as MP
 import MeowBot
 import qualified Data.Text as T
