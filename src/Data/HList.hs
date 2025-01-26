@@ -1,9 +1,10 @@
-{-# LANGUAGE DataKinds, TypeOperators, TypeFamilies, GADTs, PolyKinds, ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds, TypeOperators, TypeFamilies, GADTs, PolyKinds, ScopedTypeVariables, ImpredicativeTypes #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 -- | Some utilities for working with type-level lists
 module Data.HList where
 
 import Data.Kind
+import Data.Proxy
 
 -- compared to ordinary algebraic data type,
 -- generalized algebraic data type (GADTs) allows you to put constraints on its various constructors (which you can't do with data), specify types on its return values
@@ -21,18 +22,70 @@ data UList (f :: Type -> Type) (ts :: [Type]) where
   UNil  :: UList f '[]
   UHead :: f t -> UList f (t : ts)
   UTail :: UList f ts -> UList f (t : ts)
+---------------------------------- Constraint Lists ----------------------------------
 
--- | Using an element proof to get the element in the flist
-getEF :: Elem e l -> FList f l -> f e
-getEF  EZ    (x :** _)  = x
-getEF (ES n) (_ :** xs) = getEF n xs
-{-# INLINE getEF #-}
+-- | A type-level list, with constraints
+data CList (f :: Type -> Constraint) (ts :: [Type]) where
+  CNil  :: CList f '[]
+  CCons :: f t => t -> CList f ts -> CList f (t : ts)
+
+data CListDynamic (f :: Type -> Constraint) where
+  CDNil  :: CListDynamic f
+  CDCons :: f t => t -> CListDynamic f -> CListDynamic f
+
+cListPickElem :: CList c ts -> (forall t. c t => t -> Bool) -> Maybe ((forall t. c t => t -> a) -> a)
+cListPickElem CNil _ = Nothing
+cListPickElem (CCons t ts) predicate
+  | predicate t = Just $ \f -> f t
+  | otherwise = cListPickElem ts predicate
+{-# INLINE cListPickElem #-}
+
+cListDynamicPickElem :: CListDynamic c -> (forall t. c t => t -> Bool) -> Maybe ((forall t. c t => t -> a) -> a)
+cListDynamicPickElem CDNil _ = Nothing
+cListDynamicPickElem (CDCons t ts) predicate
+  | predicate t = Just $ \f -> f t
+  | otherwise = cListDynamicPickElem ts predicate
+{-# INLINE cListDynamicPickElem #-}
+
+cListMap :: CList c ts -> (forall t. c t => t -> a) -> [a]
+cListMap CNil _ = []
+cListMap (CCons t ts) f = f t : cListMap ts f
+{-# INLINE cListMap #-}
+
+cListDynamicMap :: CListDynamic c -> (forall t. c t => t -> a) -> [a]
+cListDynamicMap CDNil _ = []
+cListDynamicMap (CDCons t ts) f = f t : cListDynamicMap ts f
+{-# INLINE cListDynamicMap #-}
+
+class ConstraintList (c :: k -> Constraint) (ts :: [k]) where
+  useConstraint  :: Proxy c -> Proxy ts -> (forall t. c t => Proxy t -> a) -> [a]
+  pickConstraint :: Proxy c -> Proxy ts -> (forall t. c t => Proxy t -> Bool) -> Maybe ((forall t. c t => Proxy t -> a) -> a)
+
+instance ConstraintList c '[] where
+  useConstraint _ _ _ = []
+  pickConstraint _ _ _ = Nothing
+  {-# INLINE useConstraint #-}
+  {-# INLINE pickConstraint #-}
+
+instance (c t, ConstraintList c ts) => ConstraintList c (t : ts) where
+  useConstraint pc pts f = f (Proxy @t) : useConstraint pc pts f
+  pickConstraint pc pts predicate
+    | predicate (Proxy :: Proxy t) = Just $ \f -> f (Proxy @t)
+    | otherwise = pickConstraint pc pts predicate
+  {-# INLINE useConstraint #-}
+  {-# INLINE pickConstraint #-}
 
 -- | A type-level list, product
 data HList ts where
   Nil  :: HList '[]
   (:*) :: t -> HList ts -> HList (t : ts)
 infixr 5 :*
+
+-- | Using an element proof to get the element in the flist
+getEF :: Elem e l -> FList f l -> f e
+getEF  EZ    (x :** _)  = x
+getEF (ES n) (_ :** xs) = getEF n xs
+{-# INLINE getEF #-}
 
 -- | proof of the existence of an element in a list
 data Elem e l where -- a type enriched inductive natural number that holds the proof of the existence of an element in a list

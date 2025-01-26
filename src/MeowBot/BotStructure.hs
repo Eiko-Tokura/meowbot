@@ -118,9 +118,9 @@ getNewMsg wholechat = snd $ largestInTree (fromMaybe 0 . absoluteId) (getFirstTr
 getFirstTree :: WholeChat -> Tree CQMessage
 getFirstTree wc =
   case wc of
-    [] -> Node emptyCQMessage []
+    []    -> Node emptyCQMessage []
     (p:_) -> case p of
-      (_, []) -> Node emptyCQMessage []
+      (_, [])   -> Node emptyCQMessage []
       (_, t0:_) -> t0
 
 getNewMsgN :: Int -> WholeChat -> [CQMessage]

@@ -24,7 +24,7 @@ commandSetSysMessage = BotCommand System $ botT $ do
   other_data <- lift query
   let sd = savedData other_data
   --pureMaybe $ checkIfIsGroupNeedBeAllowedUsers sd (cid, uid)
-  let msysSet = first (Message "system" . T.pack <$>) msys
+  let msysSet = first (SystemMessage . T.pack <$>) msys
   case msysSet of
     Left msysMsg -> lift $ do
       change $ \other_data -> other_data {savedData = sd {chatSettings = updateSysSetting msysSet cid $ chatSettings $ savedData other_data}}
@@ -43,11 +43,13 @@ commandSetSysMessage = BotCommand System $ botT $ do
       ) |+| (MP.headCommand "temperature" >> MP.commandSeparator >> MP.positiveFloat)
 
 updateSysSetting :: Either (Maybe Message) Double -> ChatId -> [(ChatId, ChatSetting)] -> [(ChatId, ChatSetting)]
-updateSysSetting (Left msys) cid [] = [(cid, ChatSetting msys Nothing)]
-updateSysSetting (Left msys) cid (x0@(cid', ChatSetting _ mt) : xs)
-  | cid == cid' = (cid, ChatSetting msys mt) : xs
+updateSysSetting (Left msys) cid []
+  = [(cid, ChatSetting msys Nothing Nothing Nothing)]
+updateSysSetting (Left msys) cid (x0@(cid', ChatSetting _ mt _ _) : xs)
+  | cid == cid' = (cid, ChatSetting msys mt Nothing Nothing) : xs
   | otherwise   = x0 : updateSysSetting (Left msys) cid xs
-updateSysSetting (Right temp) cid [] = [(cid, ChatSetting Nothing $ Just temp)]
-updateSysSetting (Right temp) cid (x0@(cid', ChatSetting ms _) : xs)
-  | cid == cid' = (cid, ChatSetting ms $ Just temp) : xs
+updateSysSetting (Right temp) cid []
+  = [(cid, ChatSetting Nothing (Just temp) Nothing Nothing)]
+updateSysSetting (Right temp) cid (x0@(cid', ChatSetting ms _ _ _) : xs)
+  | cid == cid' = (cid, ChatSetting ms (Just temp) Nothing Nothing) : xs
   | otherwise   = x0 : updateSysSetting (Right temp) cid xs

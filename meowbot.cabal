@@ -96,6 +96,7 @@ library meowbot-lib
                    , Control.Monad.IOe
                    , Control.Monad.MaybeHints
                    , Control.Monad.Readable
+                   , Control.Monad.ExceptionReturn
                    , Control.Monad.Trans.ReaderState
                    , Data.Additional
                    , Data.Additional.Default
@@ -105,6 +106,7 @@ library meowbot-lib
                    , Data.PersistModel
                    , Data.Template
                    , External.ChatAPI
+                   , External.ChatAPI.Tools
                    , External.ChatAPI.Function
                    , External.MarkdownImage
                    , External.ProxyWS

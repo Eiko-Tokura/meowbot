@@ -1,5 +1,4 @@
-{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}
-module Command.Cat where
+{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}module Command.Cat where
 
 import Command
 import Command.Md
@@ -18,11 +17,16 @@ import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
+type MeowTools = '[]
+
 modelCat :: ChatModel
 modelCat = DeepSeek DeepSeekChat
 
 modelSuperCat :: ChatModel
 modelSuperCat = DeepSeek DeepSeekReasoner
+
+meowMaxToolDepth :: Int
+meowMaxToolDepth = 5
 
 commandCat :: BotCommand
 commandCat = BotCommand Cat $ botT $ do
@@ -33,13 +37,15 @@ commandCat = BotCommand Cat $ botT $ do
   botname    <- query
   let sd = savedData other_data
   let msys = ChatSetting
-               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (Message "system" . T.pack) . globalSysMsg $ botmodules))
+               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (SystemMessage . T.pack) . globalSysMsg $ botmodules))
                (systemTemp =<< lookup cid (chatSettings sd))
+               (Just 5)
+               Nothing
   -- looking for custom system message
   lChatModelMsg <- pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params@(ChatParams model md _) = fst . head $ rlChatModelMsg
-      ioEChatResponse = messageChat params $ (map snd . reverse . take 20) rlChatModelMsg
+      ioEChatResponse = messageChat @MeowTools params $ (map snd . reverse . take 20) rlChatModelMsg
   cid <- pureMaybe $ checkAllowedCatUsers sd model cid
   asyncAction <- liftIO $ (if md then sendIOeToChatIdMdAsync else sendIOeToChatIdAsync) (msg, cid, uid, mid, sender) ioEChatResponse
   $(logDebug) $ "created async: " <> T.pack (show asyncAction)
@@ -48,7 +54,7 @@ commandCat = BotCommand Cat $ botT $ do
         -- checkAllowedCatUsers sd modelSuperCat g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
         -- checkAllowedCatUsers sd modelSuperCat p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
-catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String)
+catParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams ts, String)
 catParser (BotName (Just botname)) msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
@@ -69,7 +75,7 @@ catParser (BotName (Just botname)) msys = do
                 case modelStr of
                     "supercat" -> (modelSuperCat, 0.2)
                     _ ->          (modelCat, 0.8)
-      return (ChatParams model md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just recommendedTemp)), str)
+      return (ChatParams model md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just recommendedTemp) Nothing Nothing), str)
 catParser (BotName Nothing) msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
@@ -84,21 +90,21 @@ catParser (BotName Nothing) msys = do
                 case modelStr of
                     "supercat" -> (modelSuperCat, 0.2)
                     _ ->          (modelCat, 0.8)
-      return (ChatParams model md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just recommendedTemp)), str)
+      return (ChatParams model md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just recommendedTemp) Nothing Nothing), str)
     parseMeowMeow = do
       $(MP.stringQ "喵喵")
       MP.commandSeparator2
       str <- MP.some MP.item
       return (ChatParams modelCat False msys, str)
 
-replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams, String)
+replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParams ts, String)
 replyCatParser name msys = catParser name msys <|> ( do
   MP.spaces0
   str <- MP.some MP.item
   return (ChatParams modelCat False msys, str)
   )
 
-treeCatParser :: forall s. (IsStream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams, Message)]
+treeCatParser :: forall s ts. (IsStream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParams ts, Message)]
 treeCatParser name msys mid = do
   elist  <- Right <$>
     --   ( do
@@ -129,21 +135,21 @@ treeCatParser name msys mid = do
           umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
           amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
           let (params, metaUMsg) = fromMaybe (ChatParams modelCat False msys, "") $ MP.runParser (replyCatParser name msys) (extractMetaMessage umsg)
-          return [ (params, Message { role = "user" , content = T.pack metaUMsg })
-                 , (params, Message { role = "assistant", content = extractMetaMessage amsg})
+          return [ (params, UserMessage { content = T.pack metaUMsg })
+                 , (params, AssistantMessage { content = extractMetaMessage amsg})
                  ]
-        ) :: Parser s CQMessage (Either (Maybe ChatSetting, [[(ChatParams, Message)]]) [[(ChatParams, Message)]])
+        ) :: Parser s CQMessage (Either (Maybe ChatSetting, [[(ChatParams ts, Message)]]) [[(ChatParams ts, Message)]])
 
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of
     Right list ->
       case MP.runParser (if null list then catParser name msys else replyCatParser name msys) (extractMetaMessage lastMsg) of
             Just (params, metaLast) -> return $ concat list ++
-                [ (params, Message { role = "user", content = T.pack metaLast}) ]
+                [ (params, UserMessage { content = T.pack metaLast}) ]
             _ -> MP.zero
     Left (msys', list) -> case MP.runParser (replyCatParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage lastMsg) of
             Just (params, metaLast) -> return $ concat list ++
-                [ (params, Message { role = "user", content = T.pack metaLast}) ]
+                [ (params, UserMessage { content = T.pack metaLast}) ]
             _ -> MP.zero
   where extractMetaMessage CQMessage{metaMessage = Nothing} = ""
         extractMetaMessage CQMessage{metaMessage = Just mmsg} = MP.onlyMessage mmsg

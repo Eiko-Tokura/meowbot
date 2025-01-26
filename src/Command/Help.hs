@@ -14,6 +14,7 @@ import qualified MeowBot.Parser as MP
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
+import Utils.ToText
 
 commandHelp :: BotCommand
 commandHelp = BotCommand Help $ botT $ do
@@ -28,7 +29,7 @@ commandHelp = BotCommand Help $ botT $ do
       MP.spaces0
       mParam <- MP.tryMaybe . MP.asumE $ map ((\str -> MP.string str <* MP.spaces0 <* MP.end) . fst) helpList;
       case mParam of
-        Just str -> return $ fromMaybe "" $ lookup str helpList
+        Just str -> return $ "命令" <> toText str <> "的帮助：\n" <> fromMaybe "" (lookup str helpList)
         Nothing  -> return . pack . concat $
           [ "你好，这里是" ++ fromMaybe "Eiko的喵喵" botName ++ "~目前支持的命令："
           , concatMap (("\n:" ++ ) . fst) helpList
@@ -37,18 +38,18 @@ commandHelp = BotCommand Help $ botT $ do
 
 helpList :: [(String, Text)]
 helpList =
-  [ ("cat", ":cat <message>\n让喵喵使用" <> MP.tshow modelCat <> "帮助您回答问题，" <> replyHelp)
-  , ("supercat", ":supercat <message>\n喵喵使用" <> MP.tshow modelSuperCat <> "帮助您回答问题" <> replyHelp)
-  , ("mdcat", ":mdcat <message>\n喵喵将cat命令的回复变成一张markdown图片，" <> replyHelp)
-  , ("mdsupercat", ":mdsupercat <message>\n喵喵将supercat的回复变成一张markdown图片，只有部分群和用户可用。" <> replyHelp)
-  , ("md", ":md <markdown>\n接受一段markdown，将其转换为一张图片发给你。")
-  , ("system", ":system set / unset <message>\n设置群/私聊的gpt系统提示消息")
+  [ ("cat",         ":cat <message>\n让喵喵使用" <> MP.tshow modelCat <> "帮助您回答问题，" <> replyHelp)
+  , ("supercat",    ":supercat <message>\n喵喵使用" <> MP.tshow modelSuperCat <> "帮助您回答问题" <> replyHelp)
+  , ("mdcat",       ":mdcat <message>\n喵喵将cat命令的回复变成一张markdown图片，" <> replyHelp)
+  , ("mdsupercat",  ":mdsupercat <message>\n喵喵将supercat的回复变成一张markdown图片，只有部分群和用户可用。" <> replyHelp)
+  , ("md",          ":md <markdown>\n接受一段markdown，将其转换为一张图片发给你。")
+  , ("system",      ":system set / unset <message>\n设置群/私聊的gpt系统提示消息")
   , ("temperature", ":temperature <float>\n设置群/私聊的gpt系统温度")
-  , ("user", ":user <add/remove/list> <admin/allowed> <uid>\n管理用户组权限，仅admin Group可用")
-  , ("group", ":group <add/remove/list> <allowedGroup> <gid>\n管理群组权限，仅admin Group可用")
-  , ("rule", ":rule <add/remove/list> <rule>\n管理命令规则, 仅admin Group可用")
-  , ("help", ":help <command>\n查看帮助")
-  , ("aokana", ":aokana [flags/search items]\n 随机选取一段苍彼的语音对话！可用flags: -asuka, -misaki, -mashiro, -rika, -list. 搜索项和flags之间用空格分隔。搜索项也可以用英文引号括起来，这样会包含空格。搜索会在四种语言中进行。")
+  , ("user",        ":user <add/remove/list> <admin/allowed> <uid>\n管理用户组权限，仅admin Group可用")
+  , ("group",       ":group <add/remove/list> <allowedGroup> <gid>\n管理群组权限，仅admin Group可用")
+  , ("rule",        ":rule <add/remove/list> <rule>\n管理命令规则, 仅admin Group可用")
+  , ("help",        ":help <command>\n查看帮助")
+  , ("aokana",      ":aokana [flags/search items]\n 随机选取一段苍彼的语音对话！可用flags: -asuka, -misaki, -mashiro, -rika, -list. 搜索项和flags之间用空格分隔。搜索项也可以用英文引号括起来，这样会包含空格。搜索会在四种语言中进行。")
   , ("random", helpRandom)
   , ("study", helpStudy)
   , ("poll", helpPoll)

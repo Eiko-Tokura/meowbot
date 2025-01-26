@@ -42,11 +42,11 @@ import Module.ProxyWS
 --    ModuleT r s l (MeowT r mods m) a -> SystemT r s mods m a
 
 data MeowData = MeowData
-  { meowConnection :: Connection
-  , meowActions    :: !(TVar [Meow [BotAction]])
+  { meowConnection     :: Connection
+  , meowActions        :: !(TVar [Meow [BotAction]])
   , meowSentCQMessage  :: !(TVar (Maybe SentCQMessage))
   , meowReceCQMessage  :: !(TVar (Maybe ReceCQMessage))
-  , meowRawMessage :: !(TVar (Maybe BL.ByteString))
+  , meowRawMessage     :: !(TVar (Maybe BL.ByteString))
   }
 -- | The modules loaded into the bot
 type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
