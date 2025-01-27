@@ -27,13 +27,16 @@ type LazyText = TL.Text
 
 class TextUtils t where
   type CorrespondingByteString t
+  ------------ conversion functions ----------------
   pack :: String -> t
 
   unpack :: t -> String
 
-  putTextLn :: t -> IO ()
-
   textToByteString :: t -> CorrespondingByteString t
+
+  textToLazyByteString :: t -> BL.ByteString
+  ----------------- IO functions -------------------
+  putTextLn :: t -> IO ()
 
   restrictLength :: Int -> t -> t
 
@@ -43,25 +46,33 @@ class TextUtils t where
 
 instance TextUtils T.Text where
   type CorrespondingByteString T.Text = B.ByteString
-  pack             = T.pack
-  unpack           = T.unpack
-  putTextLn        = TIO.putStrLn
-  textToByteString = TE.encodeUtf8
-  restrictLength n = T.take n
+  pack                 = T.pack
+  unpack               = T.unpack
+  putTextLn            = TIO.putStrLn
+  textToByteString     = TE.encodeUtf8
+  textToLazyByteString = TLE.encodeUtf8 . TL.fromStrict
+  restrictLength n     = T.take n
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
   {-# INLINE putTextLn #-}
+  {-# INLINE textToByteString #-}
+  {-# INLINE textToLazyByteString #-}
+  {-# INLINE restrictLength #-}
 
 instance TextUtils LazyText where
   type CorrespondingByteString LazyText = BL.ByteString
-  pack             = TL.pack
-  unpack           = TL.unpack
-  putTextLn        = TLIO.putStrLn
-  textToByteString = TLE.encodeUtf8
-  restrictLength n = TL.take (fromIntegral n)
+  pack                 = TL.pack
+  unpack               = TL.unpack
+  putTextLn            = TLIO.putStrLn
+  textToByteString     = TLE.encodeUtf8
+  textToLazyByteString = TLE.encodeUtf8
+  restrictLength n     = TL.take (fromIntegral n)
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
   {-# INLINE putTextLn #-}
+  {-# INLINE textToByteString #-}
+  {-# INLINE textToLazyByteString #-}
+  {-# INLINE restrictLength #-}
 
 lazyPack :: String -> LazyText
 lazyPack = TL.pack
