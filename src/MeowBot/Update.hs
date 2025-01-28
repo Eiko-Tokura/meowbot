@@ -140,17 +140,16 @@ updateListByFuncKeyElement :: (Ord k)
 updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []
 updateListByFuncKeyElement (l: !ls) past attachTo key element
   | keyl == key   =  ( keyl
-                     , ( putElementIntoForest attachTo element treel
+                     , ( strictTake forestSizeForEachChat $ putElementIntoForest attachTo element treel
                        , strictTake forestSizeForEachChat $ element : list
-                       )
+                       ) `using` evalTuple2 rseq rseq -- when eval this tuple, evaluate the two lists
                      ) : let !pastls = past ls in pastls
   | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
   where (keyl, (treel, list)) = l
 
 -- | Helper function to put an element into a forest according to the attachTo function.
 putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]
-putElementIntoForest attachTo element forest = strictTake forestSizeForEachChat $
-  case attachTo of
+putElementIntoForest attachTo element forest = case attachTo of
     Nothing -> Node element []:forest
     Just f -> let (before, rest) = break (any f . flattenTree) forest
               in case rest of
