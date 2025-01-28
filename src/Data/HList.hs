@@ -10,6 +10,7 @@ import Data.Proxy
 -- generalized algebraic data type (GADTs) allows you to put constraints on its various constructors (which you can't do with data), specify types on its return values
 
 -- | A type-level list applied to a type-level function, product
+-- has strict head, lazy tail
 data FList (f :: Type -> Type) (ts :: [Type]) where
   FNil  :: FList f '[]
   (:**) :: !(f t) -> FList f ts -> FList f (t : ts)
@@ -25,33 +26,40 @@ data UList (f :: Type -> Type) (ts :: [Type]) where
 ---------------------------------- Constraint Lists ----------------------------------
 
 -- | A type-level list, with constraints
+-- the type level information made it possible to destruct the list and get the elements
 data CList (f :: Type -> Constraint) (ts :: [Type]) where
   CNil  :: CList f '[]
   CCons :: f t => t -> CList f ts -> CList f (t : ts)
 
+-- | A dynamic type-level list, with constraints only, no information about its contents on the type
+-- so you can **only use** the constraints to work with it, you know nothing else about the elements
 data CListDynamic (f :: Type -> Constraint) where
   CDNil  :: CListDynamic f
   CDCons :: f t => t -> CListDynamic f -> CListDynamic f
 
+-- | Pick an element from the list that satisfies the predicate
 cListPickElem :: CList c ts -> (forall t. c t => t -> Bool) -> Maybe ((forall t. c t => t -> a) -> a)
 cListPickElem CNil _ = Nothing
 cListPickElem (CCons t ts) predicate
   | predicate t = Just $ \f -> f t
-  | otherwise = cListPickElem ts predicate
+  | otherwise   = cListPickElem ts predicate
 {-# INLINE cListPickElem #-}
 
+-- | Pick an element from the dynamic list that satisfies the predicate
 cListDynamicPickElem :: CListDynamic c -> (forall t. c t => t -> Bool) -> Maybe ((forall t. c t => t -> a) -> a)
 cListDynamicPickElem CDNil _ = Nothing
 cListDynamicPickElem (CDCons t ts) predicate
   | predicate t = Just $ \f -> f t
-  | otherwise = cListDynamicPickElem ts predicate
+  | otherwise   = cListDynamicPickElem ts predicate
 {-# INLINE cListDynamicPickElem #-}
 
+-- | Map a function over the clist
 cListMap :: CList c ts -> (forall t. c t => t -> a) -> [a]
 cListMap CNil _ = []
 cListMap (CCons t ts) f = f t : cListMap ts f
 {-# INLINE cListMap #-}
 
+-- | Map a function over the dynamic clist
 cListDynamicMap :: CListDynamic c -> (forall t. c t => t -> a) -> [a]
 cListDynamicMap CDNil _ = []
 cListDynamicMap (CDCons t ts) f = f t : cListDynamicMap ts f
@@ -62,18 +70,20 @@ class ConstraintList (c :: k -> Constraint) (ts :: [k]) where
   pickConstraint :: Proxy c -> Proxy ts -> (forall t. c t => Proxy t -> Bool) -> Maybe ((forall t. c t => Proxy t -> a) -> a)
 
 instance ConstraintList c '[] where
-  useConstraint _ _ _ = []
+  useConstraint  _ _ _ = []
   pickConstraint _ _ _ = Nothing
   {-# INLINE useConstraint #-}
   {-# INLINE pickConstraint #-}
 
 instance (c t, ConstraintList c ts) => ConstraintList c (t : ts) where
-  useConstraint pc _ f = f (Proxy @t) : useConstraint pc (Proxy @ts) f
+  useConstraint  pc _ f = f (Proxy @t) : useConstraint pc (Proxy @ts) f
   pickConstraint pc _ predicate
     | predicate (Proxy :: Proxy t) = Just $ \f -> f (Proxy @t)
     | otherwise = pickConstraint pc (Proxy @ts) predicate
   {-# INLINE useConstraint #-}
   {-# INLINE pickConstraint #-}
+
+------------------------------Classical HList----------------------------------
 
 -- | A type-level list, product
 data HList ts where
@@ -121,7 +131,8 @@ type family (xs :: [Type]) ++ (ys :: [Type]) :: [Type] where
   '[] ++ bs = bs
   (a:as) ++ bs = a : (as ++ bs)
 
--- | A proof of the existence of a sublist in a list
+-- | A data level proof of the existence of a sublist in a list
+-- you can also do it on the class level
 data Sub (ys :: [Type]) (xs :: [Type]) where -- another type enriched inductive natural number, the size of the natural number is the size of the sublist
   SZ :: Sub '[] xs
   SS :: Elem y xs -> Sub ys xs -> Sub (y:ys) xs -- note that a Sub list can be reordered or even repeating
@@ -164,28 +175,31 @@ instance {-# OVERLAPPABLE #-} In e ts => In e (t : ts) where
   modifyF g (x :** xs) = x :** modifyF g xs
   {-# INLINE modifyF #-}
 
-type family TIn e (ts :: [Type]) :: Bool where
-  TIn e '[] = False
-  TIn e (e ': ys) = True
-  TIn e (_ ': ys) = TIn e ys
-
-type family If (b :: Bool) (t :: k) (f :: k) :: k where
-  If True t f = t
-  If False t f = f
-
 -- | Sum of two type-level lists
 hAdd :: HList as -> HList bs -> HList (as ++ bs)
 hAdd Nil bs = bs
 hAdd (x :* xs) bs = x :* hAdd xs bs
 
---class Extract (es :: [Type]) (ts :: [Type]) where
---  extract :: HList ts -> HList es
---
---instance Extract '[] ts where extract _ = Nil
---instance Extract xs ts => Extract (x:xs) (x:ts) where
---  extract (x :* xs) = x :* extract xs
---instance (Extract es ts) => Extract es (t : ts) where
---  extract (x :* xs) = extract xs
---instance Extract (x:xs) ts => Extract xs ts where
---  extract (_ :* xs) = extract xs
+class SubList (ys :: [Type]) (xs :: [Type]) where
+  getSubList :: HList xs -> HList ys
 
+  subListModify :: (HList ys -> HList ys) -> HList xs -> HList xs
+
+  subListUpdate :: HList xs -> HList ys -> HList xs
+  subListUpdate xs ys = subListModify (const ys) xs
+  {-# INLINE subListUpdate #-}
+
+instance SubList '[] xs where
+  getSubList _ = Nil
+  subListModify _ xs = xs
+  {-# INLINE getSubList #-}
+  {-# INLINE subListModify #-}
+
+-- | Induction case
+instance (In y xs, SubList ys xs) => SubList (y : ys) xs where
+  getSubList xs = getH xs :* getSubList xs
+  subListModify f xs =
+    let hy :* hys = f (getSubList xs)
+    in (`subListUpdate` (hy :* Nil)) $ subListUpdate xs hys
+  {-# INLINE getSubList #-}
+  {-# INLINE subListModify #-}
