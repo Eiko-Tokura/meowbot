@@ -90,6 +90,7 @@ moduleEnv = ReaderStateT
       in second (first $ \l -> modifyF (const l) allLoc) <$> arrow (globmod, r) (locmod, s)
     )
   . runReaderStateT
+{-# INLINE moduleEnv #-}
 
 inductiveEnv :: Monad m => SystemT r s mods m a -> SystemT r s (mod ': mods) m a
 inductiveEnv = ReaderStateT
@@ -97,6 +98,7 @@ inductiveEnv = ReaderStateT
       second (first (locm :**)) <$> arrowms (allGlobms, r) (allLocms, s)
     )
   . runReaderStateT
+{-# INLINE inductiveEnv #-}
 
 instance (MeowModule r s mod, Modules r s mods) => Modules r s (mod ': mods) where
 

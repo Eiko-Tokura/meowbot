@@ -39,8 +39,8 @@ data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
-modelEndpoint (DeepSeek {})  = "https://api.deepseek.com/chat/completions"
-modelEndpoint DeepSeekR1_14B = "http://10.52.1.55:11434/api/chat"
+modelEndpoint DeepSeek {}    = "https://api.deepseek.com/chat/completions"
+modelEndpoint DeepSeekR1_14B = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
 
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)          = "gpt-4o-mini"
@@ -63,6 +63,9 @@ data ChatSetting = ChatSetting
   , systemMaxToolDepth :: Maybe Int       -- ^ Maximum tool call attempts
   , systemApiKeys      :: Maybe APIKey       -- ^ API keys for chat models
   } deriving (Show, Eq, Read, Generic, NFData)
+
+defaultSystemMaxToolDepth :: Int
+defaultSystemMaxToolDepth = 5
 
 chatSettingMaybeWrapper :: Maybe ChatSetting -> ChatSetting
 chatSettingMaybeWrapper = fromMaybe (ChatSetting Nothing Nothing Nothing Nothing)
@@ -263,7 +266,7 @@ agent = do
   toolDepth <- gets chatStatusToolDepth
   mapiKeys  <- asks (systemApiKeys . chatSetting)
   apiKeys   <- liftE $ pureEMsg "No API key found!" mapiKeys
-  if fromMaybe 5 (systemMaxToolDepth (chatSetting params)) <= toolDepth
+  if fromMaybe defaultSystemMaxToolDepth (systemMaxToolDepth (chatSetting params)) <= toolDepth
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
       response <- liftE . ExceptT $ fetchChatCompletionResponse apiKeys params prevMsgs
@@ -307,11 +310,6 @@ messageChat params prevMsg
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
       ExceptT $ fmap fst $ statusChat @ts params' (ChatStatus 0 0 prevMsg)
-
-    -- addToolContext msgs = case last msgs of
-    --   ToolMessage{ toolMeta = Just md } -> 
-    --     msgs ++ [SystemMessage ("Fix this invalid tool call (attempt " <> tshow md.toolAttempt <> "): " <> content (last msgs)) Nothing]
-    --   _ -> msgs
 
 -- | Handle tool execution, no recursion
 handleToolCall :: forall ts. ConstraintList ToolClass ts => Text -> Value -> ToolMeta -> ChatT ts IO Message
