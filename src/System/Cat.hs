@@ -119,7 +119,9 @@ runBotClient ip port bot initglobs glob el = do
     ) `logForkFinally` rerunBot initglobs glob el bot
 
 initMeowData :: Connection -> IO MeowData
-initMeowData conn = MeowData conn <$> newTVarIO [] <*> newTVarIO Nothing <*> newTVarIO Nothing <*> newTVarIO Nothing
+initMeowData conn = MeowData <$> initAllMeowData (conn :* () :* () :* () :* () :* Nil)
+    -- MeowData conn = Me
+--MeowData conn <$> newTVarIO [] <*> newTVarIO Nothing <*> newTVarIO Nothing <*> newTVarIO Nothing
 
 rerunBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> AllModuleEarlyLocalStates Mods -> BotInstance -> Either SomeException a -> LoggingT IO ()
 rerunBot initglobs glob el bot (Left e) = do

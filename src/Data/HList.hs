@@ -117,8 +117,9 @@ getE (ES n) (_ :* xs) = getE n xs
 
 -- | a type level function that concatenates two type level lists
 type family (xs :: [Type]) ++ (ys :: [Type]) :: [Type] where
-  (a:as) ++ bs = a : (as ++ bs)
+  --as ++ '[] = as
   '[] ++ bs = bs
+  (a:as) ++ bs = a : (as ++ bs)
 
 -- | A proof of the existence of a sublist in a list
 data Sub (ys :: [Type]) (xs :: [Type]) where -- another type enriched inductive natural number, the size of the natural number is the size of the sublist

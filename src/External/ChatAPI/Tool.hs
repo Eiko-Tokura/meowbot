@@ -406,14 +406,14 @@ instance ToolClass FibonacciTool where
   toolDescription _ = "Calculate the nth Fibonacci number"
   toolHandler _ ((IntT n) :%* ObjT0Nil)
     | n < 0     = do
-        liftIO $ putStrLn $ "[TOOL]Negative Fibonacci number " <> show n
+        liftIO $ putTextLn $ "[TOOL]Negative Fibonacci number " <> tshow n
         throwE $ FibonacciError "Negative Fibonacci number"
     | n > 100000 = do
-        liftIO $ putStrLn $ "[TOOL]Fibonacci number " <> show n <> " too large"
+        liftIO $ putTextLn $ "[TOOL]Fibonacci number " <> tshow n <> " too large"
         throwE $ FibonacciError "Fibonacci number too large"
     | otherwise = do
-        liftIO $ putStrLn $ "[TOOL]Calculating Fibonacci number " <> show n
-        liftIO $ putStrLn $ "[TOOL]The result is " <> show (fib n)
+        liftIO $ putTextLn $ "[TOOL]Calculating Fibonacci number " <> tshow n
+        liftIO $ putTextLn $ "[TOOL]The result is " <> tshow (fib n)
         return $ StringT $ toText $ fib n
     where fib :: Int -> Integer
           fib n = go n 0 1

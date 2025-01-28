@@ -2,7 +2,7 @@
 module MeowBot.Data
   ( module MeowBot.MetaMessage
   , UserId(..), GroupId(..), ChatId(..)
-  , Chat, ChatRoom
+  , ChatRoom
   , WholeChat--, AllData(..), OtherData(..)
   --, SavedData(..)
 
@@ -48,9 +48,9 @@ import Database.Persist.Sqlite
 data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read, Generic, NFData)
 
-type Chat = [MP.Tree CQMessage]
-
-type ChatRoom = (ChatId, Chat)
+-- | Structured and Unstructured Chat
+-- recent messages top, older messages bottom
+type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
 
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
@@ -405,7 +405,6 @@ instance FromJSON CQMessage where
                 (RequestEvent, Just "group"        , Just "add"        ) -> Just $ RequestGroup RequestGroupAdd comment flag
                 (RequestEvent, Just "group"        , Just "invite"     ) -> Just $ RequestGroup RequestGroupInvite comment flag
                 _                                                        -> Nothing )
-                
 
 
 showCQ :: CQMessage -> String

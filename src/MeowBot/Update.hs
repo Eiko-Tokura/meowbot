@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+-- | This module contains the functions that update the bot's basic states and data structures.
 module MeowBot.Update where
 
 import MeowBot.BotStructure
@@ -23,6 +24,7 @@ import Module
 
 forestSizeForEachChat = 128 -- ^ controls how many trees to keep in each chat room
 
+-- | Using a lifecycle event message, update the bot's self_id
 updateSelfInfo :: (MonadReadable AllData m, MonadModifiable AllData m) => CQMessage -> m ()
 updateSelfInfo cqmsg = do
   mselfInfo <- queries (selfInfo . otherdata)
@@ -109,22 +111,45 @@ updateAllDataByResponse (rdata, mecho) alldata =
       let m0 = fromMaybe headSentMessageList $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
           ms = filter (/= m0) sentMessageList
       in
-      case (groupId m0, userId m0) of
+      case (groupId m0, userId m0) of -- attach to the message id that the bot is replying to
         (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
         (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
         _ -> alldata
 
 type End a = a -> a
 
-updateListByFuncKeyElement :: (Ord k) => [(k, [Tree a])] -> End [(k, [Tree a])] -> Maybe (a -> Bool) -> k -> a -> [(k, [Tree a])]
-updateListByFuncKeyElement [] past _ key element = (key, [Node element []]) : past []
-updateListByFuncKeyElement (l: !ls) past attachTo key element
-  | keyl == key   =  (keyl, putElementIntoForest attachTo element treel) : let !pastls = past ls in pastls
-  | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
-  where (keyl, treel) = l
+-- | Strict take n elements from a list, whenever it gets evaluated
+-- will evaluate the entire list, dropping unused elements.
+-- This is helpful for avoiding lazy stateful thunk leak when the rest of the list is not needed.
+strictTake :: Int -> [a] -> [a]
+strictTake n = (`using` evalList rseq) . take n
+{-# INLINE strictTake #-}
 
+-- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
+-- and also put at the top of the list.
+updateListByFuncKeyElement :: (Ord k) 
+  => [ ( k
+       , ( [Tree a], [a] )
+       )
+     ]
+  -> End [ (k, ([Tree a], [a])) ]
+  -> Maybe (a -> Bool)
+  -> k 
+  -> a
+  -> [ (k, ([Tree a], [a])) ]
+updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []
+updateListByFuncKeyElement (l: !ls) past attachTo key element
+  | keyl == key   =  ( keyl
+                     , ( putElementIntoForest attachTo element treel
+                       , strictTake forestSizeForEachChat $ element : list
+                       )
+                     ) : let !pastls = past ls in pastls
+  | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
+  where (keyl, (treel, list)) = l
+
+-- | Helper function to put an element into a forest according to the attachTo function.
 putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]
-putElementIntoForest attachTo element forest = (`using` evalList rseq) $ take forestSizeForEachChat $
+putElementIntoForest attachTo element forest = strictTake forestSizeForEachChat $
   case attachTo of
     Nothing -> Node element []:forest
     Just f -> let (before, rest) = break (any f . flattenTree) forest
@@ -139,15 +164,17 @@ attachToFirstNode f element (Node a ts)
   | otherwise = Node a (map (attachToFirstNode f element) ts)
 attachToFirstNode _ _ EmptyTree = trace "attempt to attach to an empty tree, this should not happen" EmptyTree
 
+-- | Attach if the providing message is a reply to the message in the chat history (by detecting the message id and the replyTo field in meta message of the message)
+-- return false if the message in history is not a reply to the providing message, or does not have a message id.
 attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
-attachRule msg1 =
-  case do {mtm <- metaMessage msg1; MP.replyTo mtm} of
-    Nothing -> Nothing
-    Just id -> Just (\m -> case messageId m of
-      Nothing -> False
-      Just mid -> mid == id)
+attachRule msg1 = do
+  mtm <- metaMessage msg1
+  repId <- MP.replyTo mtm
+  return $ maybe False (== repId) . messageId
 
+-- | A constraint on the monad that we can insert a message into the chat history.
 type InsertHistory r m = (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
+
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 -- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
 insertMyResponseHistory :: InsertHistory r m => ChatId -> MetaMessage -> MeowT r mods m ()

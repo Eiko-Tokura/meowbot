@@ -7,6 +7,7 @@ module Utils.Text
   ( T.Text, LazyText
   , lazyPack, lazyUnpack, tlshow
   , TextUtils(..)
+  , putTextLn, putLazyTextLn
   , ToText(..)
   ) where
 
@@ -36,25 +37,27 @@ class TextUtils t where
 
   textToLazyByteString :: t -> BL.ByteString
   ----------------- IO functions -------------------
-  putTextLn :: t -> IO ()
-
   restrictLength :: Int -> t -> t
 
   tshow :: Show a => a -> t
   tshow = pack . show
   {-# INLINE tshow #-}
 
+putTextLn :: Text -> IO ()
+putTextLn = TIO.putStrLn
+
+putLazyTextLn :: LazyText -> IO ()
+putLazyTextLn = TLIO.putStrLn
+
 instance TextUtils T.Text where
   type CorrespondingByteString T.Text = B.ByteString
   pack                 = T.pack
   unpack               = T.unpack
-  putTextLn            = TIO.putStrLn
   textToByteString     = TE.encodeUtf8
   textToLazyByteString = TLE.encodeUtf8 . TL.fromStrict
   restrictLength n     = T.take n
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
-  {-# INLINE putTextLn #-}
   {-# INLINE textToByteString #-}
   {-# INLINE textToLazyByteString #-}
   {-# INLINE restrictLength #-}
@@ -63,13 +66,11 @@ instance TextUtils LazyText where
   type CorrespondingByteString LazyText = BL.ByteString
   pack                 = TL.pack
   unpack               = TL.unpack
-  putTextLn            = TLIO.putStrLn
   textToByteString     = TLE.encodeUtf8
   textToLazyByteString = TLE.encodeUtf8
   restrictLength n     = TL.take (fromIntegral n)
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
-  {-# INLINE putTextLn #-}
   {-# INLINE textToByteString #-}
   {-# INLINE textToLazyByteString #-}
   {-# INLINE restrictLength #-}

@@ -1,4 +1,5 @@
-{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}module Command.Cat where
+{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}
+module Command.Cat where
 
 import Command
 import Command.Md

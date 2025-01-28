@@ -49,7 +49,12 @@ sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] []
 -- Also increase the message number (absolute id)
 -- will insert the message into the history.
 meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) 
-  => ChatId -> Maybe MessageId -> [AdditionalData] -> [MetaMessageItem] -> Text -> MeowT r mods m [BotAction]
+  => ChatId            -- ^ chat id to send to
+  -> Maybe MessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> [AdditionalData]  -- ^ additional data to attach to the message
+  -> [MetaMessageItem] -- ^ meta items to attach to the message
+  -> Text              -- ^ message content
+  -> MeowT r mods m [BotAction]
 meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- [mid] ] ++ items)
   insertMyResponseHistory cid meta

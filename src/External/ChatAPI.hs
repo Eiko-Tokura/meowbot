@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 module External.ChatAPI
-  ( simpleChat, Message(..), statusChat, messageChat
+  ( simpleChat, Message(..), statusChat, messageChat, statusChatReadAPIKey
   , ChatModel(..), OpenAIModel(..), DeepSeekModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   ) where
@@ -28,20 +28,29 @@ import GHC.Generics (Generic)
 import Control.DeepSeq
 import External.ChatAPI.Tool
 
-data ChatModel = 
-  OpenAI OpenAIModel | DeepSeek DeepSeekModel deriving (Show, Eq)
+data ChatModel
+  = OpenAI OpenAIModel 
+  | DeepSeek DeepSeekModel 
+  | DeepSeekR1_14B
+  deriving (Show, Eq)
 
 data OpenAIModel = GPT4oMini | GPT4o deriving (Show, Eq)
 data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Eq)
 
--- data ChatParams  = ChatParams
---   { chatModel     :: ChatModel
---   , markDown      :: Bool
---   , chatSetting   :: ChatSetting
---   } deriving (Show)
--- 
+modelEndpoint :: ChatModel -> String
+modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
+modelEndpoint (DeepSeek {})  = "https://api.deepseek.com/chat/completions"
+modelEndpoint DeepSeekR1_14B = "http://10.52.1.55:11434/api/chat"
+
+instance ToJSON ChatModel where
+  toJSON (OpenAI GPT4oMini)          = "gpt-4o-mini"
+  toJSON (OpenAI GPT4o)              = "gpt-4o"
+  toJSON (DeepSeek DeepSeekChat)     = "deepseek-chat"
+  toJSON (DeepSeek DeepSeekReasoner) = "deepseek-reasoner"
+  toJSON DeepSeekR1_14B              = "deepseek-r1:14b"
+
 -- | Modified ChatParams with tool support
-data ChatParams (ts :: k) = ChatParams 
+data ChatParams (ts :: k) = ChatParams
   { chatModel     :: ChatModel    -- ^ LLM model to use
   , chatMarkDown  :: Bool         -- ^ Enable markdown formatting
   , chatSetting   :: ChatSetting  -- ^ Temperature and system message
@@ -65,6 +74,9 @@ chatSettingAlternative mnew def = ChatSetting
   , systemMaxToolDepth = (systemMaxToolDepth =<< mnew) <|> systemMaxToolDepth def
   , systemApiKeys      = (systemApiKeys =<< mnew)      <|> systemApiKeys def
   }
+
+-- class ChatAPI (model :: ChatModel) where
+--   modelEndpoint :: Proxy model -> String
 
 data ChatCompletionResponse = ChatCompletionResponse
   { responseId :: Text
@@ -123,18 +135,18 @@ apiKeyFile :: FilePath
 apiKeyFile = "apiKey"
 
 data ChatRequest = ChatRequest
-  { model    :: Text
-  , messages :: [Message]
-  , temperature :: Double
-  , stream :: Maybe Bool
+  { chatReqModel :: ChatModel
+  , messages     :: [Message]
+  , temperature  :: Double
+  , stream       :: Maybe Bool
   } deriving (Show, Generic)
 
 instance ToJSON ChatRequest where
   toJSON chatReq = A.object $
-    [ "model" .= model chatReq
+    [ "model" .= chatReqModel chatReq
     , "messages" .= messages chatReq
     , "temperature" .= temperature chatReq
-    ] 
+    ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ] 
     -- <> [ "tools" .= tls | Just tls <- [tools chatReq] ]
 
@@ -144,20 +156,16 @@ promptMessage prompt = UserMessage (pack prompt)
 generateRequestBody :: ConstraintList ToolClass ts => ChatParams ts -> [Message] -> BL.ByteString
 generateRequestBody param mes = encode $
   ChatRequest
-    { model       = modelString (chatModel param)
-    , messages    = sysMessage : mes
-    , temperature = fromMaybe 0.5 (systemTemp $ chatSetting param)
-    , stream      = Just False
+    { chatReqModel = chatModel param
+    , messages     = sysMessage : mes
+    , temperature  = fromMaybe 0.5 (systemTemp $ chatSetting param)
+    , stream       = case chatModel param of
+        DeepSeek _     -> Just False
+        OpenAI _       -> Nothing
+        DeepSeekR1_14B -> Just False
     -- , tools       = Nothing
     }
   where sysMessage = generateSystemPrompt param
- --  = if md then SystemMessage
- --                          "You are a endearing catgirl assistant named '喵喵'. \
- --                          \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'.  \
- --                          \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. Do not use \\( \\) or \\[ \\] for formulas."
- --                        else fromMaybe (SystemMessage
- --                          "You are the endearing catgirl assistant named '喵喵'. You adore using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
- --                          ) (systemMessage mset)
 
 generateSystemPrompt :: forall ts. ConstraintList ToolClass ts => ChatParams ts -> Message
 generateSystemPrompt params
@@ -176,16 +184,6 @@ generateSystemPrompt params
         )
         (systemMessage $ chatSetting params)
 
-modelString :: ChatModel -> Text
-modelString (OpenAI GPT4oMini)          = "gpt-4o-mini"
-modelString (OpenAI GPT4o)              = "gpt-4o"
-modelString (DeepSeek DeepSeekChat)     = "deepseek-chat"
-modelString (DeepSeek DeepSeekReasoner) = "deepseek-reasoner"
-
-modelEndpoint :: ChatModel -> String
-modelEndpoint OpenAI {}     = "https://api.openai.com/v1/chat/completions"
-modelEndpoint (DeepSeek {}) = "https://api.deepseek.com/chat/completions"
-
 data APIKey = APIKey
   { apiKeyOpenAI :: Maybe Text
   , apiKeyDeepSeek :: Maybe Text
@@ -194,6 +192,7 @@ data APIKey = APIKey
 getApiKeyByModel :: ChatModel -> APIKey -> Maybe Text
 getApiKeyByModel (OpenAI _)   apiKey = apiKeyOpenAI apiKey
 getApiKeyByModel (DeepSeek _) apiKey = apiKeyDeepSeek apiKey
+getApiKeyByModel DeepSeekR1_14B _ = Nothing
 
 fetchChatCompletionResponse :: ConstraintList ToolClass ts => APIKey -> ChatParams ts -> [Message] -> IO (Either Text ChatCompletionResponse)
 fetchChatCompletionResponse apiKey model msg = do
@@ -237,13 +236,6 @@ simpleChat model prompt = do
   apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey model [promptMessage prompt]
   return $ displayResponse result
-
--- messageChat :: ChatParams -> [Message] -> ExceptT Text IO Text
--- messageChat params prevMsg = do
---   apiKey <- readApiKeyFile
---   result <- ExceptT $ fetchChatCompletionResponse apiKey params prevMsg
---   return $ turnResponseToMsg result
---     where turnResponseToMsg res = let strRes = displayResponse res in strRes --Message "assistant" $ pack strRes
 
 data ChatStatus = ChatStatus
   { chatStatusToolDepth      :: Int
@@ -296,6 +288,15 @@ agent = do
 statusChat :: ConstraintList ToolClass ts => ChatParams ts -> ChatStatus -> IO (Either Text Text, ChatStatus)
 statusChat = runReaderStateT . runExceptT . runChatT $ agent
 
+-- | If using this you will need to maintain the chat status
+-- the first system message should not be included in the input, as it will be calculated and appended using params
+-- will read apiKey from file if no api key is found in the chat setting
+statusChatReadAPIKey :: forall ts. ConstraintList ToolClass ts => ChatParams ts -> ChatStatus -> IO (Either Text Text, ChatStatus)
+statusChatReadAPIKey params st = do
+  apiKey <- either (const Nothing) Just <$> runExceptT readApiKeyFile
+  let params' = params { chatSetting = (chatSetting params) { systemApiKeys = systemApiKeys (chatSetting params) <|> apiKey } }
+  liftIO $ statusChat @ts params' st
+
 -- | Tool calls are discarded in the output
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
@@ -320,7 +321,8 @@ handleToolCall toolCallName args md = do
     case pickConstraint (Proxy @ToolClass) (Proxy @ts) ((== toolCallName) . toolName) of
       Just toolCont -> toolCont $ \tool -> do
         input  <-  liftE . ExceptT $ pure (jsonToInput tool args)
-        wrapToolOutput <$> liftE (toolHandlerTextError tool input) -- Execute tool
+        lift $ wrapToolOutput <$> runExceptT (toolHandlerTextError tool input) 
+        -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
   
   -- Build updated message history
@@ -334,4 +336,5 @@ handleToolCall toolCallName args md = do
             }
         }
   return toolMsg
-  where wrapToolOutput t = A.object ["tool_output" .= t]
+  where wrapToolOutput (Right t) = A.object ["tool_output" .= t]
+        wrapToolOutput (Left e)  = A.object ["tool_error"  .= e]

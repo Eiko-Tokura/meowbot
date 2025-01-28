@@ -15,6 +15,9 @@ import Module.Command
 import Module.Async
 import Module.ProxyWS
 
+import Data.HList
+import Data.Kind
+
 -- the hierarchy of types:
 --
 --           SystemT r s mods m a
@@ -41,13 +44,82 @@ import Module.ProxyWS
 -- 5. Define a MonadMeow class where you can run Meow in the monad, and derive a funcition that supports
 --    ModuleT r s l (MeowT r mods m) a -> SystemT r s mods m a
 
-data MeowData = MeowData
-  { meowConnection     :: Connection
-  , meowActions        :: !(TVar [Meow [BotAction]])
-  , meowSentCQMessage  :: !(TVar (Maybe SentCQMessage))
-  , meowReceCQMessage  :: !(TVar (Maybe ReceCQMessage))
-  , meowRawMessage     :: !(TVar (Maybe BL.ByteString))
-  }
+newtype MeowData = MeowData (CList MeowDataClass
+  [ Connection
+  , TVar [Meow [BotAction]]
+  , TVar (Maybe SentCQMessage)
+  , TVar (Maybe ReceCQMessage)
+  , TVar (Maybe BL.ByteString)
+  ])
+
+instance HasSystemRead c (CList MeowDataClass 
+  [ Connection
+  , TVar [Meow [BotAction]]
+  , TVar (Maybe SentCQMessage)
+  , TVar (Maybe ReceCQMessage)
+  , TVar (Maybe BL.ByteString)
+  ]) => HasSystemRead c MeowData where
+  readSystem (MeowData clist) = readSystem clist
+  {-# INLINE readSystem #-}
+
+instance HasSystemRead t (CList MeowDataClass (t ': ts)) where
+  readSystem (CCons x _) = x
+  {-# INLINE readSystem #-}
+
+instance {-# OVERLAPPABLE #-} HasSystemRead t (CList MeowDataClass ts) => HasSystemRead t (CList MeowDataClass (t' ': ts)) where
+  readSystem (CCons _ xs) = readSystem xs
+  {-# INLINE readSystem #-}
+
+-------------MeowDataClass-------------
+class MeowDataClass a where
+  type MeowDataInit a :: Type
+  initOneMeowData :: MeowDataInit a -> IO a
+
+instance MeowDataClass (TVar (Maybe a)) where
+  type MeowDataInit (TVar (Maybe a)) = ()
+  initOneMeowData _ = newTVarIO Nothing
+  {-# INLINE initOneMeowData #-}
+
+instance MeowDataClass (TVar [a]) where
+  type MeowDataInit (TVar [a]) = ()
+  initOneMeowData _ = newTVarIO []
+  {-# INLINE initOneMeowData #-}
+
+instance MeowDataClass Connection where
+  type MeowDataInit Connection = Connection
+  initOneMeowData = return
+  {-# INLINE initOneMeowData #-}
+
+class InitMeowDataClass a where
+  type MeowDataAllInit a :: [Type]
+  initAllMeowData :: HList (MeowDataAllInit a) -> IO a
+
+instance InitMeowDataClass (CList MeowDataClass '[]) where
+  type MeowDataAllInit (CList MeowDataClass '[]) = '[]
+  initAllMeowData _ = return CNil
+  {-# INLINE initAllMeowData #-}
+
+instance (MeowDataClass p, InitMeowDataClass (CList MeowDataClass ps)) => InitMeowDataClass (CList MeowDataClass (p : ps)) where
+  type MeowDataAllInit (CList MeowDataClass (p : ps)) = MeowDataInit p : MeowDataAllInit (CList MeowDataClass ps)
+  initAllMeowData (x :* xs) = CCons <$> initOneMeowData x <*> initAllMeowData xs
+  {-# INLINE initAllMeowData #-}
+
+-- -- need a 
+-- class HelperClass as bs where
+--   function :: Monad m => (HList as -> m (CList MeowDataClass as)) -> (HList bs -> m (CList MeowDataClass bs)) -> HList (as ++ bs) -> m (CList MeowDataClass (as ++ bs))
+-- 
+-- -- perform double induction on as and bs
+-- instance HelperClass '[] bs where
+--   function _ f xs = f xs()
+--   {-# INLINE function #-}
+-- 
+-- instance HelperClass as '[] where
+--   function f _ xs = f xs
+--   {-# INLINE function #-}
+-- 
+-- instance (MeowDataClass a, HelperClass as bs) => HelperClass (a : as) bs where
+--   function f g (x :* xs) = CCons <$> _ <*> _
+
 -- | The modules loaded into the bot
 type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
 
@@ -56,26 +128,6 @@ type Meow a = MeowT MeowData Mods IO a
 
 -- | The monad the bot instance runs in
 type Cat  a = CatT  MeowData Mods IO a
-
-instance HasSystemRead (TVar [Meow [BotAction]]) (MeowData) where
-  readSystem = meowActions
-  {-# INLINE readSystem #-}
-
-instance HasSystemRead Connection (MeowData) where
-  readSystem = meowConnection
-  {-# INLINE readSystem #-}
-
-instance HasSystemRead (TVar (Maybe SentCQMessage)) (MeowData) where
-  readSystem = meowSentCQMessage
-  {-# INLINE readSystem #-}
-
-instance HasSystemRead (TVar (Maybe ReceCQMessage)) (MeowData) where
-  readSystem = meowReceCQMessage
-  {-# INLINE readSystem #-}
-
-instance HasSystemRead (TVar (Maybe BL.ByteString)) (MeowData) where
-  readSystem = meowRawMessage
-  {-# INLINE readSystem #-}
 
 ------------------------------------------------------------------------
 data BotAction
