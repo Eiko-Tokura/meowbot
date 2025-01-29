@@ -47,6 +47,7 @@ data Parameter name description
   | FloatP  name description
   | ObjectP name description [Parameter Symbol Symbol]
   | MaybeP  name description (Parameter Symbol Symbol)
+  | ArrayP  name description (Parameter Symbol Symbol)
   | ObjectP0 [Parameter Symbol Symbol] -- ^ outermost object type, no name
 
 newtype StringT n e = StringT Text
@@ -54,6 +55,7 @@ newtype IntT    n e = IntT Int
 newtype BoolT   n e = BoolT Bool
 newtype FloatT  n e = FloatT Double
 newtype UnitT   n e = UnitT ()
+newtype ArrayT  n e a = ArrayT [a]
 newtype MaybeTy t = MaybeTy (Maybe (ParamToData t)) -- ^ Maybe type wrapper, called MaybeTy to avoid conflict with MaybeT transformer
 
 data ObjectT name exp (params :: [Parameter Symbol Symbol]) where

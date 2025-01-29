@@ -12,6 +12,7 @@ import MeowBot.Parser (Parser, Chars)
 import qualified MeowBot.Parser as MP
 import qualified Data.Text as T
 import Utils.Base64
+import External.ChatAPI
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
@@ -63,15 +64,18 @@ sendIOeToChatIdMd (_, cid, _, mid, _) ioess = do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
    where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
 
-sendIOeToChatIdMdAsync :: EssentialContent -> ExceptT Text IO Text -> IO (Async (Meow [BotAction]))
+sendIOeToChatIdMdAsync :: EssentialContent -> ExceptT Text IO Message -> IO (Async (Meow [BotAction]))
 --OtherData -> IO ([BotAction], OtherData)
 sendIOeToChatIdMdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioe_ess
   case ess of
-    Right (str, mdcq) -> return $ do
-      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+    Right (msg, mdcq) -> return $ do
+      insertMyResponseHistory cid (generateMetaMessage (content msg) [] [MReplyTo mid, MMessage msg])
       return [ baSendToChatId cid mdcq ]
     Left err -> return $ do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
-   where ioe_ess = do {res <- ioess; mdcq <- turnMdCQCode res; return (res, mdcq)}
+   where ioe_ess = do 
+          res <- ioess
+          mdcq <- turnMdCQCode (content res)
+          return (res, mdcq)
 

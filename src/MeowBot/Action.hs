@@ -60,3 +60,9 @@ meowSendToChatIdFull cid mid adt items str = do
   insertMyResponseHistory cid meta
   return [ baSendToChatId cid str ]
 
+-- | Turnning an meow action that returns an action that asynchronously returns a Meow [BotAction] into a Meow [BotAction]
+asyncMeow :: Meow (IO (Meow [BotAction])) -> Meow [BotAction]
+asyncMeow masync = do
+  asyncAction  <- masync -- meow part
+  asyncWrapped <- liftIO $ async asyncAction -- async
+  return $ [BAAsync asyncWrapped]
