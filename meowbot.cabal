@@ -105,6 +105,7 @@ library meowbot-lib
                    , Data.Additional.Saved
                    , Data.FilePathFor
                    , Data.HList
+                   , Data.Maybe.Union
                    , Data.PersistModel
                    , Data.Template
                    , External.ChatAPI
@@ -176,6 +177,7 @@ library meowbot-lib
                  , servant
                  , servant-client
                  , stm
+                 , tasty
                  , template-haskell
                  , text
                  , time
@@ -187,6 +189,8 @@ library meowbot-lib
     hs-source-dirs:   src
 
     default-language: GHC2024
+
+    default-extensions: OverloadedStrings, TypeFamilies
 
 executable meowbot
     main-is:          Main.hs
@@ -224,6 +228,7 @@ executable meowbot
                  , servant
                  , servant-client
                  , stm
+                 , tasty
                  , template-haskell
                  , text
                  , time
@@ -232,6 +237,8 @@ executable meowbot
                  , wuss
 
     default-language: GHC2024
+
+    default-extensions: OverloadedStrings, TypeFamilies
 
 test-suite meowbot-test
     type: exitcode-stdio-1.0
@@ -242,7 +249,14 @@ test-suite meowbot-test
 
     main-is: Main.hs
 
+    other-modules: Test.ChatAPI
+
     build-depends: base
+                 , tasty
+                 , tasty-hunit
+                 , mtl
                  , meowbot-lib
 
     default-language: GHC2024
+
+    default-extensions: OverloadedStrings
