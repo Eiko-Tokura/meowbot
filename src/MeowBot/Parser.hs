@@ -112,7 +112,7 @@ cqmsg = do
     { onlyMessage = packable $ fromMaybe "" $ runParser htmlDecode $ rights leither
     , cqcodes = lefts leither
     , replyTo = listToMaybe [id | CQReply id <- lefts leither]
-    , withChatSetting = Nothing
+    , metaMessageItems = []
     , additionalData = []
     }
 {-# INLINE cqmsg #-}
