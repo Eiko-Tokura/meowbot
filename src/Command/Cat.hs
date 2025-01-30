@@ -102,21 +102,20 @@ commandCat = BotCommand Cat $ botT $ do
       params = fst . head $ rlChatModelMsg
       md = either chatMarkDown chatMarkDown params
       ioEChatResponse = case params of
-        Left  paramCat      -> let 
-          dispatchMessagesChat :: forall (t :: ChatModel). (ChatAPI t) => Proxy t -> ExceptT Text IO [Message]
-          dispatchMessagesChat _ = messagesChat @t @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
 
-          in case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
-              Nothing -> messagesChat @ModelCat @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
-              Just proxyCont -> proxyCont $ \p -> dispatchMessagesChat p
+        Left  paramCat      -> 
+          case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
+            Nothing ->
+              messagesChat @ModelCat @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
+            Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+              messagesChat @a @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
 
-        Right paramSuperCat -> let
-          dispatchMessagesChat :: forall (t :: ChatModel). (ChatAPI t) => Proxy t -> ExceptT Text IO [Message]
-          dispatchMessagesChat _ = messagesChat @t @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
-
-          in case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
-              Nothing -> messagesChat @ModelSuperCat @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
-              Just proxyCont -> proxyCont $ \p -> dispatchMessagesChat p
+        Right paramSuperCat ->
+          case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
+            Nothing ->
+              messagesChat @ModelSuperCat @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
+            Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+              messagesChat @a @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
 
   cid <- pureMaybe $ checkAllowedCatUsers (chatModel @ModelCat) sd cid
   asyncAction <- liftIO $ actionSendMessages md (msg, cid, uid, mid, sender) ioEChatResponse
