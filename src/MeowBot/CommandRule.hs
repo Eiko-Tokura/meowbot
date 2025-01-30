@@ -6,6 +6,7 @@ import Control.DeepSeq
 import Database.Persist
 import Database.Persist.Sqlite
 import Data.Typeable
+import Utils.Persist
 
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
@@ -21,11 +22,17 @@ instance PersistField UserId where
 instance PersistFieldSql UserId where sqlType _ = SqlInt64
 instance PersistFieldSql GroupId where sqlType _ = SqlInt64
 
-data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String deriving (Show, Eq, Ord, Read)
-data GroupGroup = AllowedGroup | CustomGroupGroup String deriving (Show, Eq, Ord, Read)
+data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String
+  deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow UserGroup)
+
+data GroupGroup = AllowedGroup | CustomGroupGroup String
+  deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow GroupGroup)
 
 data CommandRule = Allow UserObject CommandObject | Deny UserObject CommandObject
   deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow CommandRule)
 
 data UserObject
   = AllUserAndGroups
@@ -38,6 +45,7 @@ data UserObject
   | SubtractUserObject UserObject UserObject
   | ExceptUserObject UserObject
   deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow UserObject)
 
 data CommandObject
   = AllCommands
@@ -46,6 +54,7 @@ data CommandObject
   | SubtractCommand CommandObject CommandObject
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow CommandObject)
 
 data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman
   deriving (Show, Eq, Ord, Read, Enum, Bounded, Typeable)

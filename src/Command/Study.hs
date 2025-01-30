@@ -173,11 +173,11 @@ commandStudy = BotCommand Study $ botT $ do
           [ baSendToChatId cid $ T.intercalate "\n"
             [ book_name match
             , tshow (coerce @_ @Int $ reverseOffsetPageNumber offset (page_absoluteNumber randomPage)) <> ", " <> tshow (coerce @_ @Int $ page_absoluteNumber randomPage) <> "/" <> tshow (length $ book_pages match)
-            , embedCQCode $ CQImage $ T.pack $ page_imagePath randomPage
+            , embedCQCode $ CQImage $ page_imagePath randomPage
             ]
           ]
       else
-        return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . packable . page_imagePath) pagesToView ]
+        return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) pagesToView ]
 
     ReadBook bookname (Left (pageType, pages')) -> do
       match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
@@ -187,7 +187,7 @@ commandStudy = BotCommand Study $ botT $ do
             if null pages' then map page_absoluteNumber pagesOfGivenType -- if no pages are given, view all pages of the given type
             else mapMaybe ((fmap page_absoluteNumber . atMay pagesOfGivenType . coerce) `either` ((Just . offsetPageNumber offset) `either` Just)) pages'  :: [AbsolutePageNumber]
           pagesToView = [ page | page <- book_pages match, page_absoluteNumber page `elem` absPageNumbersToView ]
-      return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . packable . page_imagePath) pagesToView ]
+      return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) pagesToView ]
 
     InfoEdit bookname Set (Just infoType) -> do
       match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
@@ -271,7 +271,7 @@ makeBook bookname bookinfo pdf = do
   bookPages <- forM page_images $ \(absPageNum, imgFp) -> do
     let pageType = Nothing
     imgAbFp <- toAbsPath imgFp
-    return $ BookPage (useAnyPath imgAbFp) absPageNum pageType
+    return $ BookPage (pack $ useAnyPath imgAbFp) absPageNum pageType
   return $ Book bookname (Just $ useAbsPath pdfAbFp) bookPages bookinfo
 
 makeBookFromImageDir :: (ComposablePath anyPathType Rel) => BookName -> BookInfo -> Maybe (FilePathFor anyPathType' File PDF) -> FilePathFor anyPathType Directory Image -> ExceptT SomeException IO Book
@@ -283,7 +283,7 @@ makeBookFromImageDir bookname bookinfo mpdfFile imgDir = do
   bookPages <- forM page_images $ \(absPageNum, imgFp) -> do
     let pageType = Nothing
     imgAbFp <- toAbsPath imgFp
-    return $ BookPage (useAnyPath imgAbFp) absPageNum pageType
+    return $ BookPage (pack $ useAnyPath imgAbFp) absPageNum pageType
   return $ Book bookname (useAbsPath <$> mpdfAbFp) bookPages bookinfo
 
 readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stringQ "page_") *> positiveInt <* canBeEmpty $(stringQ ".png"))

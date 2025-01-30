@@ -11,6 +11,8 @@ import Parser.Template (asumE)
 
 newtype Saved a = Saved a deriving Eq via a
 
+type Saved_AdditionalData = Saved AdditionalData
+
 instance Show (Saved AdditionalData) where
   show (Saved (AdditionalDataSaved a)) = show $ Just (show $ typeOf a, a)
   show (Saved (AdditionalData _)) = "Nothing"

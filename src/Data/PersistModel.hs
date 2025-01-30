@@ -3,8 +3,10 @@ module Data.PersistModel where
 
 import Database.Persist.Sqlite
 import Database.Persist.TH
-import MeowBot.Data
+import MeowBot.CommandRule
 import MeowBot.CQCode
+import MeowBot.Data
+import MeowBot.Data.Book
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Utils.Persist
@@ -12,6 +14,8 @@ import Data.Maybe
 import Data.Coerce
 import Control.Applicative
 import Command.Hangman.Model
+import External.ChatAPI
+import Data.Additional.Saved
 
 import qualified Data.Set as S
 
@@ -22,6 +26,52 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 --  name String
 --  age Int
 --  deriving Show
+
+BotSetting -- Overlappable by BotSettingPerChat
+  botName          String                     Maybe
+  defaultModel     (PersistUseShow ChatModel) Maybe
+  defaultModelS    (PersistUseShow ChatModel) Maybe
+  systemMessage    Text                       Maybe
+  systemTemp       Double                     Maybe
+  systemMaxToolDepth    Int                   Maybe
+  systemAPIKeyOpenAI    Text                  Maybe
+  systemAPIKeyDeepSeek  Text                  Maybe
+
+BotSettingPerChat -- Overlapping BotSetting
+  botName          String                     Maybe
+  chatId           ChatId
+  defaultModel  (PersistUseShow ChatModel)    Maybe
+  defaultModelS (PersistUseShow ChatModel)    Maybe
+  systemMessage         Text                  Maybe
+  systemTemp            Double                Maybe
+  systemMaxToolDepth    Int                   Maybe
+  systemAPIKeyOpenAI    Text                  Maybe
+  systemAPIKeyDeepSeek  Text                  Maybe
+
+CommandRuleDB
+  botName        String      Maybe
+  commandRule    CommandRule
+
+InUserGroup
+  botName        String      Maybe
+  userId         UserId
+  userGroup      UserGroup
+
+InGroupGroup
+  botName        String      Maybe
+  groupId        GroupId
+  groupGroup     GroupGroup
+
+SavedAdditionalData
+  botName        String      Maybe
+  additionalData (PersistUseShow Saved_AdditionalData)
+
+BookDB
+  bookName    Text
+  bookPdfPath FilePath       Maybe
+  bookPages   [BookPage]
+  bookInfo    BookInfo
+
 ChatMessage
   botName        String        Maybe
   time           UTCTime
@@ -59,6 +109,16 @@ HangmanRanking
   playcount      Int         
   deriving Show
 |]
+
+botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
+botSettingPerChatSystemAPIKey bspc = case (botSettingPerChatSystemAPIKeyOpenAI bspc, botSettingPerChatSystemAPIKeyDeepSeek bspc) of
+  (Nothing, Nothing) -> Nothing
+  (a, b) -> Just $ APIKey a b
+
+botSettingSystemAPIKey :: BotSetting -> Maybe APIKey
+botSettingSystemAPIKey bs = case (botSettingSystemAPIKeyOpenAI bs, botSettingSystemAPIKeyDeepSeek bs) of
+  (Nothing, Nothing) -> Nothing
+  (a, b) -> Just $ APIKey a b
 
 cqMessageToChatMessage :: BotName -> CQMessage -> Maybe ChatMessage
 cqMessageToChatMessage botname cqm = do

@@ -21,15 +21,32 @@ import Control.Monad.Trans.ReaderState
 import Control.Monad.Except
 import Control.Concurrent
 
-type MeowTools = '[FibonacciTool]
+import Data.HList
+import Data.Proxy
+import Data.Default
+import Data.Coerce
+
+import Utils.RunDB
+import Utils.Persist
+import Data.PersistModel
+
+type MeowTools = '[] --FibonacciTool]
 
 type ModelCat      = DeepSeek DeepSeekChat
 type ModelSuperCat = DeepSeek DeepSeekReasoner
 
-modelCat      = chatModel @ModelCat
-modelSuperCat = chatModel @ModelSuperCat
+modelsInUse :: CFList ChatAPI Proxy 
+  [ Local    DeepSeekR1_14B
+  , Local    DeepSeekR1_32B
+  , DeepSeek DeepSeekChat
+  , DeepSeek DeepSeekReasoner
+  ]
+modelsInUse = def
 
-type ChatParamsPerModel ts = Either (ChatParams ModelCat ts) (ChatParams ModelSuperCat ts)
+modelCatDef      = chatModel @ModelCat
+modelSuperCatDef = chatModel @ModelSuperCat
+
+type ChatParamsPerModel m1 m2 ts = Either (ChatParams m1 ts) (ChatParams m2 ts)
 
 meowMaxToolDepth :: Int
 meowMaxToolDepth = 5
@@ -41,27 +58,71 @@ commandCat = BotCommand Cat $ botT $ do
   whole_chat <- query
   botmodules <- query
   botname    <- query
+  botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
+  botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
   let sd = savedData other_data
   let msys = ChatSetting
-               ((systemMessage =<< lookup cid (chatSettings sd)) <|> (fmap (SystemMessage . T.pack) . globalSysMsg $ botmodules))
-               (systemTemp =<< lookup cid (chatSettings sd))
-               (Just 5)
-               Nothing
+               ( asum
+                 [ fmap SystemMessage $ botSettingPerChatSystemMessage =<< botSettingPerChat
+                 , systemMessage =<< lookup cid (chatSettings sd) 
+                 , fmap SystemMessage . globalSysMsg $ botmodules
+                 , fmap SystemMessage $ botSettingSystemMessage =<< botSetting
+                 ]
+               )
+               ( asum
+                 [ botSettingPerChatSystemTemp =<< botSettingPerChat
+                 , systemTemp =<< lookup cid (chatSettings sd)
+                 , botSettingSystemTemp =<< botSetting
+                 ]
+               )
+               ( asum
+                 [ botSettingPerChatSystemMaxToolDepth =<< botSettingPerChat
+                 , systemMaxToolDepth =<< lookup cid (chatSettings sd)
+                 , botSettingSystemMaxToolDepth =<< botSetting
+                 , Just 5
+                 ]
+               )
+               ( asum
+                 [ botSettingPerChatSystemAPIKey =<< botSettingPerChat
+                 , systemApiKeys =<< lookup cid (chatSettings sd)
+                 , botSettingSystemAPIKey =<< botSetting
+                 ]
+               )
+  let modelCat = fromMaybe (modelCat) $ runPersistUseShow <$> asum 
+        [ botSettingPerChatDefaultModel =<< botSettingPerChat
+        , botSettingDefaultModel =<< botSetting
+        ]
+      modelSuperCat = fromMaybe (DeepSeek DeepSeekReasoner) $ runPersistUseShow <$> asum
+        [ botSettingPerChatDefaultModelS =<< botSettingPerChat
+        , botSettingDefaultModelS =<< botSetting
+        ]
   -- looking for custom system message
   lChatModelMsg <- pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
   let rlChatModelMsg = reverse lChatModelMsg
       params = fst . head $ rlChatModelMsg
       md = either chatMarkDown chatMarkDown params
       ioEChatResponse = case params of
-        Left paramCat       -> messagesChat @ModelCat      @MeowTools paramCat      $ (map snd . reverse . take 20) rlChatModelMsg
-        Right paramSuperCat -> messagesChat @ModelSuperCat @MeowTools paramSuperCat $ (map snd . reverse . take 20) rlChatModelMsg
+        Left  paramCat      -> let 
+          dispatchMessagesChat :: forall (t :: ChatModel). (ChatAPI t) => Proxy t -> ExceptT Text IO [Message]
+          dispatchMessagesChat _ = messagesChat @t @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
+
+          in case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
+              Nothing -> messagesChat @ModelCat @MeowTools (coerce paramCat) $ (map snd . reverse . take 20) rlChatModelMsg
+              Just proxyCont -> proxyCont $ \p -> dispatchMessagesChat p
+
+        Right paramSuperCat -> let
+          dispatchMessagesChat :: forall (t :: ChatModel). (ChatAPI t) => Proxy t -> ExceptT Text IO [Message]
+          dispatchMessagesChat _ = messagesChat @t @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
+
+          in case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
+              Nothing -> messagesChat @ModelSuperCat @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
+              Just proxyCont -> proxyCont $ \p -> dispatchMessagesChat p
+
   cid <- pureMaybe $ checkAllowedCatUsers (chatModel @ModelCat) sd cid
   asyncAction <- liftIO $ actionSendMessages md (msg, cid, uid, mid, sender) ioEChatResponse
   $(logDebug) $ "created async: " <> T.pack (show asyncAction)
   return $ pure $ BAAsync $ asyncAction
   where checkAllowedCatUsers _  _ anybody = return anybody
-        -- checkAllowedCatUsers sd modelSuperCat g@(GroupChat gid) = mIf ((gid, AllowedGroup) `elem` groupGroups sd) g
-        -- checkAllowedCatUsers sd modelSuperCat p@(PrivateChat uid) = mIf ((uid, Allowed) `elem` userGroups sd) p
 
 type UseMarkdown = Bool
 actionSendMessages :: UseMarkdown -> EssentialContent -> ExceptT Text IO [Message] -> IO (Async (Meow [BotAction]))
@@ -81,26 +142,26 @@ actionSendMessages usemd essc@(_, cid, _, mid, _) ioess = async $ do
                 Right mdcq -> do
                   send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] mdcq
                   waitAndDoRest <- liftIO . actionSendMessages usemd essc $ do
-                      liftIO $ threadDelay 2000000
+                      liftIO $ threadDelay 2500000
                       ExceptT $ return $ Right rest
                   return $ send <> [BAAsync waitAndDoRest]
             else do
               send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] str
               waitAndDoRest <- liftIO . actionSendMessages usemd essc $ do
-                  liftIO $ threadDelay 2000000
+                  liftIO $ threadDelay 2500000
                   ExceptT $ return $ Right rest
               return $ send <> [BAAsync waitAndDoRest]
           AssistantMessage { thinking = Just think } -> return $ do
             send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] $ "(..." <> T.strip think <> ")"
             waitAndDoRest <- liftIO . actionSendMessages usemd essc $ do
-                liftIO $ threadDelay 1000000
+                liftIO $ threadDelay 2500000
                 ExceptT $ return $ Right $ msg { thinking = Nothing } : rest
             return $ send <> [BAAsync waitAndDoRest]
           _ -> casingMessages usemd essc rest
 
 catParser :: (Chars sb) => BotName -> ChatSetting ->
   Parser sb Char
-    ( ChatParamsPerModel ts
+    ( ChatParamsPerModel m1 m2 ts
     , String
     )
 catParser (BotName (Just botname)) msys = do
@@ -120,8 +181,8 @@ catParser (BotName (Just botname)) msys = do
       MP.commandSeparator
       str <- MP.some MP.item
       case modelStr of
-         "supercat" -> return . (, str) . Left  $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
-         _          -> return . (, str) . Right $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
+         "supercat" -> return . (, str) . Right $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
+         _          -> return . (, str) . Left  $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
 catParser (BotName Nothing) msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
@@ -133,48 +194,24 @@ catParser (BotName Nothing) msys = do
       MP.commandSeparator
       str <- MP.some MP.item
       case modelStr of
-         "supercat" -> return . (, str) . Left  $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
-         _          -> return . (, str) . Right $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
+         "supercat" -> return . (, str) . Right $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
+         _          -> return . (, str) . Left  $ ChatParams md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
     parseMeowMeow = do
       $(MP.stringQ "喵喵")
       MP.commandSeparator2
       str <- MP.some MP.item
       return (Left $ ChatParams False msys, str)
 
-replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParamsPerModel ts, String)
+replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatParamsPerModel m1 m2 ts, String)
 replyCatParser name msys = catParser name msys <|> ( do
   MP.spaces0
   str <- MP.some MP.item
   return (Left $ ChatParams False msys, str)
   )
 
-treeCatParser :: forall s ts. (IsStream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParamsPerModel ts, Message)]
+treeCatParser :: forall s m1 m2 ts. (IsStream s CQMessage) => BotName -> ChatSetting -> Int -> Parser s CQMessage [(ChatParamsPerModel m1 m2 ts, Message)]
 treeCatParser name msys mid = do
   elist  <- Right <$>
-    --   ( do
-    --     firstUMsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage] ) -- will be dropped
-    --     firstAMsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-    --     case ( do
-    --             MP.runParser aokanaParser (extractMetaMessage firstUMsg)  -- the first user input should be an aokana command
-    --             meta <- metaMessage firstAMsg
-    --             return $ MP.withChatSetting meta -- there might be modified system message
-    --          ) of
-    --       Just msys' ->
-    --         do
-    --           innerList <- MP.many
-    --             (do
-    --               umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
-    --               amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage)
-    --               let (params, metaUMsg) = fromMaybe (ChatParams modelCat False (chatSettingMaybeWrapper msys'), "") $ MP.runParser (catParser name (chatSettingMaybeWrapper msys')) (extractMetaMessage umsg)
-    --               return [ (params, Message { role = "user", content = T.pack metaUMsg})
-    --                      , (params, Message { role = "assistant", content = extractMetaMessage amsg})
-    --                      ]
-    --             )
-    --           let params = ChatParams modelCat False (chatSettingMaybeWrapper msys')
-    --           return (msys', [(params, Message "assistant" $ extractMetaMessage firstAMsg)] : innerList)
-    --       Nothing -> MP.zero
-    -- )
-    -- MP.|+|
       MP.many (do
           umsg <- MP.satisfy (\cqm -> eventType cqm `elem` [GroupMessage, PrivateMessage])
           amsg <- MP.satisfy (\cqm -> eventType cqm == SelfMessage )
@@ -185,7 +222,7 @@ treeCatParser name msys mid = do
           return [ (params, UserMessage { content = T.pack metaUMsg })
                  , (params, msg)
                  ]
-        ) :: Parser s CQMessage (Either (Maybe ChatSetting, [[(ChatParamsPerModel ts, Message)]]) [[(ChatParamsPerModel ts, Message)]])
+        ) :: Parser s CQMessage (Either (Maybe ChatSetting, [[(ChatParamsPerModel m1 m2 ts, Message)]]) [[(ChatParamsPerModel m1 m2 ts, Message)]])
 
   lastMsg <- MP.satisfy (\cqm -> (eventType cqm `elem` [GroupMessage, PrivateMessage]) && messageId cqm == Just mid)
   case elist of

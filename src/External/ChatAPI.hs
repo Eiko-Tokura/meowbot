@@ -8,7 +8,7 @@ module External.ChatAPI
   , ChatModel(..)
   , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
-  , ChatAPI(..)
+  , ChatAPI(..), APIKey(..)
   ) where
 
 import Control.Exception (try, SomeException)
@@ -37,11 +37,11 @@ data ChatModel
   = OpenAI OpenAIModel 
   | DeepSeek DeepSeekModel
   | Local LocalModel
-  deriving (Show, Eq)
+  deriving (Show, Read, Eq)
 
-data OpenAIModel = GPT4oMini | GPT4o deriving (Show, Eq)
-data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Eq)
-data LocalModel = DeepSeekR1_14B | DeepSeekR1_32B deriving (Show, Eq)
+data OpenAIModel   = GPT4oMini | GPT4o deriving (Show, Read, Eq)
+data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
+data LocalModel    = DeepSeekR1_14B | DeepSeekR1_32B deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}   = "https://api.openai.com/v1/chat/completions"
@@ -91,7 +91,7 @@ class
   ( ToJSON (ModelDependent model ChatRequest)
   , FromJSON (ChatCompletionResponse model)
   , GetMessage (ChatCompletionResponse model)
-  ) => ChatAPI (model :: ChatModel) where
+  ) => ChatAPI model where
   type ChatCompletionResponse model
   chatModel :: ChatModel
 
@@ -151,7 +151,7 @@ data Message
   deriving (Generic, Eq, Ord, Read, NFData)
 
 -- | Wrapper for model dependent content (toJSON and FromJSON)
-newtype ModelDependent (m :: ChatModel) a = ModelDependent { runModelDependent :: a }
+newtype ModelDependent m a = ModelDependent { runModelDependent :: a }
   deriving (Show, Eq, Generic)
   deriving newtype (NFData)
 

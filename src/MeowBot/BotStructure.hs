@@ -89,6 +89,7 @@ instance {-# OVERLAPPABLE #-} Monad m => MonadModifiable OtherData (ReaderStateT
   change f = modify $ second $ \ad -> ad {otherdata = f $ otherdata ad}
   {-# INLINE change #-}
 
+-- | We will now save this data to the database, no longer in a file.
 data SavedData = SavedData
   { chatSettings    :: [(ChatId, ChatSetting)]
   , userGroups      :: [(UserId, UserGroup)]

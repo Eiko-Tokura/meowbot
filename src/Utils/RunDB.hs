@@ -15,4 +15,3 @@ runDB :: (LogDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowT r mods IO b
 runDB acts = do
   pool <- databasePool <$> asks (getF @LogDatabase . fst . snd)
   lift $ runSqlPool acts pool
-

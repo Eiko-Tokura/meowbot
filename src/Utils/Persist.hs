@@ -16,11 +16,11 @@ import Data.Text (pack)
 -- to use it, either wrap your data type with PersistUseInt64
 -- or write
 --   deriving (PersistField, PersistFieldSql) via (PersistUseInt64 YourType)
-newtype PersistUseShow a = PersistUseShow a
+newtype PersistUseShow a = PersistUseShow { runPersistUseShow :: a }
   deriving (Show, Read) via a
 
 -- | Newtype wrapper for PersistField and PersistFieldSql instances storing Enum as Int64
-newtype PersistUseInt64 a = PersistUseInt64 a
+newtype PersistUseInt64 a = PersistUseInt64 { runPersistUseInt64 :: a }
   deriving (Bounded, Enum) via a
 
 instance (Show a, Read a) => PersistField (PersistUseShow a) where

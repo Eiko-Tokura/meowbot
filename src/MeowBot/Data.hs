@@ -76,7 +76,7 @@ data BotModules = BotModules
   { canUseGroupCommands   :: [CommandId]
   , canUsePrivateCommands :: [CommandId]
   , nameOfBot             :: BotName
-  , globalSysMsg          :: Maybe String
+  , globalSysMsg          :: Maybe Text
   , proxyTChans           :: [ProxyData]
   , logFile               :: [FilePath]
   , botInstance           :: BotInstance

@@ -2,6 +2,7 @@
 module MeowBot.Data.Book where
 import Data.Coerce
 import Data.Text (Text)
+import Utils.Persist
 
 newtype PageNumber = PageNumber Int deriving (Show, Eq, Ord, Read) via Int
 newtype AbsolutePageNumber = AbsolutePageNumber Int deriving (Show, Eq, Ord, Read) via Int
@@ -24,10 +25,11 @@ data Book = Book
   } deriving (Show, Eq, Ord, Read)
 
 data BookPage = BookPage
-  { page_imagePath      :: FilePath
+  { page_imagePath      :: Text
   , page_absoluteNumber :: AbsolutePageNumber
   , page_type           :: Maybe PageType
   } deriving (Show, Eq, Ord, Read)
+    deriving (PersistField, PersistFieldSql) via PersistUseShow BookPage
 
 data PageType = Cover | Foreword | Menu | Chapter | Exercise | MarkedAs String deriving (Show, Eq, Ord, Read)
 
@@ -39,3 +41,4 @@ data BookInfo = BookInfo
   , bookInfo_tags             :: [BookTag]
   , bookInfo_uploader         :: Text
   } deriving (Show, Eq, Ord, Read)
+    deriving (PersistField, PersistFieldSql) via PersistUseShow BookInfo

@@ -5,6 +5,7 @@ module Data.HList where
 
 import Data.Kind
 import Data.Proxy
+import Data.Default
 
 -- compared to ordinary algebraic data type,
 -- generalized algebraic data type (GADTs) allows you to put constraints on its various constructors (which you can't do with data), specify types on its return values
@@ -30,12 +31,39 @@ data UList (f :: Type -> Type) (ts :: [Type]) where
 data CList (f :: Type -> Constraint) (ts :: [Type]) where
   CNil  :: CList f '[]
   CCons :: f t => t -> CList f ts -> CList f (t : ts)
+infixr 5 `CCons`
 
 -- | A dynamic type-level list, with constraints only, no information about its contents on the type
 -- so you can **only use** the constraints to work with it, you know nothing else about the elements
-data CListDynamic (f :: Type -> Constraint) where
+data CListDynamic (c :: Type -> Constraint) where
   CDNil  :: CListDynamic f
-  CDCons :: f t => t -> CListDynamic f -> CListDynamic f
+  CDCons :: c t => t -> CListDynamic c -> CListDynamic c
+infixr 5 `CDCons`
+
+data CFList (c :: k -> Constraint) (f :: k -> Type) (ts :: [k]) where
+  CFNil  :: CFList c f '[]
+  CFCons :: c t => f t -> CFList c f ts -> CFList c f (t : ts)
+infixr 5 `CFCons`
+
+instance Default (CFList c f '[]) where
+  def = CFNil
+  {-# INLINE def #-}
+
+instance (c p, Default (CFList c Proxy ps)) => Default (CFList c Proxy (p : ps)) where
+  def = CFCons Proxy def
+  {-# INLINE def #-}
+
+cfListMap :: CFList c f ts -> (forall t. c t => f t -> a) -> [a]
+cfListMap CFNil _ = []
+cfListMap (CFCons t ts) f = f t : cfListMap ts f
+{-# INLINE cfListMap #-}
+
+cfListPickElem :: CFList c f ts -> (forall t. c t => f t -> Bool) -> Maybe ((forall t. c t => f t -> a) -> a)
+cfListPickElem CFNil _ = Nothing
+cfListPickElem (CFCons t ts) predicate
+  | predicate t = Just $ \f -> f t
+  | otherwise   = cfListPickElem ts predicate
+{-# INLINE cfListPickElem #-}
 
 -- | Pick an element from the list that satisfies the predicate
 cListPickElem :: CList c ts -> (forall t. c t => t -> Bool) -> Maybe ((forall t. c t => t -> a) -> a)

@@ -38,6 +38,8 @@ import Control.DeepSeq (NFData)
 import Control.Exception
 import Utils.Text
 
+import Parser.Run
+
 type TextLazy = TL.Text
 
 data Parameter name description
@@ -353,13 +355,13 @@ instance FromJSON ToolCallPair where
     <*> o .: "args"
 
 -- | Parse potential tool call from message content
-parseToolCall :: (text ~ Text, EncodeUtf8LazyByteString text) => text -> Maybe ToolCallPair
+parseToolCall :: Text -> Maybe ToolCallPair
 parseToolCall txt = decode (encodeUtf8LBS txt) <|> (parseToolCallText txt)
   where parseToolCallText txt
           | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":", "```json"]
              = let start = T.drop 7 $ T.dropWhile (/= '`') txt
-                   mid = T.dropWhileEnd (== '`') $ start
-               in decode $ encodeUtf8LBS mid
+                   mid = runParser (manyTill' (string "```") getItem <* string "```") start :: Maybe Text
+               in decode =<< encodeUtf8LBS <$> mid
           | otherwise = Nothing
 
 -- | A unique identifier for tool call tracking
@@ -401,7 +403,7 @@ appendToolPrompts clist sep
 data FibonacciTool
 
 instance ToolClass FibonacciTool where
-  type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 100000]"])
+  type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 10000]"])
   type ToolOutput FibonacciTool = ParamToData (StringP "result" "Calculated Fibonacci number")
   data ToolError  FibonacciTool = FibonacciError Text deriving (Show)
   toolName _ = "fibonacci"
@@ -410,7 +412,7 @@ instance ToolClass FibonacciTool where
     | n < 0     = do
         liftIO $ putTextLn $ "[TOOL]Negative Fibonacci number " <> tshow n
         throwE $ FibonacciError "Negative Fibonacci number"
-    | n > 100000 = do
+    | n > 10000 = do
         liftIO $ putTextLn $ "[TOOL]Fibonacci number " <> tshow n <> " too large"
         throwE $ FibonacciError "Fibonacci number too large"
     | otherwise = do
