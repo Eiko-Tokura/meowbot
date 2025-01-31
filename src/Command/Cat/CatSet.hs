@@ -6,13 +6,26 @@ import MeowBot
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser
 import qualified Data.Text as T
+import Data.Default
 import Data.HList
+import Data.Proxy
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans
 import Utils.RunDB
 import Utils.Persist
 import Data.PersistModel
-import External.ChatAPI (ChatModel(..))
+import External.ChatAPI hiding (SystemMessage)
+
+modelsInUse :: CFList ChatAPI Proxy 
+  [ Local    DeepSeekR1_14B
+  , Local    DeepSeekR1_32B
+  , DeepSeek DeepSeekChat
+  , DeepSeek DeepSeekReasoner
+  ]
+modelsInUse = def
+
+modelsInUseText :: [T.Text]
+modelsInUseText = cfListMap modelsInUse $ \(Proxy :: Proxy a) -> tshow (chatModel @a)
 
 data CatSetCommand
   = Set   DefaultOrPerChat BotSettingItem
@@ -49,14 +62,14 @@ catSetParser = MP.headCommand "cat-" >> do
     ]
   return $ action range (DisplayThinking Nothing)
   asum
-    [ MP.string "displayThinking"      >> MP.spaces >> fmap (action range) (DisplayThinking      <$> MP.optMaybe MP.bool)
-    , MP.string "defaultModel"         >> MP.spaces >> fmap (action range) (DefaultModel         <$> (Just <$> MP.parseByRead))
-    , MP.string "defaultModelSuper"    >> MP.spaces >> fmap (action range) (DefaultModelSuper    <$> (Just <$> MP.parseByRead))
-    , MP.string "systemMessage"        >> MP.spaces >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.some' MP.item))
-    , MP.string "systemTemp"           >> MP.spaces >> fmap (action range) (SystemTemp           <$> MP.optMaybe MP.nFloat)
-    , MP.string "systemMaxToolDepth"   >> MP.spaces >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.intRange 1 100))
-    , MP.string "systemAPIKeyOpenAI"   >> MP.spaces >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.some' MP.item))
-    , MP.string "systemAPIkeyDeepSeek" >> MP.spaces >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.some' MP.item))
+    [ MP.string "displayThinking"      >> fmap (action range) (DisplayThinking      <$> MP.optMaybe (MP.spaces >> MP.bool))
+    , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+    , MP.string "defaultModelSuper"    >> fmap (action range) (DefaultModelSuper    <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+    , MP.string "systemMessage"        >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+    , MP.string "systemTemp"           >> fmap (action range) (SystemTemp           <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+    , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
+    , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+    , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     ]
   where chatIdP = asum
           [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
@@ -64,6 +77,34 @@ catSetParser = MP.headCommand "cat-" >> do
           ]
 
 testCatSetParser = MP.runParser catSetParser ":cat-set default displayThinking true"
+
+helpCatSet = T.intercalate "\n" $
+  [ "modify/view chat settings:"
+  , ":cat-<action> [range] <item> [value]"
+  , "  where"
+  , ""
+  , "* action is one of set | unset | view"
+  , ""
+  , "* range is one of default | perchat | perchat <chatid>"
+  , "  if omitted, 'perchat' will be used"
+  , "  only Admin can change 'default' and 'perchat <chatid>' settings"
+  , ""
+  , "* item is one of "
+  , "    displayThinking :: Bool" 
+  , "    defaultModel :: ChatModel"
+  , "    defaultModelSuper :: ChatModel"
+  , "    systemMessage :: Text"
+  , "    systemTemp :: Double"
+  , "    systemMaxToolDepth :: Int"
+  , "    systemAPIKeyOpenAI :: Text"
+  , "    systemAPIKeyDeepSeek :: Text"
+  , ""
+  , "* ChatModel can be one of " <> T.intercalate ", " modelsInUseText
+  , ""
+  , "Example:"
+  , ":cat-set default displayThinking true"
+  , ":cat-set perchat defaultModel Local DeepSeekR1_32B"
+  ]
 
 ----------------------------------- catSet -----------------------------------
 
@@ -104,7 +145,8 @@ catSet (Set PerChat item) = do
 
 catSet (Set (PerChatWithChatId cid) item) = do
   botname <- query
-  (_, cid', _, _, _) <- MaybeT $ getEssentialContent <$> query
+  (_, cid', uid, _, _) <- MaybeT $ getEssentialContent <$> query
+  _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
   case item of
     DisplayThinking      mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatDisplayThinking =. mdt]

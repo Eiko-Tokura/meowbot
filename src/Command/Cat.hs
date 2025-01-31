@@ -25,7 +25,6 @@ import Control.Concurrent
 
 import Data.HList
 import Data.Proxy
-import Data.Default
 import Data.Coerce
 
 import Utils.RunDB
@@ -36,14 +35,6 @@ type MeowTools = '[] --FibonacciTool]
 
 type ModelCat      = DeepSeek DeepSeekChat
 type ModelSuperCat = DeepSeek DeepSeekReasoner
-
-modelsInUse :: CFList ChatAPI Proxy 
-  [ Local    DeepSeekR1_14B
-  , Local    DeepSeekR1_32B
-  , DeepSeek DeepSeekChat
-  , DeepSeek DeepSeekReasoner
-  ]
-modelsInUse = def
 
 modelCatDef      = chatModel @ModelCat
 modelSuperCatDef = chatModel @ModelSuperCat

@@ -3,6 +3,7 @@ module Command.Help where
 
 import Command
 import Command.Cat (modelCatDef, modelSuperCatDef)
+import Command.Cat.CatSet (helpCatSet)
 import Command.Random (helpRandom)
 import Command.Study (helpStudy)
 import Command.Poll (helpPoll)
@@ -37,8 +38,8 @@ commandHelp = BotCommand Help $ botT $ do
 
 helpList :: [(String, Text)]
 helpList =
-  [ ("cat",         ":cat <message>\n让喵喵使用" <> tshow modelCatDef <> "帮助您回答问题，" <> replyHelp)
-  , ("supercat",    ":supercat <message>\n喵喵使用" <> tshow modelSuperCatDef <> "帮助您回答问题" <> replyHelp)
+  [ ("cat",         ":cat <message>\n让喵喵使用" <> tshow modelCatDef <> "帮助您回答问题，" <> replyHelp <> "\n\n" <> helpCatSet)
+  , ("supercat",    ":supercat <message>\n喵喵使用" <> tshow modelSuperCatDef <> "帮助您回答问题" <> replyHelp <> "\n\n" <> helpCatSet)
   , ("mdcat",       ":mdcat <message>\n喵喵将cat命令的回复变成一张markdown图片，" <> replyHelp)
   , ("mdsupercat",  ":mdsupercat <message>\n喵喵将supercat的回复变成一张markdown图片，只有部分群和用户可用。" <> replyHelp)
   , ("md",          ":md <markdown>\n接受一段markdown，将其转换为一张图片发给你。")
