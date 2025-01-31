@@ -34,7 +34,7 @@ import External.ChatAPI.Tool
 import Parser.Run
 
 data ChatModel
-  = OpenAI OpenAIModel 
+  = OpenAI OpenAIModel
   | DeepSeek DeepSeekModel
   | Local LocalModel
   deriving (Show, Read, Eq)
@@ -302,7 +302,7 @@ generateSystemPrompt params
   | otherwise = 
       fromMaybe 
         (SystemMessage $ 
-          "You are the helpful endearing catgirl assistant named '喵喵' who adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]'."
+          "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
           <> appendToolPrompts (Proxy @ts) "\n---\n"
         )
         (systemMessage $ chatSetting params)
@@ -410,20 +410,26 @@ agent = do
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
       response <- liftE . ExceptT $ fetchChatCompletionResponse apiKeys params prevMsgs
-      -- firstChoice <- liftE . pureEMsg "No response in choices" $ listToMaybe (choices response)
       amsg <- liftE . pureE $ getMessage response
-      liftIO $ print amsg
+      liftIO $ printMessage amsg
       case parseToolCall (content amsg) of
         Nothing -> return $ [amsg]
         Just (ToolCallPair toolName args) -> do
           toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
-          liftIO $ print toolmsg
+          liftIO $ printMessage toolmsg
           modify $ \st -> st
             { chatStatusToolDepth      = chatStatusToolDepth st + 1
             , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
             , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
             }
           ([amsg, toolmsg] <>) <$> agent
+
+printMessage :: Message -> IO ()
+printMessage (SystemMessage c)             = putStrLn $ "SystemMessage: "     <> T.unpack c
+printMessage (UserMessage c)               = putStrLn $ "UserMessage: "       <> T.unpack c
+printMessage (AssistantMessage c Nothing)  = putStrLn $ "AssistantMessage: "  <> T.unpack c
+printMessage (AssistantMessage c (Just t)) = putStrLn $ "AssistantThinking: " <> T.unpack t <> "\nAssistantMessage: " <> T.unpack c
+printMessage (ToolMessage c tm)            = putStrLn $ "ToolMessage: "       <> T.unpack c <> "\nToolMeta: "         <> show tm
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params

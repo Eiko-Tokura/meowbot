@@ -82,6 +82,7 @@ library meowbot-lib
                    , Command.Aokana
                    , Command.Aokana.Scripts
                    , Command.Cat
+                   , Command.Cat.CatSet
                    , Command.Help
                    , Command.Md
                    , Command.Poll

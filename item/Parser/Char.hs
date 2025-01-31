@@ -12,6 +12,10 @@ import Parser.Template
 positiveFloat :: forall a m. (MonadZero m, Alternative m, MonadTry m, MonadItem Char m, Floating a, Ord a, Read a) => m a
 positiveFloat = require (>0) float
 
+-- | Parse a non-negative floating point number
+nFloat :: forall a m. (MonadZero m, Alternative m, MonadTry m, MonadItem Char m, Floating a, Ord a, Read a) => m a
+nFloat = require (>=0) float
+
 -- | Parse a single digit
 digit :: (MonadZero m, MonadItem Char m) => m Char
 digit = $(itemInQ ['0'..'9'])
@@ -46,6 +50,10 @@ nint = read <$> some digit
 int :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => m i
 int = read <$> (some digit <|> just '-' <:> some digit)
 {-# INLINE int #-}
+
+bool :: (MonadZero m, Alternative m, MonadItem Char m) => m Bool
+bool = ((string "True" <|> string "true") >> return True) <|> ((string "False" <|> string "false") >> return False)
+{-# INLINE bool #-}
 
 -- | Integer in the range [a, b]
 intRange :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => i -> i -> m i

@@ -31,8 +31,9 @@ BotSetting -- Overlappable by BotSettingPerChat
   botName          String                     Maybe
   defaultModel     (PersistUseShow ChatModel) Maybe
   defaultModelS    (PersistUseShow ChatModel) Maybe
-  systemMessage    Text                       Maybe
-  systemTemp       Double                     Maybe
+  displayThinking       Bool                  Maybe
+  systemMessage         Text                  Maybe
+  systemTemp            Double                Maybe
   systemMaxToolDepth    Int                   Maybe
   systemAPIKeyOpenAI    Text                  Maybe
   systemAPIKeyDeepSeek  Text                  Maybe
@@ -40,8 +41,9 @@ BotSetting -- Overlappable by BotSettingPerChat
 BotSettingPerChat -- Overlapping BotSetting
   botName          String                     Maybe
   chatId           ChatId
-  defaultModel  (PersistUseShow ChatModel)    Maybe
-  defaultModelS (PersistUseShow ChatModel)    Maybe
+  defaultModel     (PersistUseShow ChatModel) Maybe
+  defaultModelS    (PersistUseShow ChatModel) Maybe
+  displayThinking       Bool                  Maybe
   systemMessage         Text                  Maybe
   systemTemp            Double                Maybe
   systemMaxToolDepth    Int                   Maybe

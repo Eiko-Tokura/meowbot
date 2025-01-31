@@ -167,9 +167,8 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
 initAllData :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> LoggingT IO AllData
 initAllData botconfig glob = do
   let mods = botModules botconfig
-      pool = databasePool (getF @LogDatabase glob)
-  savedDataDB   <- runExceptT $ loadSavedDataDB (nameOfBot mods) glob
-  savedDataFile <- runExceptT $ loadSavedDataFile (nameOfBot mods)
+  savedDataDB   <-                              runExceptT $ loadSavedDataDB   (nameOfBot mods) glob
+  savedDataFile <- unsafeInterleaveLoggingTIO $ runExceptT $ loadSavedDataFile (nameOfBot mods)
   case (savedDataDB, savedDataFile) of
     (Right savedDataDB, _) -> do
       $(logInfo) "Loaded saved data from database"
@@ -231,14 +230,6 @@ loadSavedDataDB botName glob = do
   savedAdditionalDatas <- fmap (map entityVal) . lift $ runSqlPool (selectList [SavedAdditionalDataBotName ==. maybeBotName botName] []) pool
   bookDBs              <- fmap (map entityVal) . lift $ runSqlPool (selectList [] []) pool
   let 
-      -- chatSetting = ChatSetting
-      --   { systemMessage      = SystemMessage <$> botSettingSystemMessage botSetting
-      --   , systemTemp         = botSettingSystemTemp botSetting
-      --   , systemMaxToolDepth = botSettingSystemMaxToolDepth botSetting
-      --   , systemApiKeys      = case (botSettingSystemAPIKeyOpenAI botSetting, botSettingSystemAPIKeyDeepSeek botSetting) of
-      --       (Nothing, Nothing) -> Nothing
-      --       (a, b)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b }
-      --   }
       chatIds_chatSettings = 
         [( botSettingPerChatChatId c, ChatSetting
           { systemMessage      = SystemMessage <$> botSettingPerChatSystemMessage c
@@ -285,6 +276,7 @@ writeSavedDataDB botconfig glob sd = do
       { botSettingBotName              = maybeBotName botname
       , botSettingDefaultModel         = coerce $ Just (DeepSeek DeepSeekChat)
       , botSettingDefaultModelS        = coerce $ Just (DeepSeek DeepSeekReasoner)
+      , botSettingDisplayThinking      = Just True
       , botSettingSystemMessage        = globalSysMsg $ botModules botconfig
       , botSettingSystemTemp           = Nothing
       , botSettingSystemMaxToolDepth   = Just 5
@@ -296,6 +288,7 @@ writeSavedDataDB botconfig glob sd = do
       , botSettingPerChatChatId           = chatId
       , botSettingPerChatDefaultModel     = Nothing
       , botSettingPerChatDefaultModelS    = Nothing
+      , botSettingPerChatDisplayThinking  = Just True
       , botSettingPerChatSystemMessage    = content <$> systemMessage chatSetting
       , botSettingPerChatSystemTemp       = systemTemp chatSetting
       , botSettingPerChatSystemMaxToolDepth = systemMaxToolDepth chatSetting
