@@ -58,7 +58,7 @@ library item
                    , Parser.Text
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -finfo-table-map -fdistinct-constructor-tables -eventlog -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -finfo-table-map -fdistinct-constructor-tables -j8
 
     build-depends: base  >=4.7 && <5
                  , mtl
