@@ -104,31 +104,32 @@ catSet (Set PerChat item) = do
 
 catSet (Set (PerChatWithChatId cid) item) = do
   botname <- query
+  (_, cid', _, _, _) <- MaybeT $ getEssentialContent <$> query
   case item of
     DisplayThinking      mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatDisplayThinking =. mdt]
-      return [ baSendToChatId cid $ "DisplayThinking set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "DisplayThinking set to " <> tshow mdt ]
     DefaultModel         mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
-      return [ baSendToChatId cid $ "DefaultModel set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatDefaultModelS =. fmap PersistUseShow mdt]
-      return [ baSendToChatId cid $ "DefaultModelSuper set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemMessage =. mdt]
-      return [ baSendToChatId cid $ "SystemMessage set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemMessage set to " <> tshow mdt ]
     SystemTemp           mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemTemp =. mdt]
-      return [ baSendToChatId cid $ "SystemTemp set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemTemp set to " <> tshow mdt ]
     SystemMaxToolDepth   mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemMaxToolDepth =. mdt]
-      return [ baSendToChatId cid $ "SystemMaxToolDepth set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
-      return [ baSendToChatId cid $ "SystemAPIKeyOpenAI set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemAPIKeyOpenAI set to " <> tshow mdt ]
     SystemAPIKeyDeepSeek mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
-      return [ baSendToChatId cid $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
 
 catSet (UnSet range item) = 
   case item of
@@ -175,30 +176,31 @@ catSet (View PerChat item) = do
 
 catSet (View (PerChatWithChatId cid) item) = do
   botname <- query
+  (_, cid', _, _, _) <- MaybeT $ getEssentialContent <$> query
   case item of
     DisplayThinking      _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "DisplayThinking: " <> tshow mdt]
+      return [baSendToChatId cid' $ "DisplayThinking: " <> tshow mdt]
     DefaultModel         _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "DefaultModel: " <> tshow mdt]
+      return [baSendToChatId cid' $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "DefaultModelSuper: " <> tshow mdt]
+      return [baSendToChatId cid' $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemMessage: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemMessage: " <> tshow mdt]
     SystemTemp           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemTemp: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemMaxToolDepth: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemAPIKeyOpenAI: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemAPIKeyOpenAI: " <> tshow mdt]
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
 
 
