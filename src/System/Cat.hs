@@ -177,13 +177,13 @@ initAllData botconfig glob = do
       $(logError) $ "Failed to load saved data from database: " <> errDb
       $(logInfo) "Loaded saved data from file"
       $(logInfo) $ "Trying to migrate data from file to database"
-      writeSavedDataDB botconfig glob savedDataFile
+      newSavedDataDB botconfig glob savedDataFile
       AllData [] botconfig . OtherData 0 Nothing [] savedDataFile (coerce $ savedAdditional savedDataFile) <$> lift getAllScripts
     (Left errDb, Left errFile) -> do
       $(logError) $ "Failed to load saved data from database: " <> errDb
       $(logError) $ "Failed to load saved data from file: " <> errFile
       $(logInfo) "Starting with empty data, also writing empty data to database"
-      writeSavedDataDB botconfig glob (SavedData [] initialUGroups initialGGroups initialRules initialBooks [])
+      newSavedDataDB botconfig glob (SavedData [] initialUGroups initialGGroups initialRules initialBooks [])
       AllData [] botconfig . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) [] <$> lift getAllScripts
   where
     initialUGroups = [(me, Admin)]
@@ -260,8 +260,32 @@ loadSavedDataDB botName glob = do
     , savedAdditional = savedAdditionalData
     }
 
-writeSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
-writeSavedDataDB botconfig glob sd = do
+-- updateSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
+-- updateSavedDataDB botconfig glob sd = do
+--   let pool = databasePool (getF @LogDatabase glob)
+--       botname = nameOfBot (botModules botconfig)
+--   runSqlPool (do
+--     -- deleteWhere [BotSettingBotName          ==. maybeBotName botname]
+--     -- deleteWhere [BotSettingPerChatBotName   ==. maybeBotName botname]
+--     -- deleteWhere [InUserGroupBotName         ==. maybeBotName botname]
+--     -- deleteWhere [InGroupGroupBotName        ==. maybeBotName botname]
+--     -- deleteWhere [CommandRuleDBBotName       ==. maybeBotName botname]
+--     -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
+--     -- deleteWhere ([] :: [Filter BookDB])
+--     insertMany_ [ SavedAdditionalData
+--       { savedAdditionalDataBotName  = maybeBotName botname
+--       , savedAdditionalDataAdditionalData = PersistUseShow savedAdditional
+--       } | savedAdditional <- savedAdditional sd]
+--     insertMany_ [ BookDB
+--       { bookDBBookName    = book_name book
+--       , bookDBBookPdfPath = book_pdfPath book
+--       , bookDBBookPages   = book_pages book
+--       , bookDBBookInfo    = book_info book
+--       } | book <- books sd]
+--     ) pool
+
+newSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
+newSavedDataDB botconfig glob sd = do
   let pool = databasePool (getF @LogDatabase glob)
       botname = nameOfBot (botModules botconfig)
   runSqlPool (do

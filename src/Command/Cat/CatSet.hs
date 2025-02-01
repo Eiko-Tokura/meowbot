@@ -21,6 +21,8 @@ modelsInUse :: CFList ChatAPI Proxy
   , Local    DeepSeekR1_32B
   , DeepSeek DeepSeekChat
   , DeepSeek DeepSeekReasoner
+  , OpenAI   GPT4oMini
+  , OpenAI   GPT4o
   ]
 modelsInUse = def
 
@@ -63,8 +65,8 @@ catSetParser = MP.headCommand "cat-" >> do
   return $ action range (DisplayThinking Nothing)
   asum
     [ MP.string "displayThinking"      >> fmap (action range) (DisplayThinking      <$> MP.optMaybe (MP.spaces >> MP.bool))
-    , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
     , MP.string "defaultModelSuper"    >> fmap (action range) (DefaultModelSuper    <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+    , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
     , MP.string "systemMessage"        >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "systemTemp"           >> fmap (action range) (SystemTemp           <$> MP.optMaybe (MP.spaces >> MP.nFloat))
     , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))

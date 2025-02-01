@@ -30,7 +30,7 @@ updateTotalPP uid mnick = do
       accPairs@(totalMiss, totalGuess) 
         = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0) 
         $ accuracyPair . hangmanRecordToState . entityVal <$> listScores
-  runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc) 
+  runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc)
           ( [ HangmanRankingTotalPP    =. totalPP
             , HangmanRankingRank       =. rank
             , HangmanRankingTotalMiss  =. totalMiss

@@ -8,10 +8,12 @@ import Control.Monad.IOe
 import MeowBot
 import MeowBot.CommandRule
 import qualified Data.Text as T
-import Data.List
+import qualified Data.List as L
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
+import Utils.RunDB hiding (Add)
+import Data.PersistModel
 
 data UserManagement
   = UserManagement  Action UserGroup  (Maybe UserId)
@@ -24,20 +26,22 @@ commandUser :: BotCommand
 commandUser = BotCommand User $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   userParser' <- lift $ commandParserTransformByBotName userParser
+  botname <- queries maybeBotName
   um <- pureMaybe $ MP.runParser userParser' msg
   other <- lift query
   let sd = savedData other
-  let (actions, sd') = case um of
-        UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = insert (uid, ug) $ userGroups sd})
-        UserManagement Remove ug (Just uid)  -> ([reportUM other cid um], sd {userGroups = filter (/= (uid, ug)) $ userGroups sd})
-        UserManagement List _ _              -> ([reportUM other cid um], sd)
-        GroupManagement Add gg (Just gid)    -> ([reportUM other cid um], sd {groupGroups = insert (gid, gg) $ groupGroups sd})
-        GroupManagement Remove gg (Just gid) -> ([reportUM other cid um], sd {groupGroups = filter (/= (gid, gg)) $ groupGroups sd})
-        GroupManagement List _ _             -> ([reportUM other cid um], sd)
-        RuleManagement Add (Just cr)         -> ([reportUM other cid um], sd {commandRules = insert cr $ commandRules sd})
-        RuleManagement Remove (Just cr)      -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd})
-        RuleManagement List _                -> ([reportUM other cid um], sd)
-        _ -> ([], sd)
+  let (actions, sd', db) = case um of
+        UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = L.insert (uid, ug) $ userGroups sd}, runDB $ do p <- selectFirst [InUserGroupBotName ==. botname, InUserGroupUserId ==. uid, InUserGroupUserGroup ==. ug] []; maybe (insert_ $ InUserGroup botname uid ug) (const $ return ()) p)
+        UserManagement Remove ug (Just uid)  -> ([reportUM other cid um], sd {userGroups = filter (/= (uid, ug)) $ userGroups sd}, runDB $ deleteWhere [InUserGroupBotName ==. botname, InUserGroupUserId ==. uid, InUserGroupUserGroup ==. ug])
+        UserManagement List _ _              -> ([reportUM other cid um], sd, return ())
+        GroupManagement Add gg (Just gid)    -> ([reportUM other cid um], sd {groupGroups = L.insert (gid, gg) $ groupGroups sd}, runDB $ do p <- selectFirst [InGroupGroupBotName ==. botname, InGroupGroupGroupId ==. gid, InGroupGroupGroupGroup ==. gg] []; maybe (insert_ $ InGroupGroup botname gid gg) (const $ return ()) p)
+        GroupManagement Remove gg (Just gid) -> ([reportUM other cid um], sd {groupGroups = filter (/= (gid, gg)) $ groupGroups sd}, runDB $ deleteWhere [InGroupGroupBotName ==. botname, InGroupGroupGroupId ==. gid, InGroupGroupGroupGroup ==. gg])
+        GroupManagement List _ _             -> ([reportUM other cid um], sd, return ())
+        RuleManagement Add (Just cr)         -> ([reportUM other cid um], sd {commandRules = L.insert cr $ commandRules sd}, runDB $ do p <- selectFirst [CommandRuleDBBotName ==. botname, CommandRuleDBCommandRule ==. cr] []; maybe (insert_ $ CommandRuleDB botname cr) (const $ return ()) p)
+        RuleManagement Remove (Just cr)      -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd}, runDB $ deleteWhere [CommandRuleDBBotName ==. botname, CommandRuleDBCommandRule ==. cr])
+        RuleManagement List _                -> ([reportUM other cid um], sd, return ())
+        _ -> ([], sd, return ())
+  lift $ db
   lift . change $ \other -> other {savedData = sd'}
   return actions
   where reportUM other_data cid um = baSendToChatId cid $ T.pack $ case um of
@@ -49,7 +53,7 @@ commandUser = BotCommand User $ botT $ do
           GroupManagement List gg _            -> show gg ++ "群列表：" ++ show (map fst $ filter ((== gg) . snd) $ groupGroups $ savedData other_data)
           RuleManagement Add (Just cr)         -> "已添加规则" ++ show cr
           RuleManagement Remove (Just cr)      -> "已移除规则" ++ show cr
-          RuleManagement List _                -> "规则列表：" ++ "\n[ " ++ intercalate "\n, " (show <$> commandRules (savedData other_data)) ++ "\n]"
+          RuleManagement List _                -> "规则列表：" ++ "\n[ " ++ L.intercalate "\n, " (show <$> commandRules (savedData other_data)) ++ "\n]"
           _ -> "user_id / group_id parameter cannot be empty o.o"
 
 userParser :: (MP.Chars sb) => Parser sb Char UserManagement
