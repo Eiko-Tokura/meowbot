@@ -36,7 +36,7 @@ type MeowTools = '[] -- empty for now
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
-maxMessageInState = 20
+maxMessageInState = 24
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
@@ -205,15 +205,19 @@ mergeChatStatus cid newMsgs newStatus = do
 
 determineIfReply :: ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
 determineIfReply GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
-  chance <- boolMaybe . (<= 10) <$> getUniformR (0, 100 :: Int)
+  chance <- getUniformR (0, 100 :: Int)
+  liftIO $ putTextLn $ "Chance: " <> tshow chance
+  let chanceReply = boolMaybe $ chance <= 10
   let parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chance <|> parsed
+  pureMaybe $ chanceReply <|> parsed
 determineIfReply PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
+  chance <- getUniformR (0, 100 :: Int)
+  liftIO $ putTextLn $ "Chance (not used): " <> tshow chance
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
 determineIfReply _ _ _ _ _ = empty
 
 boolMaybe :: Bool -> Maybe ()
-boolMaybe True = Just ()
+boolMaybe True  = Just ()
 boolMaybe False = Nothing

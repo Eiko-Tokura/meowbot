@@ -12,6 +12,7 @@ import Data.Time.Clock.POSIX
 import Utils.Persist
 import Data.Maybe
 import Data.Coerce
+import Data.Default
 import Control.Applicative
 import Command.Hangman.Model
 import External.ChatAPI
@@ -113,6 +114,35 @@ HangmanRanking
   playcount      Int         
   deriving Show
 |]
+
+instance Default BotSetting where
+  def = BotSetting
+    { botSettingBotName          = Nothing
+    , botSettingDefaultModel     = Nothing
+    , botSettingDefaultModelS    = Nothing
+    , botSettingDisplayThinking  = Nothing
+    , botSettingSystemMessage    = Nothing
+    , botSettingSystemTemp       = Nothing
+    , botSettingSystemMaxToolDepth = Nothing
+    , botSettingSystemAPIKeyOpenAI = Nothing
+    , botSettingSystemAPIKeyDeepSeek = Nothing
+    , botSettingActiveChat       = Nothing
+    }
+
+instance Default BotSettingPerChat where
+  def = BotSettingPerChat
+    { botSettingPerChatBotName          = Nothing
+    , botSettingPerChatChatId           = PrivateChat 0
+    , botSettingPerChatDefaultModel     = Nothing
+    , botSettingPerChatDefaultModelS    = Nothing
+    , botSettingPerChatDisplayThinking  = Nothing
+    , botSettingPerChatSystemMessage    = Nothing
+    , botSettingPerChatSystemTemp       = Nothing
+    , botSettingPerChatSystemMaxToolDepth = Nothing
+    , botSettingPerChatSystemAPIKeyOpenAI = Nothing
+    , botSettingPerChatSystemAPIKeyDeepSeek = Nothing
+    , botSettingPerChatActiveChat       = Nothing
+    }
 
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
 botSettingPerChatSystemAPIKey bspc = case (botSettingPerChatSystemAPIKeyOpenAI bspc, botSettingPerChatSystemAPIKeyDeepSeek bspc) of

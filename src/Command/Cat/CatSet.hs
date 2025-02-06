@@ -11,6 +11,7 @@ import Data.HList
 import Data.Proxy
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans
+import Control.Monad
 import Utils.RunDB
 import Utils.Persist
 import Data.PersistModel
@@ -154,7 +155,14 @@ catSet (Set PerChat item) = do
 catSet (Set (PerChatWithChatId cid) item) = do
   botname <- query
   (_, cid', uid, _, _) <- MaybeT $ getEssentialContent <$> query
-  _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+  _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void 
+       <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+  lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] >>= \case
+    True -> return ()
+    False -> insert_ $ def
+      { botSettingPerChatChatId = cid
+      , botSettingPerChatBotName = maybeBotName botname
+      }
   case item of
     DisplayThinking      mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatDisplayThinking =. mdt]
