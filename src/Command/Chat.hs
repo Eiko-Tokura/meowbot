@@ -106,6 +106,10 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatActiveChat =<< botSettingPerChat
         , botSettingActiveChat =<< botSetting
         ] -- ^ whether to chat actively randomly
+      activeProbability = fromMaybe 0.1 $ asum
+        [ botSettingPerChatActiveProbability =<< botSettingPerChat
+        , botSettingActiveProbability =<< botSetting
+        ] -- ^ probability to chat actively
       modelCat = fromMaybe modelCat $ runPersistUseShow <$> asum
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
@@ -149,7 +153,7 @@ commandChat = BotCommand Chat $ botT $ do
   chatState <- pureMaybe $ SM.lookup cid allChatState
 
   $(logDebug) "Determining if reply"
-  determineIfReply cid msg botname msys chatState
+  determineIfReply activeProbability cid msg botname msys chatState
   $(logDebug) "Replying"
 
   let ioeResponse =
@@ -203,20 +207,20 @@ mergeChatStatus cid newMsgs newStatus = do
           }
         allChatState
 
-determineIfReply :: ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
-  chance <- getUniformR (0, 100 :: Int)
+determineIfReply :: Double -> ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
+  chance <- getUniformR (0, 1 :: Double)
   liftIO $ putTextLn $ "Chance: " <> tshow chance
-  let chanceReply = boolMaybe $ chance <= 10
+  let chanceReply = boolMaybe $ chance <= prob
   let parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed
-determineIfReply PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
-  chance <- getUniformR (0, 100 :: Int)
+determineIfReply _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
+  chance <- getUniformR (0, 1 :: Double)
   liftIO $ putTextLn $ "Chance (not used): " <> tshow chance
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
-determineIfReply _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ = empty
 
 boolMaybe :: Bool -> Maybe ()
 boolMaybe True  = Just ()

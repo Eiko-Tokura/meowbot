@@ -39,6 +39,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   systemAPIKeyOpenAI    Text                  Maybe
   systemAPIKeyDeepSeek  Text                  Maybe
   activeChat            Bool                  Maybe
+  activeProbability     Double                Maybe
 
 BotSettingPerChat -- Overlapping BotSetting
   botName          String                     Maybe
@@ -52,6 +53,7 @@ BotSettingPerChat -- Overlapping BotSetting
   systemAPIKeyOpenAI    Text                  Maybe
   systemAPIKeyDeepSeek  Text                  Maybe
   activeChat            Bool                  Maybe
+  activeProbability     Double                Maybe
 
 CommandRuleDB
   botName        String      Maybe
@@ -126,7 +128,8 @@ instance Default BotSetting where
     , botSettingSystemMaxToolDepth = Nothing
     , botSettingSystemAPIKeyOpenAI = Nothing
     , botSettingSystemAPIKeyDeepSeek = Nothing
-    , botSettingActiveChat       = Nothing
+    , botSettingActiveChat        = Nothing
+    , botSettingActiveProbability = Nothing
     }
 
 instance Default BotSettingPerChat where
@@ -142,6 +145,7 @@ instance Default BotSettingPerChat where
     , botSettingPerChatSystemAPIKeyOpenAI = Nothing
     , botSettingPerChatSystemAPIKeyDeepSeek = Nothing
     , botSettingPerChatActiveChat       = Nothing
+    , botSettingPerChatActiveProbability = Nothing
     }
 
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey

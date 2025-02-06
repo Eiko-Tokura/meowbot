@@ -48,6 +48,7 @@ data BotSettingItem
   | SystemAPIKeyOpenAI   (Maybe Text)
   | SystemAPIKeyDeepSeek (Maybe Text)
   | ActiveChat           (Maybe Bool)
+  | ActiveProbability    (Maybe Double)
   deriving (Show)
 
 catSetParser :: Parser T.Text Char CatSetCommand
@@ -75,6 +76,7 @@ catSetParser = MP.headCommand "cat-" >> do
     , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
+    , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
     ]
   where chatIdP = asum
           [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
@@ -104,6 +106,7 @@ helpCatSet = T.intercalate "\n" $
   , "    systemAPIKeyOpenAI :: Text"
   , "    systemAPIKeyDeepSeek :: Text"
   , "    activeChat :: Bool"
+  , "    activeProbability :: Double"
   , ""
   , "* ChatModel can be one of " <> T.intercalate ", " modelsInUseText
   , ""
@@ -147,6 +150,9 @@ catSet (Set Default item) = do
     ActiveChat           mdt -> do
       lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingActiveChat =. mdt])
       return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
+    ActiveProbability    mdt -> do
+      lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingActiveProbability =. mdt])
+      return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
 
 catSet (Set PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -191,6 +197,9 @@ catSet (Set (PerChatWithChatId cid) item) = do
     ActiveChat           mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatActiveChat =. mdt]
       return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
+    ActiveProbability    mdt -> do
+      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatActiveProbability =. mdt]
+      return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
 
 catSet (UnSet range item) = 
   case item of
@@ -234,6 +243,9 @@ catSet (View Default item) = do
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
+    ActiveProbability    _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
 
 catSet (View PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -270,5 +282,8 @@ catSet (View (PerChatWithChatId cid) item) = do
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
       return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
+    ActiveProbability    _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
 
 
