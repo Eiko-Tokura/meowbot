@@ -37,16 +37,19 @@ data ChatModel
   = OpenAI OpenAIModel
   | DeepSeek DeepSeekModel
   | Local LocalModel
+  | Gemini GeminiModel
   deriving (Show, Read, Eq)
 
 data OpenAIModel   = GPT4oMini | GPT4o deriving (Show, Read, Eq)
 data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel    = DeepSeekR1_14B | DeepSeekR1_32B deriving (Show, Read, Eq)
+data GeminiModel   = gemini-2.0-flash-thinking-exp-01-21 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}   = "https://api.openai.com/v1/chat/completions"
 modelEndpoint DeepSeek {} = "https://api.deepseek.com/chat/completions"
 modelEndpoint Local {}    = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
+modelEndpoint Gemini {}   = "https://generativeai.google.com/v1/chat/completions" -- 占位符 URL，需要验证
 
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)          = "gpt-4o-mini"
@@ -55,6 +58,7 @@ instance ToJSON ChatModel where
   toJSON (DeepSeek DeepSeekReasoner) = "deepseek-reasoner"
   toJSON (Local DeepSeekR1_14B)      = "deepseek-r1:14b"
   toJSON (Local DeepSeekR1_32B)      = "deepseek-r1:32b"
+  toJSON (Gemini gemini-2.0-flash-thinking-exp-01-21)         = "gemini-pro"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -118,6 +122,10 @@ instance ChatAPI (Local DeepSeekR1_14B) where
 instance ChatAPI (Local DeepSeekR1_32B) where
   chatModel  = Local DeepSeekR1_32B
   type ChatCompletionResponse (Local DeepSeekR1_32B) = ChatCompletionResponseOllama
+
+instance ChatAPI (Gemini gemini-2.0-flash-thinking-exp-01-21) where
+  chatModel = Gemini gemini-2.0-flash-thinking-exp-01-21
+  type ChatCompletionResponse (Gemini gemini-2.0-flash-thinking-exp-01-21) = ChatCompletionResponseOpenAI -- 暂时使用 OpenAI 的 Response 类型，后续可能需要修改
 
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
@@ -214,6 +222,12 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   toJSON (ModelDependent (AssistantMessage c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("tool" :: Text)      , "content" .= c]
 
+instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Gemini a) Message) where
+  toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
+  toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("tool" :: Text)      , "content" .= c]
+
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)     , "content" .= c]
@@ -236,80 +250,10 @@ instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message) where
     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>" <> c <> "</think>\n\n" <> think)]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
 
-apiKeyFile :: FilePath
-apiKeyFile = "apiKey"
-
-data ChatRequest = ChatRequest
-  { chatReqModel :: ChatModel
-  , messages     :: [Message]
-  , temperature  :: Double
-  , stream       :: Maybe Bool
-  } deriving (Show, Generic)
-
-instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
-  toJSON (ModelDependent chatReq) = A.object $
-    [ "model" .= chatReqModel chatReq
-    , "messages" .= map (ModelDependent @(OpenAI a)) (messages chatReq)
-    , "temperature" .= temperature chatReq
-    ]
-    <> [ "stream" .= stream | Just stream <- [stream chatReq] ] 
-
-instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
-  toJSON (ModelDependent chatReq) = A.object $
-    [ "model" .= chatReqModel chatReq
-    , "messages" .= map (ModelDependent @(DeepSeek a)) (messages chatReq)
-    , "temperature" .= temperature chatReq
-    ]
-    <> [ "stream" .= stream | Just stream <- [stream chatReq] ] 
-    -- <> [ "tools" .= tls | Just tls <- [tools chatReq] ]
-
--- | Ollama compatible format
-instance ToJSON (ModelDependent (Local a) ChatRequest) where
-  toJSON (ModelDependent chatReq) = A.object $
-    [ "model" .= chatReqModel chatReq
-    , "messages" .= map (ModelDependent @(Local a)) (messages chatReq)
-    , "options" .= A.object (
-        ["temperature" .= temperature chatReq]
-      )
-    ]
-    <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
-
-promptMessage :: String -> Message
-promptMessage prompt = UserMessage (pack prompt)
-
-generateRequestBody :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> [Message] -> BL.ByteString
-generateRequestBody param mes = encode $ ModelDependent @md $
-  ChatRequest
-    { chatReqModel = chatModel @md
-    , messages     = sysMessage : mes
-    , temperature  = fromMaybe 0.5 (systemTemp $ chatSetting param)
-    , stream       = case chatModel @md of
-        DeepSeek _ -> Just False
-        OpenAI _   -> Nothing
-        Local _    -> Just False
-    -- , tools       = Nothing
-    }
-  where sysMessage = generateSystemPrompt param
-
-generateSystemPrompt :: forall md ts. ConstraintList ToolClass ts => ChatParams md ts -> Message
-generateSystemPrompt params
-  | chatMarkDown params = SystemMessage $
-      "You are a endearing catgirl assistant named '喵喵'. \
-      \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'. \
-      \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. \
-      \ Do not use \\( \\) or \\[ \\] for formulas."
-      <> appendToolPrompts (Proxy @ts) "\n---\n"
-  | otherwise = 
-      fromMaybe 
-        (SystemMessage $ 
-          "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
-          <> appendToolPrompts (Proxy @ts) "\n---\n"
-        )
-        (systemMessage $ chatSetting params)
-
 data APIKey = APIKey
   { apiKeyOpenAI :: Maybe Text
   , apiKeyDeepSeek :: Maybe Text
+  , apiKeyGemini :: Maybe Text -- 添加 Gemini API Key
   } deriving (Show, Read, Eq, Generic, NFData)
 
 data GetAPIKey
@@ -320,10 +264,11 @@ getApiKeyByModel :: ChatModel -> APIKey -> GetAPIKey
 getApiKeyByModel (OpenAI _)   apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
 getApiKeyByModel (DeepSeek _) apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
 getApiKeyByModel (Local _)    _      = NoAPIKeyRequired
+getApiKeyByModel (Gemini _)   apiKey = APIKeyRequired $ apiKeyGemini apiKey -- 获取 Gemini API Key
 
 fetchChatCompletionResponse :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => APIKey -> ChatParams md ts -> [Message] -> IO (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse apiKey model msg = do
-  let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
+  let customTimeout = 50 * 1000000 -- 60 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
   manager <- newManager customManagerSettings
   request <- parseRequest (modelEndpoint $ chatModel @md)
