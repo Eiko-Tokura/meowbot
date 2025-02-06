@@ -55,6 +55,10 @@ commandCat = BotCommand Cat $ botT $ do
       botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
       botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
       let sd = savedData other_data
+      let activeChat = fromMaybe False $ asum
+            [ botSettingPerChatActiveChat =<< botSettingPerChat
+            , botSettingActiveChat =<< botSetting
+            ] -- ^ whether to chat actively randomly
       let msys = ChatSetting
                    ( asum
                      [ fmap API.SystemMessage $ botSettingPerChatSystemMessage =<< botSettingPerChat
@@ -94,10 +98,12 @@ commandCat = BotCommand Cat $ botT $ do
             [ botSettingPerChatDisplayThinking =<< botSettingPerChat
             , botSettingDisplayThinking =<< botSetting
             ]
-      lChatModelMsg <- pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
-      let rlChatModelMsg = reverse lChatModelMsg
-          params = fst . head $ rlChatModelMsg
-          md = either chatMarkDown chatMarkDown params
+      lChatModelMsg <- if activeChat
+        then pureMaybe Nothing  -- disable cat command when active chat, we will use chat command instead
+        else pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
+      let rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
+          params = fst . head $ rlChatModelMsg   -- take the last message model
+          md = either chatMarkDown chatMarkDown params  -- whether to use markdown
           ioEChatResponse = case params of
 
             Left  paramCat      -> 
@@ -114,7 +120,7 @@ commandCat = BotCommand Cat $ botT $ do
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
                   messagesChat @a @MeowTools (coerce paramSuperCat) $ (map snd . reverse . take 20) rlChatModelMsg
 
-      asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) ioEChatResponse
+      asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
       $(logDebug) $ "created async: " <> T.pack (show asyncAction)
       return $ pure $ BAAsync $ asyncAction
 
@@ -122,8 +128,11 @@ type UseMarkdown = Bool
 type DisplayThinking = Bool
 actionSendMessages 
   :: DisplayThinking -> UseMarkdown 
-  -> EssentialContent -> ExceptT Text IO [Message] -> IO (Async (Meow [BotAction]))
-actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) ioess = async $ do
+  -> EssentialContent 
+  -> Meow () -- ^ arbitrary action performed in Meow [BotAction] returned
+  -> ExceptT Text IO [Message] 
+  -> IO (Async (Meow [BotAction]))
+actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) act ioess = async $ do
   ess <- runExceptT ioess
   case ess of
     Left err   -> return . return $ [ baSendToChatId cid ("喵~出错啦：" <> err) ]
@@ -138,23 +147,26 @@ actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) ioess = async $ d
                 Left err   -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
                 Right mdcq -> do
                   send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] mdcq
-                  waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc $ do
-                      liftIO $ threadDelay 2500000
+                  waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
+                      liftIO $ threadDelay 2000000
                       ExceptT $ return $ Right rest
+                  act
                   return $ send <> [BAAsync waitAndDoRest]
             else do
               send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] str
-              waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc $ do
-                  liftIO $ threadDelay 2500000
+              waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
+                  liftIO $ threadDelay 2000000
                   ExceptT $ return $ Right rest
+              act
               return $ send <> [BAAsync waitAndDoRest]
           AssistantMessage { thinking = Just think } -> do
             if displayThink
               then return $ do
                 send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] $ "(..." <> T.strip think <> ")"
-                waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc $ do
-                    liftIO $ threadDelay 2500000
+                waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
+                    liftIO $ threadDelay 2000000
                     ExceptT $ return $ Right $ msg { thinking = Nothing } : rest
+                act
                 return $ send <> [BAAsync waitAndDoRest]
               else
                 casingMessages usemd essc $ msg { thinking = Nothing } : rest

@@ -8,6 +8,9 @@ import Database.Persist.Sqlite
 import Data.Typeable
 import Utils.Persist
 
+data CommandId = Aokana | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman
+  deriving (Show, Eq, Ord, Read, Enum, Bounded, Typeable)
+
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 
@@ -55,9 +58,6 @@ data CommandObject
   | ExceptCommands [CommandId]
   deriving (Show, Eq, Ord, Read)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CommandObject)
-
-data CommandId = Aokana | Cat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman
-  deriving (Show, Eq, Ord, Read, Enum, Bounded, Typeable)
 
 safeCommandGroup :: CommandObject
 safeCommandGroup = CGroup [Cat, Help, Md, Random]

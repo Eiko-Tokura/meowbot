@@ -8,7 +8,8 @@ module MeowBot.Data
 
   , CQMessage(..), CQEventType(..)
   , ReceCQMessage(..), SentCQMessage(..)
-  , Sender(..), Role(..), ResponseData(..)
+  , Sender(..), Role(..), roleToText
+  , ResponseData(..)
 
   , Flag(..)
   , NoticeType(..), NoticeSubType(..), GroupDecreaseSubType(..), GroupIncreaseSubType(..)
@@ -287,9 +288,9 @@ data CQMessage = CQMessage
   { eventType    :: CQEventType
   , messageId    :: Maybe Int
   , groupId      :: Maybe GroupId
-  , userId       :: Maybe UserId
-  , sender       :: Maybe Sender
-  , message      :: Maybe Text
+  , userId       :: Maybe UserId   -- ^ user id
+  , sender       :: Maybe Sender   -- ^ sender information
+  , message      :: Maybe Text     -- ^ raw message
   , time         :: Maybe Int
   , utcTime      :: Maybe UTCTime
   , self_id      :: Maybe Int
@@ -323,6 +324,12 @@ instance FromJSON Sender where
 
 data Role = ROwner | RAdmin | RMember | RUnknown
   deriving (Show, Read, Eq, Generic, NFData, Bounded, Enum)
+
+roleToText :: Role -> Text
+roleToText ROwner  = "owner"
+roleToText RAdmin  = "admin"
+roleToText RMember = "member"
+roleToText RUnknown = "unknown"
 
 instance FromJSON Role where
   parseJSON = withText "Role" $ \case

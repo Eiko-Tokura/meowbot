@@ -37,6 +37,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   systemMaxToolDepth    Int                   Maybe
   systemAPIKeyOpenAI    Text                  Maybe
   systemAPIKeyDeepSeek  Text                  Maybe
+  activeChat            Bool                  Maybe
 
 BotSettingPerChat -- Overlapping BotSetting
   botName          String                     Maybe
@@ -49,6 +50,7 @@ BotSettingPerChat -- Overlapping BotSetting
   systemMaxToolDepth    Int                   Maybe
   systemAPIKeyOpenAI    Text                  Maybe
   systemAPIKeyDeepSeek  Text                  Maybe
+  activeChat            Bool                  Maybe
 
 CommandRuleDB
   botName        String      Maybe

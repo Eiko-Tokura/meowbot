@@ -20,6 +20,7 @@ import qualified Data.ByteString.Lazy as BL
 
 import Command
 import Command.Cat
+import Command.Chat
 import Command.Md
 import Command.Help
 import Command.SetSysMessage
@@ -37,10 +38,10 @@ import Module
 import Utils.ByteString
 
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]
+allPrivateCommands = [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands   = [commandCat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]
+allGroupCommands   = [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions

@@ -46,6 +46,7 @@ data BotSettingItem
   | SystemMaxToolDepth   (Maybe Int)
   | SystemAPIKeyOpenAI   (Maybe Text)
   | SystemAPIKeyDeepSeek (Maybe Text)
+  | ActiveChat           (Maybe Bool)
   deriving (Show)
 
 catSetParser :: Parser T.Text Char CatSetCommand
@@ -72,6 +73,7 @@ catSetParser = MP.headCommand "cat-" >> do
     , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
     , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+    , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
     ]
   where chatIdP = asum
           [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
@@ -100,6 +102,7 @@ helpCatSet = T.intercalate "\n" $
   , "    systemMaxToolDepth :: Int"
   , "    systemAPIKeyOpenAI :: Text"
   , "    systemAPIKeyDeepSeek :: Text"
+  , "    activeChat :: Bool"
   , ""
   , "* ChatModel can be one of " <> T.intercalate ", " modelsInUseText
   , ""
@@ -140,6 +143,9 @@ catSet (Set Default item) = do
     SystemAPIKeyDeepSeek mdt -> do
       lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingSystemAPIKeyDeepSeek =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
+    ActiveChat           mdt -> do
+      lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingActiveChat =. mdt])
+      return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
 
 catSet (Set PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -174,6 +180,9 @@ catSet (Set (PerChatWithChatId cid) item) = do
     SystemAPIKeyDeepSeek mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
+    ActiveChat           mdt -> do
+      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatActiveChat =. mdt]
+      return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
 
 catSet (UnSet range item) = 
   case item of
@@ -185,6 +194,7 @@ catSet (UnSet range item) =
     SystemMaxToolDepth   _ -> catSet (Set range $ SystemMaxToolDepth Nothing)
     SystemAPIKeyOpenAI   _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
     SystemAPIKeyDeepSeek _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
+    ActiveChat           _ -> catSet (Set range $ ActiveChat Nothing)
 catSet (View Default item) = do
   botname <- query
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -213,6 +223,9 @@ catSet (View Default item) = do
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
+    ActiveChat           _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
 
 catSet (View PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -246,5 +259,8 @@ catSet (View (PerChatWithChatId cid) item) = do
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
       return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
+    ActiveChat           _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
 
 

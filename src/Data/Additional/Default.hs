@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Data.Additional.Default
   ( getTypeWithDef
+  , putType
   , module Data.Additional
   , Typeable
   ) where
@@ -13,7 +14,7 @@ import MeowBot.BotStructure
 import System.General
 import Control.Monad.Logger
 
-getTypeWithDef :: forall t r mods m. (MonadIO m, Show t, Eq t, Read t, Typeable t, IsAdditionalData t) => t -> MeowT r mods m t
+getTypeWithDef :: forall t r mods m. (MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT r mods m t
 getTypeWithDef defT = do
   mt <- listToMaybe . getAdditionalDataType @_ @t <$> query @OtherData
   case mt of
@@ -24,3 +25,5 @@ getTypeWithDef defT = do
       $(logInfo) $ pack (show (typeRep (Proxy @t))) <> " initialized!"
       return emptyMap
 
+putType :: forall t r mods m. (MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT r mods m ()
+putType t = change @OtherData . modifyAdditionalDataType $ const $ Just t
