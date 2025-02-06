@@ -5,7 +5,7 @@ import Command
 import Command.Cat (catParser)
 import MeowBot
 import System.General (MeowT)
-import Data.Maybe (fromMaybe, catMaybes)
+import Data.Maybe (fromMaybe, catMaybes, isNothing)
 import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
@@ -16,7 +16,6 @@ import qualified Data.Text as T
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Logger
-import Control.Monad.Except
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
@@ -36,7 +35,7 @@ type MeowTools = '[] -- empty for now
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
-maxMessageInState = 24
+maxMessageInState = 20
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
@@ -66,10 +65,11 @@ instance IsAdditionalData AllChatState      -- use getTypeWithDef
 -- What we will do first is to try this in private chat, providing note taking and scheduled message
 commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
-  ess@(msg, cid, uid, mid, _) <- MaybeT $ getEssentialContent <$> query
-  cqmsg <- queries getNewMsg
+  ess@(msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
+  _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
+  -- cqmsg <- queries getNewMsg
   other_data <- query
-  whole_chat :: WholeChat <- query
+  -- whole_chat :: WholeChat <- query
   botmodules <- query
   botname    <- query
   botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
@@ -80,6 +80,7 @@ commandChat = BotCommand Chat $ botT $ do
           , systemMessage =<< lookup cid (chatSettings sd) 
           , fmap API.SystemMessage . globalSysMsg $ botmodules
           , fmap API.SystemMessage $ botSettingSystemMessage =<< botSetting
+          , Just $ API.SystemMessage "You are the helpful, endearing catgirl assistant named '喵喵' chatting with people in a lively group chat. You have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. Be friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
           ]
         )
         ( asum
@@ -114,15 +115,11 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
         ]
-      displayThinking = fromMaybe False $ asum
-        [ botSettingPerChatDisplayThinking =<< botSettingPerChat
-        , botSettingDisplayThinking =<< botSetting
-        ]
       newChatState = SM.empty :: AllChatState
       toUserMessage :: EssentialContent -> Message
       toUserMessage (msg, _, _, _, sender) = UserMessage $ mconcat $ catMaybes $ 
-        [ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
-        , fmap (\t -> "<nickname>" <> t <> "</nickname>") (senderNickname sender) <> Just ": "
+        --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
+        [ fmap (\t -> "<nickname>" <> t <> "</nickname>") (senderNickname sender) <> Just ": "
         , Just msg
         ]
       updateChatState :: AllChatState -> AllChatState
@@ -139,6 +136,8 @@ commandChat = BotCommand Chat $ botT $ do
           Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 [toUserMessage ess]) MeowIdle) s
 
       params = ChatParams False msys :: ChatParams ModelChat MeowTools
+
+      --notCatSet = isNothing $ MP.runParser catSetParser msg
 
   MaybeT $ if activeChat then pure (Just ()) else pure Nothing
   -- ^ only chat when set to active
@@ -225,3 +224,7 @@ determineIfReply _ _ _ _ _ _ = empty
 boolMaybe :: Bool -> Maybe ()
 boolMaybe True  = Just ()
 boolMaybe False = Nothing
+
+invertMaybe_ :: Maybe a -> Maybe ()
+invertMaybe_ Nothing = Just ()
+invertMaybe_ _       = Nothing

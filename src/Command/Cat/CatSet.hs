@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Werror=incomplete-patterns #-}
 module Command.Cat.CatSet where
 
 import System.General
@@ -134,7 +135,7 @@ catSet (Set Default item) = do
       return [ baSendToChatId cid $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
       lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingSystemMessage =. mdt])
-      return [ baSendToChatId cid $ "SystemMessage set to " <> tshow mdt ]
+      return [ baSendToChatId cid $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
       lift $ runDB (updateWhere [BotSettingBotName ==. maybeBotName botname] [BotSettingSystemTemp =. mdt])
       return [ baSendToChatId cid $ "SystemTemp set to " <> tshow mdt ]
@@ -181,7 +182,7 @@ catSet (Set (PerChatWithChatId cid) item) = do
       return [ baSendToChatId cid' $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemMessage =. mdt]
-      return [ baSendToChatId cid' $ "SystemMessage set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatSystemTemp =. mdt]
       return [ baSendToChatId cid' $ "SystemTemp set to " <> tshow mdt ]
@@ -212,6 +213,7 @@ catSet (UnSet range item) =
     SystemAPIKeyOpenAI   _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
     SystemAPIKeyDeepSeek _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
     ActiveChat           _ -> catSet (Set range $ ActiveChat Nothing)
+    ActiveProbability    _ -> catSet (Set range $ ActiveProbability Nothing)
 catSet (View Default item) = do
   botname <- query
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -227,7 +229,7 @@ catSet (View Default item) = do
       return [baSendToChatId cid $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
       mdt <- lift $ runDB $ fmap (botSettingSystemMessage . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemMessage: " <> tshow mdt]
+      return [baSendToChatId cid $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingSystemTemp . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "SystemTemp: " <> tshow mdt]
@@ -266,7 +268,7 @@ catSet (View (PerChatWithChatId cid) item) = do
       return [baSendToChatId cid' $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid' $ "SystemMessage: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
       return [baSendToChatId cid' $ "SystemTemp: " <> tshow mdt]
@@ -285,5 +287,4 @@ catSet (View (PerChatWithChatId cid) item) = do
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
-
 
