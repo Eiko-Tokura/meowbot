@@ -323,7 +323,7 @@ getApiKeyByModel (Local _)    _      = NoAPIKeyRequired
 
 fetchChatCompletionResponse :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => APIKey -> ChatParams md ts -> [Message] -> IO (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse apiKey model msg = do
-  let customTimeout = 50 * 1000000 -- 60 seconds in microseconds
+  let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
   manager <- newManager customManagerSettings
   request <- parseRequest (modelEndpoint $ chatModel @md)

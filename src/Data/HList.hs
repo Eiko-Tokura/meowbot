@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, TypeOperators, TypeFamilies, GADTs, PolyKinds, ScopedTypeVariables, ImpredicativeTypes #-}
+{-# LANGUAGE DataKinds, TypeOperators, LinearTypes, TypeFamilies, GADTs, PolyKinds, ScopedTypeVariables, ImpredicativeTypes #-}
 {-# OPTIONS_GHC -Wno-missing-signatures #-}
 -- | Some utilities for working with type-level lists
 module Data.HList where
@@ -18,6 +18,11 @@ data FList (f :: Type -> Type) (ts :: [Type]) where
 infixr 5 :**
 
 -- the ! bang pattern here is to make it strict because it might cause trouble when putting in a stateful monad. Alternatively we can also write a strict version FList, SFList.
+
+data SList (ts :: [Type]) where
+  SNil  :: SList '[]
+  SHead :: t -> SList (t : ts)
+  STail :: SList ts -> SList (t : ts)
 
 -- | A type-level list applied to a type-level function, sum
 data UList (f :: Type -> Type) (ts :: [Type]) where
@@ -183,7 +188,11 @@ class In e (ts :: [Type]) where
 
   getF :: FList f ts -> f e
 
+  modifyH :: (e -> e) -> HList ts -> HList ts
+
   modifyF :: (f e -> f e) -> FList f ts -> FList f ts
+
+  embedU :: f e -> UList f ts
 
 -- | Base case
 instance In e (e : ts) where
@@ -191,8 +200,12 @@ instance In e (e : ts) where
   {-# INLINE getH #-}
   getF h = getEF EZ h
   {-# INLINE getF #-}
+  modifyH f (x :* xs) = f x :* xs
+  {-# INLINE modifyH #-}
   modifyF g (x :** xs) = g x :** xs
   {-# INLINE modifyF #-}
+  embedU x = UHead x
+  {-# INLINE embedU #-}
 
 -- | Inductive case
 instance {-# OVERLAPPABLE #-} In e ts => In e (t : ts) where
@@ -200,8 +213,12 @@ instance {-# OVERLAPPABLE #-} In e ts => In e (t : ts) where
   {-# INLINE getH #-}
   getF (_ :** xs) = getF xs
   {-# INLINE getF #-}
+  modifyH f (x :* xs) = x :* modifyH f xs
+  {-# INLINE modifyH #-}
   modifyF g (x :** xs) = x :** modifyF g xs
   {-# INLINE modifyF #-}
+  embedU x = UTail $ embedU x
+  {-# INLINE embedU #-}
 
 -- | Sum of two type-level lists
 hAdd :: HList as -> HList bs -> HList (as ++ bs)
@@ -211,23 +228,74 @@ hAdd (x :* xs) bs = x :* hAdd xs bs
 class SubList (ys :: [Type]) (xs :: [Type]) where
   getSubList :: HList xs -> HList ys
 
+  getSubListF :: FList f xs -> FList f ys
+
   subListModify :: (HList ys -> HList ys) -> HList xs -> HList xs
+
+  subListModifyF :: (FList f ys -> FList f ys) -> FList f xs -> FList f xs
 
   subListUpdate :: HList xs -> HList ys -> HList xs
   subListUpdate xs ys = subListModify (const ys) xs
   {-# INLINE subListUpdate #-}
 
+  subListUpdateF :: FList f xs -> FList f ys -> FList f xs
+  subListUpdateF xs ys = subListModifyF (const ys) xs
+  {-# INLINE subListUpdateF #-}
+
+class EmbedSubList (ys :: [Type]) (xs :: [Type]) where
+  embedSubList :: UList f ys -> UList f xs
+
+instance EmbedSubList '[] '[] where
+  embedSubList = id
+  {-# INLINE embedSubList #-}
+
+instance EmbedSubList '[] xs => EmbedSubList '[] (x : xs) where
+  embedSubList _ = UTail $ embedSubList @'[] @xs UNil
+  {-# INLINE embedSubList #-}
+
+-- (x:xs) (y:ys) <= 
+--
+
+instance (EmbedSubList ys xs, In y xs) => EmbedSubList (y : ys) xs where
+  embedSubList (UHead y)  = embedU y
+  embedSubList (UTail ys) = embedSubList ys
+  {-# INLINE embedSubList #-}
+
+instance {-# OVERLAPPING #-} EmbedSubList ys (y : ys) where
+  embedSubList y = UTail y
+  {-# INLINE embedSubList #-}
+
 instance SubList '[] xs where
   getSubList _ = Nil
-  subListModify _ xs = xs
   {-# INLINE getSubList #-}
+  getSubListF _ = FNil
+  {-# INLINE getSubListF #-}
+  subListModify _ xs = xs
   {-# INLINE subListModify #-}
+  subListModifyF _ xs = xs
+  {-# INLINE subListModifyF #-}
 
 -- | Induction case
 instance (In y xs, SubList ys xs) => SubList (y : ys) xs where
   getSubList xs = getH xs :* getSubList xs
+  getSubListF xs = getF xs :** getSubListF xs
   subListModify f xs =
     let hy :* hys = f (getSubList xs)
     in (`subListUpdate` (hy :* Nil)) $ subListUpdate xs hys
+  subListModifyF f xs =
+    let hy :** hys = f (getSubListF xs)
+    in (`subListUpdateF` (hy :** FNil)) $ subListUpdateF xs hys
   {-# INLINE getSubList #-}
+  {-# INLINE getSubListF #-}
   {-# INLINE subListModify #-}
+  {-# INLINE subListModifyF #-}
+
+instance {-# OVERLAPPING #-} SubList ys (y : ys) where
+  getSubList (_ :* ys) = ys
+  getSubListF (_ :** ys) = ys
+  subListModify f (x :* ys) = x :* f ys
+  subListModifyF f (x :** ys) = x :** f ys
+  {-# INLINE getSubList #-}
+  {-# INLINE getSubListF #-}
+  {-# INLINE subListModify #-}
+  {-# INLINE subListModifyF #-}
