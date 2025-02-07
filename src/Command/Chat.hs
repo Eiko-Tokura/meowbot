@@ -67,7 +67,7 @@ commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
   ess@(msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
   _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
-  -- cqmsg <- queries getNewMsg
+  cqmsg <- queries getNewMsg
   other_data <- query
   -- whole_chat :: WholeChat <- query
   botmodules <- query
@@ -80,7 +80,7 @@ commandChat = BotCommand Chat $ botT $ do
           , systemMessage =<< lookup cid (chatSettings sd) 
           , fmap API.SystemMessage . globalSysMsg $ botmodules
           , fmap API.SystemMessage $ botSettingSystemMessage =<< botSetting
-          , Just $ API.SystemMessage "You are the helpful, endearing catgirl assistant named '喵喵' chatting with people in a lively group chat. You have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. Be friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
+          , Just $ API.SystemMessage "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
           ]
         )
         ( asum
@@ -116,11 +116,11 @@ commandChat = BotCommand Chat $ botT $ do
         , botSettingDefaultModel =<< botSetting
         ]
       newChatState = SM.empty :: AllChatState
-      toUserMessage :: EssentialContent -> Message
-      toUserMessage (msg, _, _, _, sender) = UserMessage $ mconcat $ catMaybes $ 
+      toUserMessage :: CQMessage -> Message
+      toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
         --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
-        [ fmap (\t -> "<nickname>" <> t <> "</nickname>") (senderNickname sender) <> Just ": "
-        , Just msg
+        [ fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg) <> Just ": "
+        , message cqmsg -- use raw message instead
         ]
       updateChatState :: AllChatState -> AllChatState
       updateChatState s =
@@ -129,11 +129,11 @@ commandChat = BotCommand Chat $ botT $ do
           Just cs -> SM.insert cid 
             cs 
               { chatStatus = (chatStatus cs) 
-                { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage ess]
+                { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
                 }
               }
             s
-          Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 [toUserMessage ess]) MeowIdle) s
+          Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 [toUserMessage cqmsg]) MeowIdle) s
 
       params = ChatParams False msys :: ChatParams ModelChat MeowTools
 
@@ -171,7 +171,8 @@ commandChat = BotCommand Chat $ botT $ do
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
-        Right newMsgs -> do
+        Right newMsgs' -> do
+          let newMsgs = map (mapMessage MP.cqcodeFix) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus cid newMsgs newStatus

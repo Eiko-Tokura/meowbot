@@ -9,6 +9,7 @@ module MeowBot.Parser
   , htmlDecode, htmlDecodeFunction
   , cqcodeExceptFace
   , cqother
+  , cqcodeLenient, cqcodeFix
   , htmlCodes
   , item
   , commandSeparator, commandSeparator2
@@ -32,6 +33,8 @@ import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe)
 import Data.Either(lefts, rights, fromRight)
 import Data.Text (Text)
+import qualified Data.Text as T
+import Data.List (groupBy)
 
 data Tree a = EmptyTree | Node a [Tree a] deriving Show
   deriving (Generic, NFData)
@@ -104,6 +107,43 @@ cqcodeExceptFace = do
     str     -> cqother str
   <* just ']'
 {-# INLINE cqcodeExceptFace #-}
+
+-- | This function is used to fix inaccurate output of Meowmeow
+cqcodeLenient :: (Chars sb) => Parser sb Char CQCode
+cqcodeLenient = do
+  $(stringQ "[CQ:")
+  cqtype :: Text <- some' $ itemNot ','
+  just ',' >> spaces0
+  case cqtype of
+    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int
+    "reply" -> $(stringQ_ "id=") >> CQReply <$> int
+    str     -> cqother str
+  <* just ']'
+{-# INLINE cqcodeLenient #-}
+
+-- | This function is used to fix inaccurate output of Meowmeow
+cqcodeFixP :: (Chars sb) => Parser sb Char Text
+cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . contSecond) $ many $ cqcodeLenient |+| getItem @Char
+  where contSecond :: [Either a Char] -> [Either a Text]
+        contSecond
+          = concat
+          . fmap (\case
+              l@(Left _:_)  -> [ Left x | Left x <- l ]
+              r@(Right _:_) -> [ Right $ packable [ c | Right c <- r ] ]
+              []            -> []
+            )
+          . groupBy
+              (\x y -> case (x, y) of
+                (Left _, Left _) -> True
+                (Right _, Right _) -> True
+                _ -> False
+              )
+{-# INLINE cqcodeFixP #-}
+
+-- | This function is used to fix inaccurate output of Meowmeow
+cqcodeFix :: Text -> Text
+cqcodeFix x = fromMaybe x $ runParser cqcodeFixP x
+{-# INLINE cqcodeFix #-}
 
 cqmsg :: (Chars sb) => Parser sb Char MetaMessage
 cqmsg = do

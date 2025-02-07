@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeApplications, AllowAmbiguousTypes, TypeFamilies #-}
 
 module External.ChatAPI
-  ( simpleChat, Message(..), statusChat, messageChat, messagesChat, statusChatReadAPIKey
+  ( simpleChat, Message(..), mapMessage, statusChat, messageChat, messagesChat, statusChatReadAPIKey
   , ChatModel(..)
   , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
@@ -149,6 +149,12 @@ data Message
   | AssistantMessage { content :: Text, thinking :: Maybe Text }
   | ToolMessage      { content :: Text, toolMeta :: Maybe ToolMeta }
   deriving (Generic, Eq, Ord, Read, NFData)
+
+mapMessage :: (Text -> Text) -> Message -> Message
+mapMessage f (SystemMessage    c) = SystemMessage    $ f c
+mapMessage f (UserMessage      c) = UserMessage      $ f c
+mapMessage f (AssistantMessage c t) = AssistantMessage (f c) (f <$> t)
+mapMessage f (ToolMessage      c m) = ToolMessage      (f c) m
 
 -- | Wrapper for model dependent content (toJSON and FromJSON)
 newtype ModelDependent m a = ModelDependent { runModelDependent :: a }

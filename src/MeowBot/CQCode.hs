@@ -33,4 +33,8 @@ embedCQCode (CQReply id)  = "[CQ:reply,id=" <> pack (show id) <> "]"
 embedCQCode (CQImage str) = "[CQ:image,file=file://" <> str <> "]"
 embedCQCode (CQImage64 str) = "[CQ:image,file=base64://" <> bsToText (runBase64 str) <> "]"
 embedCQCode (CQRecord str)= "[CQ:record,file=file://" <> str <> "]"
-embedCQCode (CQOther str list) = "[CQ:" <> str <> T.intercalate "," [ key <> "=" <> val | (key, val) <- list] <> "]"
+embedCQCode (CQOther str list) 
+  =  "[CQ:" <> str
+  <> if null list then "" else ","
+  <> T.intercalate "," [ key <> "=" <> val | (key, val) <- list]
+  <> "]"
