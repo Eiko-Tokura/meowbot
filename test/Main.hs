@@ -11,11 +11,12 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests"
-  [ testChatAPI
-  , testGroup "Legacy Tests"
+  [ testGroup "Legacy Tests"
     [ testCase "Saved Additional" testSavedAdditional
     , testCase "Poll Parser" pollParserTest
     ]
+  , testTools
+  , testChatAPI
   ]
   -- testSavedAdditional
   -- pollParserTest

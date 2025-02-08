@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.4.1.0
+version:             0.4.2.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -113,7 +113,8 @@ library meowbot-lib
                    , Data.Template
                    , External.ChatAPI
                    , External.ChatAPI.Tool
-                   , External.ChatAPI.Tool.MeowToolEnv
+                   , External.ChatAPI.MeowTool
+                   , External.ChatAPI.MeowToolEnv
                    --, External.ChatAPI.Tool.Search
                    , External.ChatAPI.Function
                    , External.MarkdownImage

@@ -2,6 +2,7 @@ module Test.ChatAPI where
 
 import Control.Monad.Except
 import External.ChatAPI
+import External.ChatAPI.Tool
 import Utils.Text
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -74,5 +75,10 @@ testChatAPI = testGroup "ChatAPI Round Trip"
     ]
   ]
 
+testTools :: TestTree
+testTools = testGroup "Tools test"
+  [ testCase "TimeTool" sanityCheckTimeTool
+  , testCase "FibonacciTool" sanityCheckFibonacciTool
+  ]
 
 

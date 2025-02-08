@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase, AllowAmbiguousTypes, UndecidableInstances #-}
 {-# LANGUAGE DerivingVia, DeriveAnyClass #-}
@@ -26,7 +25,10 @@ import Data.Kind
 import Data.HList
 import Data.Proxy
 import Data.String (IsString, fromString)
+import Data.Time.Clock
 import GHC.TypeLits
+import Data.Aeson as A
+import qualified Data.Aeson.KeyMap as AK
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy.Encoding as TLE
@@ -83,55 +85,92 @@ type ParamExample
 
 instance (KnownSymbol t, KnownSymbol e) => FromJSON (StringT t e) where
   parseJSON = fmap StringT . parseJSON
+  {-# INLINE parseJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => ToJSON (StringT t e) where
   toJSON (StringT t) = String t
+  {-# INLINE toJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => FromJSON (IntT t e) where
   parseJSON = fmap IntT . parseJSON
+  {-# INLINE parseJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => ToJSON (IntT t e) where
   toJSON (IntT i) = Number $ fromIntegral i
+  {-# INLINE toJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => FromJSON (BoolT t e) where
   parseJSON = fmap BoolT . parseJSON
+  {-# INLINE parseJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => ToJSON (BoolT t e) where
   toJSON (BoolT b) = Bool b
+  {-# INLINE toJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => FromJSON (FloatT t e) where
   parseJSON = fmap FloatT . parseJSON
+  {-# INLINE parseJSON #-}
 
 instance (KnownSymbol t, KnownSymbol e) => ToJSON (FloatT t e) where
   toJSON (FloatT f) = Number $ realToFrac f
+  {-# INLINE toJSON #-}
 
 instance FromJSON (UnitT t e) where
   parseJSON _ = return $ UnitT ()
+  {-# INLINE parseJSON #-}
 
 instance ToJSON (UnitT t e) where
   toJSON _ = Null
+  {-# INLINE toJSON #-}
 
 instance FromJSON (ParamToData t) => FromJSON (MaybeTy t) where
   parseJSON Null = return $ MaybeTy Nothing
   parseJSON v    = fmap MaybeTy $ Just <$> parseJSON v
+  {-# INLINE parseJSON #-}
 
 instance FromJSON (ObjectT name e '[]) where
   parseJSON _ = return ObjTNil
+  {-# INLINE parseJSON #-}
 
 instance FromJSON (ObjectT0 '[]) where
   parseJSON _ = return ObjT0Nil
+  {-# INLINE parseJSON #-}
+
+instance ToJSON (ObjectT name e '[]) where
+  toJSON _ = A.object []
+  {-# INLINE toJSON #-}
+
+instance ToJSON (ObjectT0 '[]) where
+  toJSON _ = A.object []
+  {-# INLINE toJSON #-}
 
 instance (FromJSON (ObjectT name e ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT name e (t ': ts)) where
   parseJSON = withObject "ObjectT" $ \o -> do
     t <- parseJSON =<< o .: fromString (getName @t)
     ts <- parseJSON (Object o)
     return (t :@* ts)
+  {-# INLINE parseJSON #-}
+
+instance (ToJSON (ObjectT name e ts), ToJSON (ParamToData t), HasName t) => ToJSON (ObjectT name e (t ': ts)) where
+  toJSON (t :@* ts) = A.object $ (fromString $ getName @t, toJSON t) : rest
+    where rest = case toJSON ts of
+            Object o -> AK.toList o
+            _        -> error "impossible: ObjectT encoutered non-object"
+  {-# INLINE toJSON #-}
 
 instance (FromJSON (ObjectT0 ts), FromJSON (ParamToData t), HasName t) => FromJSON (ObjectT0 (t ': ts)) where
   parseJSON = withObject "ObjectT0" $ \o -> do
     t <- parseJSON =<< o .: fromString (getName @t)
     ts <- parseJSON (Object o)
     return (t :%* ts)
+  {-# INLINE parseJSON #-}
+
+instance (ToJSON (ObjectT0 ts), ToJSON (ParamToData t), HasName t) => ToJSON (ObjectT0 (t ': ts)) where
+  toJSON (t :%* ts) = A.object $ (fromString $ getName @t, toJSON t) : rest
+    where rest = case toJSON ts of
+            Object o -> AK.toList o
+            _        -> error "impossible: ObjectT0 encoutered non-object"
+  {-# INLINE toJSON #-}
 
 class HasName t where
   getName :: String
@@ -438,3 +477,42 @@ sanityCheckFibonacciTool = do
     Right v -> -- print its json
       TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
     _ -> error "output not ok"
+
+--------------------------------- time tool ---------------------------------
+-- | Tool to get current time
+data TimeTool
+
+instance MonadIO m => ToolClass m TimeTool where
+  type ToolInput  TimeTool = ParamToData (ObjectP0 '[IntP "timezone" "Timezone offset in hours, 0 for UTC"])
+  type ToolOutput TimeTool = ParamToData (StringP "time" "Current time")
+  data ToolError  TimeTool = TimeError Text deriving (Show)
+  toolName _ _ = "time"
+  toolDescription _ _ = "Get current time"
+  toolHandler _ _ ((IntT tz) :%* ObjT0Nil) = do
+    t <- liftIO getCurrentTime
+    return $ StringT $ toText $ addUTCTime (fromIntegral $ tz * 3600) t
+
+sanityCheckTimeTool :: IO ()
+sanityCheckTimeTool = do
+  let input = "{\"timezone\": 8}"
+  let inputVal = either (error "input not work") id $ jsonToInput (Proxy @IO) (Proxy @TimeTool) =<< first toText (eitherDecode input)
+  case inputVal of
+    IntT 8 :%* ObjT0Nil -> putStrLn "input ok"
+    _ -> error "input not ok"
+  res <- runExceptT $ toolHandlerTextError (Proxy @IO) (Proxy @TimeTool) inputVal
+  case res of
+    Right v -> -- print its json
+      TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
+    _ -> error "output not ok"
+
+--------------------------------- skil tool ---------------------------------
+-- | Tool to skip current output
+data SkipTool
+
+instance MonadIO m => ToolClass m SkipTool where
+  type ToolInput  SkipTool = ParamToData (ObjectP0 '[])
+  type ToolOutput SkipTool = ParamToData (StringP "skip" "Skipped")
+  data ToolError  SkipTool = SkipOutput deriving (Show)
+  toolName _ _ = "skip"
+  toolDescription _ _ = "Use this tool to skip current output"
+  toolHandler _ _ ObjT0Nil = ExceptT $ return $ Left SkipOutput

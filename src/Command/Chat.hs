@@ -9,12 +9,15 @@ import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
+import External.ChatAPI.MeowTool
+import External.ChatAPI.MeowToolEnv
 import qualified MeowBot.Parser as MP
 import qualified Data.Map.Strict as SM
 import qualified Data.Text as T
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.IO.Unlift
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
@@ -32,11 +35,11 @@ import Data.Additional.Default
 
 import Probability.Foundation
 
-type MeowTools = '[] -- empty for now
+type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete] -- empty for now
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
-maxMessageInState = 24
+maxMessageInState = 27
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
@@ -76,15 +79,20 @@ commandChat = BotCommand Chat $ botT $ do
   -- whole_chat :: WholeChat <- query
   botmodules <- query
   botname    <- query
+  noteListing <- lift $ getNoteListing botname cid
   botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
   botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
-  let msys = ChatSetting
-        ( asum
-          [ fmap API.SystemMessage $ botSettingPerChatSystemMessage =<< botSettingPerChat
-          , systemMessage =<< lookup cid (chatSettings sd)
-          , fmap API.SystemMessage . globalSysMsg $ botmodules
-          , fmap API.SystemMessage $ botSettingSystemMessage =<< botSetting
-          , Just $ API.SystemMessage "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
+  let appendNoteListing :: Text -> Text
+      appendNoteListing t = case noteListing of
+        Nothing       -> t
+        Just noteList -> t <> "\n\n---\n\nNotes:\n" <> noteList
+      msys = ChatSetting
+        ( fmap (API.SystemMessage . appendNoteListing) $ asum
+          [ botSettingPerChatSystemMessage =<< botSettingPerChat
+          , fmap content . systemMessage =<< lookup cid (chatSettings sd)
+          , globalSysMsg $ botmodules
+          , botSettingSystemMessage =<< botSetting
+          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
           ]
         )
         ( asum
@@ -160,12 +168,12 @@ commandChat = BotCommand Chat $ botT $ do
   determineIfReply activeProbability cid msg botname msys chatState
   $(logInfo) "Replying"
 
-  let ioeResponse =
-        case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
-          Nothing ->
-            statusChatReadAPIKey @ModelChat @MeowTools (coerce params) $ chatStatus chatState
-          Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
-            statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
+  ioeResponse <- lift . embedMeowToolEnv . toIO $ 
+    case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
+      Nothing ->
+        statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
+      Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+        statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
 
   asyncAction <- liftIO $ do
     async $ do

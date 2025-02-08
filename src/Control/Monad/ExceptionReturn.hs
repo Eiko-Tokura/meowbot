@@ -2,6 +2,7 @@
 module Control.Monad.ExceptionReturn
   ( ToText(..)
   , ExceptionReturn(..)
+  , ExceptionOverride(..)
   , module Control.Monad.Trans.Except
   ) where
 
@@ -54,6 +55,18 @@ class ExceptionReturn f emsg where
   pureEMsg :: Monad m => emsg -> f a -> ExceptT emsg m a
   pureEMsg msg = effectEMsg msg . return
   {-# INLINE pureEMsg #-}
+
+class ExceptionOverride f emsg where
+  effectEWith' :: Monad m => (f a -> emsg) -> m (f a) -> ExceptT emsg m a
+  pureEWith' :: Monad m => (f a -> emsg) -> f a -> ExceptT emsg m a
+
+instance ExceptionOverride Maybe emsg where
+  effectEWith' msgf mfa = ExceptT $ do
+    fa <- mfa
+    return $ maybe (Left $ msgf fa) Right fa
+  {-# INLINE effectEWith' #-}
+  pureEWith' msgf = effectEWith' msgf . return
+  {-# INLINE pureEWith' #-}
 
 instance ToText e Text => ExceptionReturn (Either e) Text where
   conversionToEither Nothing     = first toText

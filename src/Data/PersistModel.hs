@@ -55,6 +55,14 @@ BotSettingPerChat -- Overlapping BotSetting
   activeChat            Bool                  Maybe
   activeProbability     Double                Maybe
 
+AssistantNote
+  botName        String      Maybe
+  chatId         ChatId
+  noteId         Int
+  title          Text
+  content        Text
+  time           UTCTime
+
 CommandRuleDB
   botName        String      Maybe
   commandRule    CommandRule

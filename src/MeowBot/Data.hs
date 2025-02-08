@@ -26,7 +26,7 @@ module MeowBot.Data
 
   , module Utils.Text
 
-  , showCQ, cqmsgToEssentialContent, emptyCQMessage
+  , showCQ, cqmsgToEssentialContent, emptyCQMessage, cqmsgToCid
   ) where
 
 import MeowBot.CommandRule
@@ -432,12 +432,14 @@ type EssentialContent = (Text, ChatId, UserId, MessageId, Sender)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
 cqmsgToEssentialContent cqmsg =
   (,,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)
-         <*> (case eventType cqmsg of
-               GroupMessage -> GroupChat <$> groupId cqmsg
-               PrivateMessage -> PrivateChat <$> userId cqmsg
-               _ -> Nothing
-             )
+         <*> cqmsgToCid cqmsg
          <*> userId cqmsg
          <*> messageId cqmsg
          <*> sender cqmsg
+
+cqmsgToCid :: CQMessage -> Maybe ChatId
+cqmsgToCid cqmsg = case eventType cqmsg of
+  GroupMessage -> GroupChat <$> groupId cqmsg
+  PrivateMessage -> PrivateChat <$> userId cqmsg
+  _ -> Nothing
 

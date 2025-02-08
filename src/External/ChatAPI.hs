@@ -315,13 +315,14 @@ generateSystemPrompt params
       \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. \
       \ Do not use \\( \\) or \\[ \\] for formulas."
       <> appendToolPrompts @m (Proxy @ts) "\n---\n"
-  | otherwise = 
-      fromMaybe 
-        (SystemMessage $ 
+  | otherwise =
+      maybe
+        (SystemMessage $
           "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
           <> appendToolPrompts @m (Proxy @ts) "\n---\n"
         )
-        (systemMessage $ chatSetting params)
+        (SystemMessage . (<> appendToolPrompts @m (Proxy @ts) "\n---\n"))
+        (fmap content . systemMessage $ chatSetting params)
 
 data APIKey = APIKey
   { apiKeyOpenAI :: Maybe Text
@@ -432,14 +433,17 @@ agent = do
       case parseToolCall (content amsg) of
         Nothing -> return $ [amsg]
         Just (ToolCallPair toolName args) -> do
-          toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
-          liftIO $ printMessage toolmsg
-          modify $ \st -> st
-            { chatStatusToolDepth      = chatStatusToolDepth st + 1
-            , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
-            , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
-            }
-          ([amsg, toolmsg] <>) <$> agent
+          skip_toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
+          case skip_toolmsg of
+            Left Skipped -> return [amsg]
+            Right toolmsg -> do
+              liftIO $ printMessage toolmsg
+              modify $ \st -> st
+                { chatStatusToolDepth      = chatStatusToolDepth st + 1
+                , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
+                , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
+                }
+              ([amsg, toolmsg] <>) <$> agent
 
 printMessage :: Message -> IO ()
 printMessage (SystemMessage c)             = putStrLn $ "SystemMessage: "     <> T.unpack c
@@ -486,28 +490,35 @@ messagesChat params prevMsg
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
       ExceptT $ fmap fst $ statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
 
+data Skipped = Skipped
 -- | Handle tool execution, no recursion
-handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m Message
+handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m (Either Skipped Message)
 handleToolCall toolCallName args md = do
   -- Find matching tool
   output <- 
     case pickConstraint (Proxy @(ToolClass m)) (Proxy @ts) ((== toolCallName) . toolName (Proxy @m)) of
       Just toolCont -> toolCont $ \tool -> do
         input  <-  liftE . ExceptT $ pure (jsonToInput (Proxy @m) tool args)
-        lift $ wrapToolOutput <$> runExceptT (toolHandlerTextError (Proxy @m) tool input) 
+        toolOutput <- lift $ runExceptT (toolHandlerTextError (Proxy @m) tool input)
+        case toolOutput of
+          Left "SkipOutput" -> return $ Left Skipped
+          _ -> return $ Right $ wrapToolOutput toolOutput
         -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
   
-  -- Build updated message history
-  let toolMsg = ToolMessage
-        { content = case output of
-            String t -> t
-            _ -> decodeUtf8 (BL.toStrict $ encode output)
-        , toolMeta = Just md
-            { toolCallId = "dummy_toolcall_id" -- T.pack (show (hash prevMsgs))  -- Simple ID generation
-            , toolAttempt = toolAttempt md + 1
+  case output of
+    Left Skipped -> return $ Left Skipped
+    Right output -> do
+      -- Build updated message history
+      let toolMsg = ToolMessage
+            { content = case output of
+                String t -> t
+                _ -> decodeUtf8 (BL.toStrict $ encode output)
+            , toolMeta = Just md
+                { toolCallId = "dummy_toolcall_id" -- T.pack (show (hash prevMsgs))  -- Simple ID generation
+                , toolAttempt = toolAttempt md + 1
+                }
             }
-        }
-  return toolMsg
+      return $ Right toolMsg
   where wrapToolOutput (Right t) = A.object ["tool_output" .= t]
         wrapToolOutput (Left e)  = A.object ["tool_error"  .= e]
