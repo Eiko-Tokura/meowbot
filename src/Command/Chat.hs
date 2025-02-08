@@ -5,7 +5,7 @@ import Command
 import Command.Cat (catParser)
 import MeowBot
 import System.General (MeowT)
-import Data.Maybe (fromMaybe, catMaybes, isNothing)
+import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
@@ -35,7 +35,7 @@ type MeowTools = '[] -- empty for now
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
-maxMessageInState = 20
+maxMessageInState = 24
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
@@ -65,7 +65,7 @@ instance IsAdditionalData AllChatState      -- use getTypeWithDef
 -- What we will do first is to try this in private chat, providing note taking and scheduled message
 commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
-  ess@(msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
+  (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
   _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
   cqmsg <- queries getNewMsg
   other_data <- query
@@ -77,7 +77,7 @@ commandChat = BotCommand Chat $ botT $ do
   let msys = ChatSetting
         ( asum
           [ fmap API.SystemMessage $ botSettingPerChatSystemMessage =<< botSettingPerChat
-          , systemMessage =<< lookup cid (chatSettings sd) 
+          , systemMessage =<< lookup cid (chatSettings sd)
           , fmap API.SystemMessage . globalSysMsg $ botmodules
           , fmap API.SystemMessage $ botSettingSystemMessage =<< botSetting
           , Just $ API.SystemMessage "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
@@ -107,7 +107,7 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatActiveChat =<< botSettingPerChat
         , botSettingActiveChat =<< botSetting
         ] -- ^ whether to chat actively randomly
-      activeProbability = fromMaybe 0.1 $ asum
+      activeProbability = fromMaybe 0.05 $ asum
         [ botSettingPerChatActiveProbability =<< botSettingPerChat
         , botSettingActiveProbability =<< botSetting
         ] -- ^ probability to chat actively
@@ -119,7 +119,8 @@ commandChat = BotCommand Chat $ botT $ do
       toUserMessage :: CQMessage -> Message
       toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
         --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
-        [ fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg) <> Just ": "
+        [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
+        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg) <> Just ": "
         , message cqmsg -- use raw message instead
         ]
       updateChatState :: AllChatState -> AllChatState
