@@ -204,8 +204,8 @@ parseThinking ct = maybe (Nothing, ct)
   $ runParser
     ( string "<think>" 
     *> ( (,)
-          <$> manyTill' (string "</think>") getItem
-          <* (string "</think>" >> many spaceOrEnter) <*> many' getItem
+          <$> (manyTill' (string "</think>") getItem <* (string "</think>" >> many spaceOrEnter))
+          <*> many' getItem
        )
     ) ct
 
@@ -215,7 +215,7 @@ instance ToJSON (ModelDependent (DeepSeek DeepSeekReasoner) Message) where
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c Nothing)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c (Just think)))
-    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>" <> c <> "</think>\n\n" <> think)]
+    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (DeepSeek a) Message) where
@@ -234,23 +234,25 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)     , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c _)) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("tool" :: Text), "content" .= c]
 
 instance ToJSON (ModelDependent (Local DeepSeekR1_32B) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c Nothing)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c (Just think)))
-    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>" <> c <> "</think>\n\n" <> think)]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
+  -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
 
 instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c Nothing)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c (Just think)))
-    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>" <> c <> "</think>\n\n" <> think)]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
+  -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
 
 apiKeyFile :: FilePath
 apiKeyFile = "apiKey"

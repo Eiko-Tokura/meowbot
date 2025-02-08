@@ -12,6 +12,8 @@ Description :
 
     currently geenrating prompt for tools list, and tool call parsing, for generic llm to use
     will add openai tool call generation later
+
+    TODO: support openai native tool call system
 -}
 module External.ChatAPI.Tool where
 
