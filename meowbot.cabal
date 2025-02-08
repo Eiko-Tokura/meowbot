@@ -113,6 +113,7 @@ library meowbot-lib
                    , Data.Template
                    , External.ChatAPI
                    , External.ChatAPI.Tool
+                   , External.ChatAPI.Tool.MeowToolEnv
                    --, External.ChatAPI.Tool.Search
                    , External.ChatAPI.Function
                    , External.MarkdownImage
@@ -186,6 +187,7 @@ library meowbot-lib
                  , text
                  , time
                  , transformers
+                 , unliftio-core
                  , vector
                  , websockets
                  , wuss

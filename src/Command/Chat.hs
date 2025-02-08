@@ -20,6 +20,7 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 import Command.Cat.CatSet
+import Command.Hangman
 
 import Data.PersistModel
 import Data.Proxy
@@ -66,7 +67,10 @@ instance IsAdditionalData AllChatState      -- use getTypeWithDef
 commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
   (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
-  _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
+  _ <- MaybeT    $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
+  hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
+  let ignoredPatterns = MP.runParser hangmanParser'
+  _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
   cqmsg <- queries getNewMsg
   other_data <- query
   -- whole_chat :: WholeChat <- query
@@ -154,7 +158,7 @@ commandChat = BotCommand Chat $ botT $ do
 
   $(logDebug) "Determining if reply"
   determineIfReply activeProbability cid msg botname msys chatState
-  $(logDebug) "Replying"
+  $(logInfo) "Replying"
 
   let ioeResponse =
         case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of

@@ -313,29 +313,30 @@ class
   , ToJSON (ToolOutput a)
   , FromJSON (ToolInput a)
   , Show (ToolError a)
-  ) 
-  => ToolClass a where
+  , MonadIO m
+  )
+  => ToolClass m a where
   type ToolInput  a :: Type
   type ToolOutput a :: Type
   data ToolError  a :: Type
-  toolName          :: Proxy a -> Text
-  toolDescription   :: Proxy a -> Text
-  toolHandler       :: Proxy a -> ToolInput a -> ExceptT (ToolError a) IO (ToolOutput a)
+  toolName          :: Proxy m -> Proxy a -> Text
+  toolDescription   :: Proxy m -> Proxy a -> Text
+  toolHandler       :: Proxy m -> Proxy a -> ToolInput a -> ExceptT (ToolError a) m (ToolOutput a)
 
   -- | Default tool handler with text error, defined by toolHandler, will also catch unhandled exceptions
-  toolHandlerTextError :: Proxy a -> ToolInput a -> ExceptT Text IO (ToolOutput a)
-  toolHandlerTextError t i = ExceptT $ do
-    try @SomeException (runExceptT (toolHandler t i)) >>= \case
-      Left someEx       -> return $ Left $ "Tool Unhandled Exception: " <> toText someEx
-      Right (Left err)  -> return $ Left $ "Tool Returned Error: " <> toText err
-      Right (Right val) -> return $ Right val
+  toolHandlerTextError :: Proxy m -> Proxy a -> ToolInput a -> ExceptT Text m (ToolOutput a)
+  toolHandlerTextError tm t i = ExceptT $ do
+    runExceptT (toolHandler tm t i) >>= \case
+      --Left someEx       -> return $ Left $ "Tool Unhandled Exception: " <> toText someEx
+      Left err  -> return $ Left $ "Tool Returned Error: " <> toText err
+      Right val -> return $ Right val
 
-  jsonToInput :: Proxy a -> Value -> Either Text (ToolInput a)
-  jsonToInput _ = first toText . parseEither parseJSON
+  jsonToInput :: Proxy m -> Proxy a -> Value -> Either Text (ToolInput a)
+  jsonToInput _ _ = first toText . parseEither parseJSON
 
-  toolExplain :: Proxy a -> Text
-  toolExplain pa = "Tool Name: " <> toolName pa <> "\n" <>
-                   "Description: " <> toolDescription pa <> "\n" <>
+  toolExplain :: Proxy m -> Proxy a -> Text
+  toolExplain pm pa = "Tool Name: " <> toolName pm pa <> "\n" <>
+                   "Description: " <> toolDescription pm pa <> "\n" <>
                    getExplanation @(ToolInput a)
 
 class EncodeUtf8LazyByteString a where
@@ -380,7 +381,7 @@ instance ToJSON ToolMeta
 instance FromJSON ToolMeta
 
 ---------------------------------
-appendToolPrompts :: ConstraintList ToolClass ts => Proxy ts -> Text -> Text
+appendToolPrompts :: forall m ts. ConstraintList (ToolClass m) ts => Proxy ts -> Text -> Text
 appendToolPrompts clist sep
   | null toolExplainList = ""
   | otherwise = 
@@ -396,19 +397,19 @@ appendToolPrompts clist sep
     <>
     )
     . T.unlines $ toolExplainList
-  where toolExplainList = useConstraint (Proxy @ToolClass) clist (\t -> toolExplain t <> sep)
+  where toolExplainList = useConstraint (Proxy @(ToolClass m)) clist (\t -> toolExplain (Proxy @m) t <> sep)
 
 --------------------------------- example tool ---------------------------------
 
 data FibonacciTool
 
-instance ToolClass FibonacciTool where
+instance MonadIO m => ToolClass m FibonacciTool where
   type ToolInput  FibonacciTool = ParamToData (ObjectP0 '[IntP "n" "Fibonacci number to calculate, in range [0, 10000]"])
   type ToolOutput FibonacciTool = ParamToData (StringP "result" "Calculated Fibonacci number")
   data ToolError  FibonacciTool = FibonacciError Text deriving (Show)
-  toolName _ = "fibonacci"
-  toolDescription _ = "Calculate the nth Fibonacci number"
-  toolHandler _ ((IntT n) :%* ObjT0Nil)
+  toolName _ _ = "fibonacci"
+  toolDescription _ _ = "Calculate the nth Fibonacci number"
+  toolHandler _ _ ((IntT n) :%* ObjT0Nil)
     | n < 0     = do
         liftIO $ putTextLn $ "[TOOL]Negative Fibonacci number " <> tshow n
         throwE $ FibonacciError "Negative Fibonacci number"
@@ -428,11 +429,11 @@ instance ToolClass FibonacciTool where
 sanityCheckFibonacciTool :: IO ()
 sanityCheckFibonacciTool = do
   let input = "{\"n\": 10}"
-  let inputVal = either (error "input not work") id $ jsonToInput (Proxy @FibonacciTool) =<< first toText (eitherDecode input)
+  let inputVal = either (error "input not work") id $ jsonToInput (Proxy @IO) (Proxy @FibonacciTool) =<< first toText (eitherDecode input)
   case inputVal of
     IntT 10 :%* ObjT0Nil -> putStrLn "input ok"
     _ -> error "input not ok"
-  res <- runExceptT $ toolHandlerTextError (Proxy @FibonacciTool) inputVal
+  res <- runExceptT $ toolHandlerTextError (Proxy @IO) (Proxy @FibonacciTool) inputVal
   case res of
     Right v -> -- print its json
       TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v

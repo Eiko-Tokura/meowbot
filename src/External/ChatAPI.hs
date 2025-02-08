@@ -41,7 +41,7 @@ data ChatModel
 
 data OpenAIModel   = GPT4oMini | GPT4o deriving (Show, Read, Eq)
 data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel    = DeepSeekR1_14B | DeepSeekR1_32B deriving (Show, Read, Eq)
+data LocalModel    = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | QwQ_32B deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}   = "https://api.openai.com/v1/chat/completions"
@@ -55,6 +55,8 @@ instance ToJSON ChatModel where
   toJSON (DeepSeek DeepSeekReasoner) = "deepseek-reasoner"
   toJSON (Local DeepSeekR1_14B)      = "deepseek-r1:14b"
   toJSON (Local DeepSeekR1_32B)      = "deepseek-r1:32b"
+  toJSON (Local Qwen2_5_32B)         = "qwen2.5:32b"
+  toJSON (Local QwQ_32B)             = "qwq:32b"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -118,6 +120,14 @@ instance ChatAPI (Local DeepSeekR1_14B) where
 instance ChatAPI (Local DeepSeekR1_32B) where
   chatModel  = Local DeepSeekR1_32B
   type ChatCompletionResponse (Local DeepSeekR1_32B) = ChatCompletionResponseOllama
+
+instance ChatAPI (Local Qwen2_5_32B) where
+  chatModel  = Local Qwen2_5_32B
+  type ChatCompletionResponse (Local Qwen2_5_32B) = ChatCompletionResponseOllama
+
+instance ChatAPI (Local QwQ_32B) where
+  chatModel  = Local QwQ_32B
+  type ChatCompletionResponse (Local QwQ_32B) = ChatCompletionResponseOllama
 
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
@@ -194,7 +204,7 @@ parseThinking ct = maybe (Nothing, ct)
   $ runParser
     ( string "<think>" 
     *> ( (,)
-          <$> manyTill' (string "</think>") getItem 
+          <$> manyTill' (string "</think>") getItem
           <* (string "</think>" >> many spaceOrEnter) <*> many' getItem
        )
     ) ct
@@ -283,7 +293,7 @@ instance ToJSON (ModelDependent (Local a) ChatRequest) where
 promptMessage :: String -> Message
 promptMessage prompt = UserMessage (pack prompt)
 
-generateRequestBody :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> [Message] -> BL.ByteString
+generateRequestBody :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts) => ChatParams md ts -> [Message] -> BL.ByteString
 generateRequestBody param mes = encode $ ModelDependent @md $
   ChatRequest
     { chatReqModel = chatModel @md
@@ -295,21 +305,21 @@ generateRequestBody param mes = encode $ ModelDependent @md $
         Local _    -> Just False
     -- , tools       = Nothing
     }
-  where sysMessage = generateSystemPrompt param
+  where sysMessage = generateSystemPrompt @md @ts @m param
 
-generateSystemPrompt :: forall md ts. ConstraintList ToolClass ts => ChatParams md ts -> Message
+generateSystemPrompt :: forall md ts m. ConstraintList (ToolClass m) ts => ChatParams md ts -> Message
 generateSystemPrompt params
   | chatMarkDown params = SystemMessage $
       "You are a endearing catgirl assistant named '喵喵'. \
       \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'. \
       \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. \
       \ Do not use \\( \\) or \\[ \\] for formulas."
-      <> appendToolPrompts (Proxy @ts) "\n---\n"
+      <> appendToolPrompts @m (Proxy @ts) "\n---\n"
   | otherwise = 
       fromMaybe 
         (SystemMessage $ 
           "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
-          <> appendToolPrompts (Proxy @ts) "\n---\n"
+          <> appendToolPrompts @m (Proxy @ts) "\n---\n"
         )
         (systemMessage $ chatSetting params)
 
@@ -327,13 +337,13 @@ getApiKeyByModel (OpenAI _)   apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
 getApiKeyByModel (DeepSeek _) apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
 getApiKeyByModel (Local _)    _      = NoAPIKeyRequired
 
-fetchChatCompletionResponse :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => APIKey -> ChatParams md ts -> [Message] -> IO (Either Text (ChatCompletionResponse md))
+fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse apiKey model msg = do
   let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
   let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
-  manager <- newManager customManagerSettings
-  request <- parseRequest (modelEndpoint $ chatModel @md)
-  let requestBody = generateRequestBody model msg --promptMessage prompt
+  manager <- liftIO $ newManager customManagerSettings
+  request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
+  let requestBody = generateRequestBody @md @ts @m model msg --promptMessage prompt
   case getApiKeyByModel (chatModel @md) apiKey of
     APIKeyRequired Nothing       -> return . Left $ "No API key found for the model " <> T.pack (show $ chatModel @md)
     APIKeyRequired (Just apikey) -> do
@@ -345,7 +355,7 @@ fetchChatCompletionResponse apiKey model msg = do
                 , ("Authorization", "Bearer " <> encodeUtf8 apikey)
                 ]
             }
-      result <- try (httpLbs request' manager) :: IO (Either SomeException (Response BL.ByteString))
+      result <- liftIO $ try (httpLbs request' manager) :: m (Either SomeException (Response BL.ByteString))
       return $ bimap (T.pack . show) responseBody result >>= first T.pack . eitherDecode
     NoAPIKeyRequired -> do
       let request' = request
@@ -355,7 +365,7 @@ fetchChatCompletionResponse apiKey model msg = do
                 [ ("Content-Type", "application/json")
                 ]
             }
-      result <- try (httpLbs request' manager) :: IO (Either SomeException (Response BL.ByteString))
+      result <- liftIO $ try (httpLbs request' manager) :: m (Either SomeException (Response BL.ByteString))
       return $ bimap (T.pack . show) responseBody result >>= first T.pack . eitherDecode
 
 instance GetMessage (ChatCompletionResponseOpenAI) where
@@ -370,17 +380,18 @@ instance GetMessage (ChatCompletionResponseOllama) where
 --     []         -> ""
 --     headChos:_ -> (content . message) headChos
 
-readApiKeyFile :: ExceptT Text IO APIKey
+readApiKeyFile :: MonadIO m => ExceptT Text m APIKey
 readApiKeyFile = ExceptT
   . fmap
     (bimap
       ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show)
       id
     )
+  . liftIO
   . try @SomeException
   $ read <$> readFile apiKeyFile
 
-simpleChat :: (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> String -> ExceptT Text IO Text
+simpleChat :: (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> String -> ExceptT Text m Text
 simpleChat model prompt = do
   apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse apiKey model [promptMessage prompt]
@@ -405,7 +416,7 @@ liftE :: Monad m => ExceptT Text m a -> ChatT md tools m a
 liftE = ChatT . ExceptT . lift . runExceptT
 
 -- | Enhanced message chat with tool handling
-agent :: (ChatAPI md, ConstraintList ToolClass ts) => ChatT md ts IO [Message]
+agent :: (MonadIO m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
 agent = do
   params    <- ask
   prevMsgs  <- gets chatStatusMessages
@@ -440,22 +451,22 @@ printMessage (ToolMessage c tm)            = putStrLn $ "ToolMessage: "       <>
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will only read apiKey from chat setting
-statusChat :: (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> ChatStatus -> IO (Either Text [Message], ChatStatus)
+statusChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
 statusChat = runReaderStateT . runExceptT . runChatT $ agent
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will read apiKey from file if no api key is found in the chat setting
-statusChatReadAPIKey :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> ChatStatus -> IO (Either Text [Message], ChatStatus)
+statusChatReadAPIKey :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
 statusChatReadAPIKey params st = do
-  apiKey <- either (const Nothing) Just <$> runExceptT readApiKeyFile
+  apiKey <- either (const Nothing) Just <$> liftIO (runExceptT readApiKeyFile)
   let params' = params { chatSetting = (chatSetting params) { systemApiKeys = systemApiKeys (chatSetting params) <|> apiKey } }
-  liftIO $ statusChat @md @ts params' st
+  statusChat @md @ts params' st
 
 -- | Tool calls are discarded in the output
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
-messageChat :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> [Message] -> ExceptT Text IO Message
+messageChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m Message
 messageChat params prevMsg
   | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap (fmap last . fst) $ statusChat @md params (ChatStatus 0 0 prevMsg)
   | otherwise = do
@@ -467,7 +478,7 @@ messageChat params prevMsg
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
 -- returns the list of new messages: assistant tool calls followed by the final response
-messagesChat :: forall md ts. (ChatAPI md, ConstraintList ToolClass ts) => ChatParams md ts -> [Message] -> ExceptT Text IO [Message]
+messagesChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
 messagesChat params prevMsg
   | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap fst $ statusChat @md params (ChatStatus 0 0 prevMsg)
   | otherwise = do
@@ -476,14 +487,14 @@ messagesChat params prevMsg
       ExceptT $ fmap fst $ statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
 
 -- | Handle tool execution, no recursion
-handleToolCall :: forall md ts. ConstraintList ToolClass ts => Text -> Value -> ToolMeta -> ChatT md ts IO Message
+handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m Message
 handleToolCall toolCallName args md = do
   -- Find matching tool
   output <- 
-    case pickConstraint (Proxy @ToolClass) (Proxy @ts) ((== toolCallName) . toolName) of
+    case pickConstraint (Proxy @(ToolClass m)) (Proxy @ts) ((== toolCallName) . toolName (Proxy @m)) of
       Just toolCont -> toolCont $ \tool -> do
-        input  <-  liftE . ExceptT $ pure (jsonToInput tool args)
-        lift $ wrapToolOutput <$> runExceptT (toolHandlerTextError tool input) 
+        input  <-  liftE . ExceptT $ pure (jsonToInput (Proxy @m) tool args)
+        lift $ wrapToolOutput <$> runExceptT (toolHandlerTextError (Proxy @m) tool input) 
         -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
   

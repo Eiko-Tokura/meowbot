@@ -10,6 +10,7 @@ module Control.Monad.Trans.ReaderState
   , onlyStateT
   , restrictState
   , restrictRead
+  , freezeState
   ) where
 
 import Data.Bifunctor
@@ -103,3 +104,7 @@ onlyStateT f = ReaderStateT $ \_ s -> f s
 instance MonadIO m => MonadIO (ReaderStateT r s m) where
   liftIO v = ReaderStateT $ \_ s -> (,s) <$> liftIO v
   {-# INLINE liftIO #-}
+
+freezeState :: Monad m => ReaderStateT r s m (ReaderT (r, s) m a -> m a)
+freezeState = ReaderStateT $ \r s -> return (flip runReaderT (r, s), s)
+{-# INLINE freezeState #-}

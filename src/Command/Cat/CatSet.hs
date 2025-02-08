@@ -21,6 +21,8 @@ import External.ChatAPI hiding (SystemMessage)
 modelsInUse :: CFList ChatAPI Proxy 
   [ Local    DeepSeekR1_14B
   , Local    DeepSeekR1_32B
+  , Local    Qwen2_5_32B
+  , Local    QwQ_32B
   , DeepSeek DeepSeekChat
   , DeepSeek DeepSeekReasoner
   , OpenAI   GPT4oMini
