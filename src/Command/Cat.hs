@@ -68,7 +68,7 @@ commandCat = BotCommand Cat $ botT $ do
       let msys = ChatSetting
                    ( asum
                      [ fmap API.SystemMessage $ botSettingPerChatSystemMessage =<< botSettingPerChat
-                     , systemMessage =<< lookup cid (chatSettings sd) 
+                     , systemMessage =<< lookup cid (chatSettings sd)
                      , fmap API.SystemMessage . globalSysMsg $ botmodules
                      , fmap API.SystemMessage $ botSettingSystemMessage =<< botSetting
                      ]
@@ -92,7 +92,7 @@ commandCat = BotCommand Cat $ botT $ do
                      , botSettingSystemAPIKey =<< botSetting
                      ]
                    )
-      let modelCat = fromMaybe (modelCat) $ runPersistUseShow <$> asum 
+      let modelCat = fromMaybe (modelCat) $ runPersistUseShow <$> asum
             [ botSettingPerChatDefaultModel =<< botSettingPerChat
             , botSettingDefaultModel =<< botSetting
             ]
@@ -113,18 +113,18 @@ commandCat = BotCommand Cat $ botT $ do
           md = either chatMarkDown chatMarkDown (bimap ($ addManager) ($ addManager) params)  -- whether to use markdown
           ioEChatResponse = case params of
 
-            Left  paramCat      -> 
+            Left  paramCat      ->
               case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
                 Nothing ->
                   messagesChat @ModelCat @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
-                Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+                Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
                   messagesChat @a @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
             Right paramSuperCat ->
               case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
                 Nothing ->
                   messagesChat @ModelSuperCat @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
-                Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+                Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
       asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
@@ -133,11 +133,11 @@ commandCat = BotCommand Cat $ botT $ do
 
 type UseMarkdown = Bool
 type DisplayThinking = Bool
-actionSendMessages 
-  :: DisplayThinking -> UseMarkdown 
-  -> EssentialContent 
+actionSendMessages
+  :: DisplayThinking -> UseMarkdown
+  -> EssentialContent
   -> Meow () -- ^ arbitrary action performed in Meow [BotAction] returned
-  -> ExceptT Text IO [Message] 
+  -> ExceptT Text IO [Message]
   -> IO (Async (Meow [BotAction]))
 actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) act ioess = async $ do
   ess <- runExceptT ioess

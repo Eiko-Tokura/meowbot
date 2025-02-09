@@ -5,7 +5,7 @@
 
 {-|
 Module      : External.ChatAPI
-Description : 
+Description :
     LLM chat tool call interface, type level!
     automatically generate tool call interface from type level definitions!
     extremely cool!
@@ -39,7 +39,7 @@ import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
 import Control.Monad.Trans.Except
 import Control.DeepSeq (NFData)
-import Control.Exception
+-- import Control.Exception
 import Utils.Text
 
 import Parser.Run
@@ -204,7 +204,7 @@ class ParamExplained t where
 
   getExplanation :: Text
   getExplanation
-    = T.intercalate "\n" . reverse . printStateTextRev . snd 
+    = T.intercalate "\n" . reverse . printStateTextRev . snd
     $ runState (printParamExplanation @t) (PrintState 0 [])
   {-# INLINE getExplanation #-}
 
@@ -250,7 +250,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (StringT n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntP n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type integer) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -258,7 +258,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntP n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntT n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type integer) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -266,7 +266,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (IntT n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolP n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type boolean) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -274,7 +274,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolP n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolT n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type boolean) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -282,7 +282,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (BoolT n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatP n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type float) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -290,7 +290,7 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatP n d) where
 
 instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatT n d) where
   printParamExplanation = prints $ mconcat
-    [ toText $ symbolVal (Proxy @n) 
+    [ toText $ symbolVal (Proxy @n)
     , ": (type float) "
     , toText $ symbolVal (Proxy @d)
     ]
@@ -402,8 +402,8 @@ instance FromJSON ToolCallPair where
 
 -- | Parse potential tool call from message content
 parseToolCall :: Text -> Maybe (Maybe Text, ToolCallPair)
-parseToolCall txt 
-  =   fmap (Nothing, ) (decode (encodeUtf8LBS txt)) 
+parseToolCall txt
+  =   fmap (Nothing, ) (decode (encodeUtf8LBS txt))
   <|> (parseToolCallText txt)
   where parseToolCallText txt
           | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":", "```json"]
@@ -440,7 +440,7 @@ instance FromJSON ToolMeta
 appendToolPrompts :: forall m ts. ConstraintList (ToolClass m) ts => Proxy ts -> Text -> Text
 appendToolPrompts clist sep
   | null toolExplainList = ""
-  | otherwise = 
+  | otherwise =
     ( T.unlines
       [ sep
       , "## Available Tools"

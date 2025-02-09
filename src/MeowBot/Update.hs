@@ -132,14 +132,14 @@ strictTakeTail n = (`using` evalList rseq) . reverse . take n . reverse
 
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
 -- and also put at the top of the list.
-updateListByFuncKeyElement :: (Ord k) 
+updateListByFuncKeyElement :: (Ord k)
   => [ ( k
        , ( [Tree a], [a] )
        )
      ]
   -> End [ (k, ([Tree a], [a])) ]
   -> Maybe (a -> Bool)
-  -> k 
+  -> k
   -> a
   -> [ (k, ([Tree a], [a])) ]
 updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []

@@ -99,17 +99,17 @@ instance PersistFieldSql ChatId where sqlType _ = SqlInt64
 
 -------------------------------------------------------------------------------------------
 -- Notifcation and Request
-data NoticeType 
-  = NoticeGroupUpload 
-  | NoticeGroupAdmin 
-  | NoticeGroupDecrease GroupDecreaseSubType 
-  | NoticeGroupIncrease GroupIncreaseSubType 
-  | NoticeGroupBan 
-  | NoticeGroupAdd 
-  | NoticeFriendAdd 
-  | NoticeGroupRecall 
-  | NoticeFriendRecall 
-  | NoticeNotify NoticeSubType 
+data NoticeType
+  = NoticeGroupUpload
+  | NoticeGroupAdmin
+  | NoticeGroupDecrease GroupDecreaseSubType
+  | NoticeGroupIncrease GroupIncreaseSubType
+  | NoticeGroupBan
+  | NoticeGroupAdd
+  | NoticeFriendAdd
+  | NoticeGroupRecall
+  | NoticeFriendRecall
+  | NoticeNotify NoticeSubType
   deriving (Show, Eq, Read)
 
 data NoticeSubType = NoticeSubTypePoke | NoticeSubTypeLuckyKing | NoticeSubTypeHonor
@@ -124,7 +124,7 @@ data GroupIncreaseSubType = GroupIncreaseApprove | GroupIncreaseInvite
 newtype Flag = Flag { unFlag :: Text }
   deriving (Show, Eq, Read, FromJSON, ToJSON) via Text
 
-data RequestType 
+data RequestType
   = RequestFriend
     { requestComment :: Maybe Text
     , requestFlag    :: Maybe Flag

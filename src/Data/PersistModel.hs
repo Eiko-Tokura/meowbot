@@ -118,10 +118,10 @@ HangmanRanking
   userNickName   Text
   totalPP        Double
   rank           Int
-  totalMiss      Int           
-  totalGuess     Int           
-  passCount      Int          
-  playcount      Int         
+  totalMiss      Int
+  totalGuess     Int
+  passCount      Int
+  playcount      Int
   deriving Show
 |]
 

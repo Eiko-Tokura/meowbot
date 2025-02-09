@@ -143,9 +143,9 @@ commandChat = BotCommand Chat $ botT $ do
       updateChatState s =
         let state = SM.lookup cid s in
         case state of
-          Just cs -> SM.insert cid 
-            cs 
-              { chatStatus = (chatStatus cs) 
+          Just cs -> SM.insert cid
+            cs
+              { chatStatus = (chatStatus cs)
                 { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
                 , chatStatusToolDepth = 0 -- ^ reset tool depth
                 }
@@ -161,7 +161,7 @@ commandChat = BotCommand Chat $ botT $ do
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
-  allChatState <- lift $ updateChatState <$> getTypeWithDef newChatState 
+  allChatState <- lift $ updateChatState <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
   lift $ putType $ allChatState
@@ -173,11 +173,11 @@ commandChat = BotCommand Chat $ botT $ do
   determineIfReply activeProbability cid msg botname msys chatState
   $(logInfo) "Replying"
 
-  ioeResponse <- lift . embedMeowToolEnv . toIO $ 
+  ioeResponse <- lift . embedMeowToolEnv . toIO $
     case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
       Nothing ->
         statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
-      Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) -> 
+      Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
         statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
 
   asyncAction <- liftIO $ do
@@ -194,7 +194,7 @@ commandChat = BotCommand Chat $ botT $ do
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus cid newMsgs newStatus
-            meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 
+            meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)]
               (T.intercalate "\n---\n" . map content $ filter (\case
                   AssistantMessage { pureToolCall = Just True } -> False
                   ToolMessage {} -> False
@@ -222,7 +222,7 @@ mergeChatStatus cid newMsgs newStatus = do
   case chatState of
     Nothing -> pure ()
     Just chatState ->
-      putType $ SM.insert cid 
+      putType $ SM.insert cid
         chatState -- adding new messages to newest state
           { chatStatus = newStatus
             { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus chatState) ++ newMsgs

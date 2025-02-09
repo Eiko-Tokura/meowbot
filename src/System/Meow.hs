@@ -53,7 +53,7 @@ newtype MeowData = MeowData (CList MeowDataClass
   , TVar (Maybe BL.ByteString)
   ])
 
-instance HasSystemRead c (CList MeowDataClass 
+instance HasSystemRead c (CList MeowDataClass
   [ Connection
   , TVar [Meow [BotAction]]
   , TVar (Maybe SentCQMessage)
@@ -105,19 +105,19 @@ instance (MeowDataClass p, InitMeowDataClass (CList MeowDataClass ps)) => InitMe
   initAllMeowData (x :* xs) = CCons <$> initOneMeowData x <*> initAllMeowData xs
   {-# INLINE initAllMeowData #-}
 
--- -- need a 
+-- -- need a
 -- class HelperClass as bs where
 --   function :: Monad m => (HList as -> m (CList MeowDataClass as)) -> (HList bs -> m (CList MeowDataClass bs)) -> HList (as ++ bs) -> m (CList MeowDataClass (as ++ bs))
--- 
+--
 -- -- perform double induction on as and bs
 -- instance HelperClass '[] bs where
 --   function _ f xs = f xs()
 --   {-# INLINE function #-}
--- 
+--
 -- instance HelperClass as '[] where
 --   function f _ xs = f xs
 --   {-# INLINE function #-}
--- 
+--
 -- instance (MeowDataClass a, HelperClass as bs) => HelperClass (a : as) bs where
 --   function f g (x :* xs) = CCons <$> _ <*> _
 

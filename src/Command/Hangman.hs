@@ -137,10 +137,10 @@ doHangman cid _ _ (Right UpdateAllScores) = do
   return [ baSendToChatId cid "All scores recalculated!" ]
 
 showRanking :: HangmanRanking -> Text
-showRanking r 
-  =  hangmanRankingUserNickName r <> " (" <> tshow (coerce @_ @Int $ hangmanRankingUserId r) <> ") " 
-  <> tshowfloat (hangmanRankingTotalPP r) <> "pp" 
-  <> " acc:" <> tshowfloat (1 - fromIntegral (hangmanRankingTotalMiss r) / fromIntegral (hangmanRankingTotalGuess r)) 
+showRanking r
+  =  hangmanRankingUserNickName r <> " (" <> tshow (coerce @_ @Int $ hangmanRankingUserId r) <> ") "
+  <> tshowfloat (hangmanRankingTotalPP r) <> "pp"
+  <> " acc:" <> tshowfloat (1 - fromIntegral (hangmanRankingTotalMiss r) / fromIntegral (hangmanRankingTotalGuess r))
   <> " pc:" <> tshow (hangmanRankingPassCount r) <> "/" <> tshow (hangmanRankingPlaycount r)
 
 tshowfloat :: Double -> Text

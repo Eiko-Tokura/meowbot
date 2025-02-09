@@ -108,7 +108,7 @@ type SystemError    mods = UList ModuleError    mods
 type SystemEvent    mods = UList ModuleEvent    mods
 
 -- | Specifies that the module can load after mods are loaded
--- in practice we could use 
+-- in practice we could use
 -- instance SomeModuleWeNeed `In` mods => Loadable mods SomeModuleToLoad
 class Loadable mod mods where
   initModule  :: ModuleInitData mod -> Eff mods (Either (ModuleError mod) (ModuleRead mod, ModuleState mod))
@@ -171,7 +171,7 @@ instance (Module mod, System mods, Loadable mod mods) => System (mod ': mods) wh
           Left es                -> return $ Left $ UTail es
       Left es -> return $ Left $ UTail es
   {-# INLINE initAllModules #-}
-  
+
   beforeSystem = do
     embedEff $ beforeSystem @mods
     beforeEvent @mod
@@ -229,7 +229,7 @@ instance Module Database where
 instance Logger `In` mods => Loadable Database mods where
   initModule (DatabaseInitData path migration poolSize) = do
     logger <- askLoggerIO
-    pool <- liftIO $ runLoggingT 
+    pool <- liftIO $ runLoggingT
       ( do
           pool <- createSqlitePool path poolSize
           runMigration migration `runSqlPool` pool

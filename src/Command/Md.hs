@@ -74,7 +74,7 @@ sendIOeToChatIdMdAsync (_, cid, _, mid, _) ioess = async $ do
       return [ baSendToChatId cid mdcq ]
     Left err -> return $ do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
-   where ioe_ess = do 
+   where ioe_ess = do
           res <- ioess
           mdcq <- turnMdCQCode (content res)
           return (res, mdcq)

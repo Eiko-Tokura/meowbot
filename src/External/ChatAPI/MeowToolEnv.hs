@@ -25,7 +25,7 @@ newtype MeowToolEnv r mods a = MeowToolEnv
         )
         (LoggingT IO)
         a
-  } deriving newtype 
+  } deriving newtype
     ( Functor, Applicative, Monad, MonadUnliftIO, MonadIO
     , MonadReader
         ( ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))

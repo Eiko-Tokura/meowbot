@@ -48,7 +48,7 @@ sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] []
 -- | send message to a chat id, recording the message as reply in meta message (optional in Maybe MessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
 -- will insert the message into the history.
-meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) 
+meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
   => ChatId            -- ^ chat id to send to
   -> Maybe MessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message

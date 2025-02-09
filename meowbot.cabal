@@ -75,7 +75,7 @@ library meowbot-lib
     -- .hs or .lhs file containing the Main module.
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O1 -threaded -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O1 -threaded -j8 -fexpose-all-unfoldings
     -- -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=512 -finfo-table-map -fdistinct-constructor-tables -j8
 
     -- Modules included in this executable, other than Main.

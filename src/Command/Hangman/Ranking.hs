@@ -27,8 +27,8 @@ updateTotalPP uid mnick = do
   rank <- fmap (+1) . runDB $ count [HangmanRankingTotalPP >. totalPP, HangmanRankingUserId !=. uid]
   let pc = length listScores
       pass = length $ filter (completedPlay . hangmanRecordToState . entityVal) listScores
-      accPairs@(totalMiss, totalGuess) 
-        = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0) 
+      accPairs@(totalMiss, totalGuess)
+        = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0)
         $ accuracyPair . hangmanRecordToState . entityVal <$> listScores
   runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc)
           ( [ HangmanRankingTotalPP    =. totalPP
@@ -45,7 +45,7 @@ updateTotalPP uid mnick = do
 recalculateAllScores :: Meow ()
 recalculateAllScores = do
   allScores <- runDB $ selectList [] [Desc HangmanRecordId]
-  let newAllScores = (\score -> 
+  let newAllScores = (\score ->
         let scoreRec = entityVal $ score
             state = hangmanRecordToState scoreRec
         in (scoreRec { hangmanRecordScore = Just $ hangmanScoring state }, entityKey score)
@@ -73,7 +73,7 @@ greedyGrouping groupSize l =
                                  | otherwise     = y : mergeBySum (x:xs) ys
 
 getMaxSumGroup :: Int -> [Double] -> ([Double], (Double, [Double]), [Double])
-getMaxSumGroup groupSize l = maximumBy (comparing (\(_,(s,_),_) -> s)) $ 
+getMaxSumGroup groupSize l = maximumBy (comparing (\(_,(s,_),_) -> s)) $
   [ (left, (sum group, group), right) | (left, rest) <- zip (inits l) (tails l)
                          , let group = take groupSize rest
                                right = drop groupSize rest

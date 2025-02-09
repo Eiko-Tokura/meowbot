@@ -31,7 +31,6 @@ import qualified Data.ByteString.Lazy as BL
 import GHC.Generics (Generic)
 import Control.DeepSeq
 import External.ChatAPI.Tool
-import System.Timeout
 
 import Parser.Run
 
@@ -93,7 +92,7 @@ chatSettingAlternative mnew def = ChatSetting
 class GetMessage a where
   getMessage :: a -> Either Text Message
 
-class 
+class
   ( ToJSON (ModelDependent model ChatRequest)
   , FromJSON (ChatCompletionResponse model)
   , GetMessage (ChatCompletionResponse model)
@@ -147,8 +146,8 @@ data Choice = Choice
   , finish_reason :: Text
   } deriving (Show, Generic)
 
-data ChatCompletionResponseOllama = ChatCompletionResponseOllama 
-  { ollamaResponse :: Message 
+data ChatCompletionResponseOllama = ChatCompletionResponseOllama
+  { ollamaResponse :: Message
   --, ollamaDoneReason :: Text
   }
   deriving (Show)
@@ -203,10 +202,10 @@ instance FromJSON Message where
       _           -> error "Invalid role in message"
 
 parseThinking :: Text -> (Maybe Text, Text)
-parseThinking ct = maybe (Nothing, ct) 
+parseThinking ct = maybe (Nothing, ct)
   (\(think, content) -> if T.null (T.strip think) then (Nothing, content) else (Just think, content))
   $ runParser
-    ( string "<think>" 
+    ( string "<think>"
     *> ( (,)
           <$> (manyTill' (string "</think>") getItem <* (string "</think>" >> many spaceOrEnter))
           <*> many' getItem
@@ -276,7 +275,7 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     , "messages" .= map (ModelDependent @(OpenAI a)) (messages chatReq)
     , "temperature" .= temperature chatReq
     ]
-    <> [ "stream" .= stream | Just stream <- [stream chatReq] ] 
+    <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
@@ -284,7 +283,7 @@ instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
     , "messages" .= map (ModelDependent @(DeepSeek a)) (messages chatReq)
     , "temperature" .= temperature chatReq
     ]
-    <> [ "stream" .= stream | Just stream <- [stream chatReq] ] 
+    <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
     -- <> [ "tools" .= tls | Just tls <- [tools chatReq] ]
 
 -- | Ollama compatible format
@@ -541,7 +540,7 @@ data Skipped = Skipped
 handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m (Either Skipped Message)
 handleToolCall toolCallName args md = do
   -- Find matching tool
-  output <- 
+  output <-
     case pickConstraint (Proxy @(ToolClass m)) (Proxy @ts) ((== toolCallName) . toolName (Proxy @m)) of
       Just toolCont -> toolCont $ \tool -> do
         toolOutput <- lift $ runExceptT $ do
@@ -552,7 +551,7 @@ handleToolCall toolCallName args md = do
           _ -> return $ Right $ wrapToolOutput toolOutput
         -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
-  
+
   case output of
     Left Skipped -> return $ Left Skipped
     Right output -> do

@@ -18,7 +18,7 @@ import Utils.Persist
 import Data.PersistModel
 import External.ChatAPI hiding (SystemMessage)
 
-modelsInUse :: CFList ChatAPI Proxy 
+modelsInUse :: CFList ChatAPI Proxy
   [ Local    DeepSeekR1_14B
   , Local    DeepSeekR1_32B
   , Local    Qwen2_5_32B
@@ -62,7 +62,7 @@ catSetParser = MP.headCommand "cat-" >> do
     , MP.string "view"  >> return View
     ]
   MP.spaces
-  range <- asum 
+  range <- asum
     [ MP.string "default" *> return Default <* MP.spaces
     , MP.string "perchat" *> MP.spaces *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
     , MP.string "perchat" *> return PerChat <* MP.spaces
@@ -100,7 +100,7 @@ helpCatSet = T.intercalate "\n" $
   , "  only Admin can change 'default' and 'perchat <chatid>' settings"
   , ""
   , "* item is one of "
-  , "    displayThinking :: Bool" 
+  , "    displayThinking :: Bool"
   , "    defaultModel :: ChatModel"
   , "    defaultModelSuper :: ChatModel"
   , "    systemMessage :: Text"
@@ -164,7 +164,7 @@ catSet (Set PerChat item) = do
 catSet (Set (PerChatWithChatId cid) item) = do
   botname <- query
   (_, cid', uid, _, _) <- MaybeT $ getEssentialContent <$> query
-  _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void 
+  _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void
        <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
   lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] >>= \case
     True -> return ()
@@ -204,7 +204,7 @@ catSet (Set (PerChatWithChatId cid) item) = do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
 
-catSet (UnSet range item) = 
+catSet (UnSet range item) =
   case item of
     DisplayThinking      _ -> catSet (Set range $ DisplayThinking Nothing)
     DefaultModel         _ -> catSet (Set range $ DefaultModel Nothing)

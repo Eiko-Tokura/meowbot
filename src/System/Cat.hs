@@ -77,7 +77,7 @@ allInitDataG  = CommandInitDataG   :** AsyncInitDataG :** LogDatabaseInitDataG "
 
 allInitDataL :: [ProxyFlag] -> AllModuleInitDataL Mods
 allInitDataL pf =   CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL
-                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] 
+                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
                 :** ConnectionManagerInitDataL :** FNil
 
 runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()
@@ -231,8 +231,8 @@ loadSavedDataDB botName glob = do
   commandRulesDB       <- fmap (map entityVal) . lift $ runSqlPool (selectList [CommandRuleDBBotName       ==. maybeBotName botName] []) pool
   savedAdditionalDatas <- fmap (map entityVal) . lift $ runSqlPool (selectList [SavedAdditionalDataBotName ==. maybeBotName botName] []) pool
   bookDBs              <- fmap (map entityVal) . lift $ runSqlPool (selectList [] []) pool
-  let 
-      chatIds_chatSettings = 
+  let
+      chatIds_chatSettings =
         [( botSettingPerChatChatId c, ChatSetting
           { systemMessage      = SystemMessage <$> botSettingPerChatSystemMessage c
           , systemTemp         = botSettingPerChatSystemTemp c
@@ -245,8 +245,8 @@ loadSavedDataDB botName glob = do
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
       commandRules         = [commandRuleDBCommandRule c | c <- commandRulesDB]
       savedAdditionalData  = map (runPersistUseShow . savedAdditionalDataAdditionalData) savedAdditionalDatas :: [Saved AdditionalData]
-      books = 
-        [ Book 
+      books =
+        [ Book
           { book_name    = bookDBBookName b
           , book_pdfPath = bookDBBookPdfPath b
           , book_pages   = bookDBBookPages b

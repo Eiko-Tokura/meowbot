@@ -52,7 +52,7 @@ instance ToJSON Function where
     [ "name"        .= name f
     , "description" .= description f
     --, "parameters"  .= object
-      
+
     ]
 
 instance ToJSON Parameter where

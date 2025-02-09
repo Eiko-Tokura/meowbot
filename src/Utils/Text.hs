@@ -92,11 +92,11 @@ tlshow = TL.pack . show
 class (Semigroup t, IsString t) => ToText a t where
   toText :: a -> t
 
-instance ToText Text Text where 
+instance ToText Text Text where
   toText = id
   {-# INLINE toText #-}
 
-instance ToText LazyText LazyText where 
+instance ToText LazyText LazyText where
   toText = id
   {-# INLINE toText #-}
 

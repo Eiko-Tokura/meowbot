@@ -253,7 +253,7 @@ instance EmbedSubList '[] xs => EmbedSubList '[] (x : xs) where
   embedSubList _ = UTail $ embedSubList @'[] @xs UNil
   {-# INLINE embedSubList #-}
 
--- (x:xs) (y:ys) <= 
+-- (x:xs) (y:ys) <=
 --
 
 instance (EmbedSubList ys xs, In y xs) => EmbedSubList (y : ys) xs where
