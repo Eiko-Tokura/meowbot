@@ -29,7 +29,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead wh
      , StringP "time" "the time the note was last modified"
      ])
   data ToolError NoteToolRead = NoteReadError Text deriving Show
-  toolName _ _ = "NoteToolRead"
+  toolName _ _ = "note_read"
   toolDescription _ _ = "Get note content by note_id"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
     botname <- lift getBotName
@@ -41,13 +41,13 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead wh
 
 instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd where
   type ToolInput NoteToolAdd = ParamToData (ObjectP0 --"note" "the note to add"
-    '[ StringP "title" "the note title"
-     , StringP "content" "the note content"
+    '[ StringP "title" "the note title should be informative"
+     , StringP "content" "the note content, you can include more detailed information here"
      ])
   type ToolOutput NoteToolAdd = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the added note"])
   data ToolError NoteToolAdd = NoteAddError Text deriving Show
-  toolName _ _ = "NoteToolAdd"
-  toolDescription _ _ = "Add a note"
+  toolName _ _ = "note_add"
+  toolDescription _ _ = "Add a note, You can use the tools to take notes if you want to memorize things that people teach you, the title will be added to your system prompt."
   toolHandler _ _ ((StringT title) :%* (StringT content) :%* ObjT0Nil) = do
     botname <- lift getBotName
     cid <- effectEWith' (const $ NoteAddError "no cid found") $ getCid
@@ -74,7 +74,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace
      ])
   type ToolOutput NoteToolReplace = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the replaced note"])
   data ToolError NoteToolReplace = NoteReplaceError Text deriving Show
-  toolName _ _ = "NoteToolReplace"
+  toolName _ _ = "note_replace"
   toolDescription _ _ = "Replace a note"
   toolHandler _ _ ((IntT note_id) :%* (StringT title) :%* (StringT content) :%* ObjT0Nil) = do
     botname <- lift getBotName
@@ -95,7 +95,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete 
   type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the note to delete"])
   type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the deleted note"])
   data ToolError NoteToolDelete = NoteDeleteError Text deriving Show
-  toolName _ _ = "NoteToolDelete"
+  toolName _ _ = "note_delete"
   toolDescription _ _ = "Delete a note"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
     botname <- lift getBotName

@@ -96,7 +96,7 @@ commandChat = BotCommand Chat $ botT $ do
           , fmap content . systemMessage =<< lookup cid (chatSettings sd)
           , globalSysMsg $ botmodules
           , botSettingSystemMessage =<< botSetting
-          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants. You can use the tools to take notes if you want to memorize things, skip responses if there isn't anything interesting to say."
+          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
           ]
         )
         ( asum
@@ -136,7 +136,9 @@ commandChat = BotCommand Chat $ botT $ do
       toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
         --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
         [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
-        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg) <> Just ": "
+        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
+        , fmap (\t -> "<group-nickname>" <> t <> "</group-nickname>") (senderCard =<< sender cqmsg)
+        , Just ": "
         , message cqmsg -- use raw message instead
         ]
       updateChatState :: AllChatState -> AllChatState
