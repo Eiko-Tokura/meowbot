@@ -19,6 +19,7 @@ import Module.CommandInstance
 import Module.AsyncInstance
 import Module.LogDatabase
 import Module.ProxyWS
+import Module.ConnectionManager
 
 import System.Directory
 import Data.Coerce
@@ -72,11 +73,12 @@ type R = MeowData -- ^ the r parameter
 
 allInitDataG :: AllModuleInitDataG Mods
 allInitDataG  = CommandInitDataG   :** AsyncInitDataG :** LogDatabaseInitDataG "meowbot.db"
-              :** ProxyWSInitDataG :** FNil
+              :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
 
 allInitDataL :: [ProxyFlag] -> AllModuleInitDataL Mods
 allInitDataL pf =   CommandInitDataL :** AsyncInitDataL :** LogDatabaseInitDataL
-                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] :** FNil
+                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf] 
+                :** ConnectionManagerInitDataL :** FNil
 
 runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()
 runBots initglobs bots = do

@@ -397,13 +397,24 @@ instance FromJSON ToolCallPair where
     <*> o .: "args"
 
 -- | Parse potential tool call from message content
-parseToolCall :: Text -> Maybe ToolCallPair
-parseToolCall txt = decode (encodeUtf8LBS txt) <|> (parseToolCallText txt)
+parseToolCall :: Text -> Maybe (Maybe Text, ToolCallPair)
+parseToolCall txt 
+  =   fmap (Nothing, ) (decode (encodeUtf8LBS txt)) 
+  <|> (parseToolCallText txt)
   where parseToolCallText txt
           | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":", "```json"]
              = let start = T.drop 7 $ T.dropWhile (/= '`') txt
                    mid = runParser (manyTill' (string "```") getItem <* string "```") start :: Maybe Text
-               in decode =<< encodeUtf8LBS <$> mid
+               in fmap (Nothing,) . decode =<< encodeUtf8LBS <$> mid
+          | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":"]
+             = let parse = runParser ((,) <$> manyTill' (string "{\"tool\":") getItem <*> (some' getItem <* end)) txt :: Maybe (Text, Text)
+               in do
+                (start, toolText) <- parse
+                let toolBS = encodeUtf8LBS toolText
+                decodedToolPair <- decode toolBS
+                case T.null (T.strip start) of
+                  True  -> return (Nothing, decodedToolPair)
+                  False -> return (Just start, decodedToolPair)
           | otherwise = Nothing
 
 -- | A unique identifier for tool call tracking
@@ -429,8 +440,8 @@ appendToolPrompts clist sep
     ( T.unlines
       [ sep
       , "## Available Tools"
-      , "If you need to use tool, format output as JSON with 'tool' and 'args' fields, no other text."
-      , "Example: {\"tool\": \"weather\", \"args\": {\"city\": \"Paris\"}}"
+      , "If you need to use tool, format output as JSON with 'tool' and 'args' fields, no other text. Tool calls cannot be mixed with other text."
+      , "Example output: {\"tool\": \"time\", \"args\": {\"timezone\": 8}}"
       , sep
       , "### Tools List"
       , ""

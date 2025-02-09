@@ -5,6 +5,7 @@ import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
 import System
 import Data.Kind
+import Data.HList (In, getF)
 import Data.Bifunctor
 import MeowBot.BotStructure
 import Data.Time.Clock
@@ -74,6 +75,10 @@ instance MonadIO m => MonadReadable UTCTime (MeowT r mods m) where
 
 instance Monad m => MonadReadable (AllModuleGlobalStates mods) (MeowT r mods m) where
   query = asks (fst . snd)
+  {-# INLINE query #-}
+
+instance (Monad m, mod `In` mods) => MonadReadable (ModuleGlobalState mod) (MeowT r mods m) where
+  query = queries (getF @mod @mods)
   {-# INLINE query #-}
 
 instance Monad m => MonadReadable AllData (MeowT r mods m) where

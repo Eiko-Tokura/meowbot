@@ -6,17 +6,21 @@ import Command.Poll
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.ChatAPI
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS
 
-main = defaultMain tests
+main = do
+  man <- newManager tlsManagerSettings
+  defaultMain (tests man)
 
-tests :: TestTree
-tests = testGroup "Tests"
+tests :: Manager -> TestTree
+tests man = testGroup "Tests"
   [ testGroup "Legacy Tests"
     [ testCase "Saved Additional" testSavedAdditional
     , testCase "Poll Parser" pollParserTest
     ]
   , testTools
-  , testChatAPI
+  , testChatAPI man
   ]
   -- testSavedAdditional
   -- pollParserTest

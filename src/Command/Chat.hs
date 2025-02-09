@@ -25,6 +25,7 @@ import Control.Monad.Trans.ReaderState
 import Command.Cat.CatSet
 import Command.Hangman
 
+import Module.ConnectionManager
 import Data.PersistModel
 import Data.Proxy
 import Data.HList
@@ -79,6 +80,7 @@ commandChat = BotCommand Chat $ botT $ do
   -- whole_chat :: WholeChat <- query
   botmodules <- query
   botname    <- query
+  ConnectionManagerModuleG man timeout <- query
   noteListing <- lift $ getNoteListing botname cid
   botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
   botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
@@ -92,7 +94,7 @@ commandChat = BotCommand Chat $ botT $ do
           , fmap content . systemMessage =<< lookup cid (chatSettings sd)
           , globalSysMsg $ botmodules
           , botSettingSystemMessage =<< botSetting
-          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after the comma) to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants."
+          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants. You can use the tools to take notes if you want to memorize things, skip responses if there isn't anything interesting to say."
           ]
         )
         ( asum
@@ -143,12 +145,13 @@ commandChat = BotCommand Chat $ botT $ do
             cs 
               { chatStatus = (chatStatus cs) 
                 { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
+                , chatStatusToolDepth = 0 -- ^ reset tool depth
                 }
               }
             s
           Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 [toUserMessage cqmsg]) MeowIdle) s
 
-      params = ChatParams False msys :: ChatParams ModelChat MeowTools
+      params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
       --notCatSet = isNothing $ MP.runParser catSetParser msg
 
@@ -189,7 +192,12 @@ commandChat = BotCommand Chat $ botT $ do
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus cid newMsgs newStatus
-            meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] (content $ last newMsgs)
+            meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 
+              (T.intercalate "\n---\n" . map content $ filter (\case
+                  AssistantMessage { pureToolCall = Just True } -> False
+                  ToolMessage {} -> False
+                  _ -> True
+              ) newMsgs)
 
   -- update busy status
   lift $ markMeow cid MeowBusy

@@ -17,6 +17,7 @@
 module System
   ( SystemT
   , Modules(..)
+  , moduleEnv
   , AllModuleLocalStates
   , AllModuleEarlyLocalStates
   , AllModuleGlobalStates
