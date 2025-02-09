@@ -85,6 +85,10 @@ library meowbot-lib
                    , Command.Cat
                    , Command.Cat.CatSet
                    , Command.Chat
+                   , Command.Hangman
+                   , Command.Hangman.Data
+                   , Command.Hangman.Model
+                   , Command.Hangman.Ranking
                    , Command.Help
                    , Command.Md
                    , Command.Poll
@@ -94,15 +98,11 @@ library meowbot-lib
                    , Command.SetSysMessage
                    , Command.Study
                    , Command.User
-                   , Command.Hangman.Model
-                   , Command.Hangman.Data
-                   , Command.Hangman.Ranking
-                   , Command.Hangman
+                   , Control.Monad.Effect
+                   , Control.Monad.ExceptionReturn
                    , Control.Monad.IOe
                    , Control.Monad.MaybeHints
                    , Control.Monad.Readable
-                   , Control.Monad.Effect
-                   , Control.Monad.ExceptionReturn
                    , Control.Monad.Trans.ReaderState
                    , Data.Additional
                    , Data.Additional.Default
@@ -113,11 +113,10 @@ library meowbot-lib
                    , Data.PersistModel
                    , Data.Template
                    , External.ChatAPI
-                   , External.ChatAPI.Tool
+                   , External.ChatAPI.Function
                    , External.ChatAPI.MeowTool
                    , External.ChatAPI.MeowToolEnv
-                   --, External.ChatAPI.Tool.Search
-                   , External.ChatAPI.Function
+                   , External.ChatAPI.Tool
                    , External.MarkdownImage
                    , External.ProxyWS
                    , MeowBot
@@ -127,31 +126,33 @@ library meowbot-lib
                    , MeowBot.CQCode
                    , MeowBot.CommandRule
                    , MeowBot.Data
-                   , MeowBot.GetInfo
                    , MeowBot.Data.Book
+                   , MeowBot.GetInfo
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Update
                    , Module
                    , Module.Async
                    , Module.AsyncInstance
-                   , Module.ConnectionManager
                    , Module.Command
                    , Module.CommandInstance
+                   , Module.ConnectionManager
                    , Module.LogDatabase
                    , Module.ProxyWS
                    , Probability.Foundation
                    , System
                    , System.Cat
-                   , System.Meow
                    , System.General
                    , System.Logging
-                   , Utils.ByteString
-                   , Utils.Persist
-                   , Utils.Logging
-                   , Utils.RunDB
+                   , System.Meow
                    , Utils.Base64
+                   , Utils.ByteString
+                   , Utils.Logging
+                   , Utils.Maybe
+                   , Utils.Persist
+                   , Utils.RunDB
                    , Utils.Text
+                   --, External.ChatAPI.Tool.Search
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:

@@ -32,6 +32,7 @@ import Data.Proxy
 import Data.HList
 import Data.Coerce
 import Utils.RunDB
+import Utils.Maybe
 import Utils.Persist
 import Data.Additional.Default
 
@@ -243,11 +244,3 @@ determineIfReply _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
   then pureMaybe Nothing
   else pureMaybe $ Just ()
 determineIfReply _ _ _ _ _ _ = empty
-
-boolMaybe :: Bool -> Maybe ()
-boolMaybe True  = Just ()
-boolMaybe False = Nothing
-
-invertMaybe_ :: Maybe a -> Maybe ()
-invertMaybe_ Nothing = Just ()
-invertMaybe_ _       = Nothing
