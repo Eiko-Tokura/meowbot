@@ -127,6 +127,7 @@ library meowbot-lib
                    , MeowBot.CQCode
                    , MeowBot.CommandRule
                    , MeowBot.Data
+                   , MeowBot.GetInfo
                    , MeowBot.Data.Book
                    , MeowBot.MetaMessage
                    , MeowBot.Parser

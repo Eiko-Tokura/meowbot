@@ -9,7 +9,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import External.ChatAPI hiding (SystemMessage)
 import qualified External.ChatAPI as API
-import External.ChatAPI.Tool
+-- import External.ChatAPI.Tool
 import MeowBot.Parser (Parser, Chars)
 import Parser.Definition (IsStream)
 import qualified MeowBot.Parser as MP

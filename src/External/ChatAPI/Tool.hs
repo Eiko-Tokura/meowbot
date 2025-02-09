@@ -348,6 +348,10 @@ type family ParamToData p :: Type where
   ParamToData (ObjectP n e l) = ObjectT n e l
   ParamToData (ObjectP0 l)    = ObjectT0 l
 
+
+toolErrorHint :: Text
+toolErrorHint = "Tool Returned Error: "
+
 -- | A class for tools
 class
   ( ParamExplained (ToolInput a)
@@ -369,7 +373,7 @@ class
   toolHandlerTextError tm t i = ExceptT $ do
     runExceptT (toolHandler tm t i) >>= \case
       --Left someEx       -> return $ Left $ "Tool Unhandled Exception: " <> toText someEx
-      Left err  -> return $ Left $ "Tool Returned Error: " <> toText err
+      Left err  -> return $ Left $ toolErrorHint <> toText err
       Right val -> return $ Right val
 
   jsonToInput :: Proxy m -> Proxy a -> Value -> Either Text (ToolInput a)

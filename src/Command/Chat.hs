@@ -4,6 +4,7 @@ module Command.Chat where
 import Command
 import Command.Cat (catParser)
 import MeowBot
+import MeowBot.GetInfo
 import System.General (MeowT)
 import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI
@@ -230,14 +231,14 @@ mergeChatStatus cid newMsgs newStatus = do
 
 determineIfReply :: Double -> ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
 determineIfReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
-  chance <- getUniformR (0, 1 :: Double)
-  liftIO $ putTextLn $ "Chance: " <> tshow chance
+  chance  <- getUniformR (0, 1 :: Double)
+  lift $ $(logDebug) $ "Chance: " <> tshow chance
+  replied <- lift $ boolMaybe <$> beingReplied
+  ated    <- lift $ boolMaybe <$> beingAt
   let chanceReply = boolMaybe $ chance <= prob
-  let parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chanceReply <|> parsed
+      parsed = void $ MP.runParser (catParser bn cs) msg
+  pureMaybe $ chanceReply <|> parsed <|> replied <|> ated
 determineIfReply _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
-  chance <- getUniformR (0, 1 :: Double)
-  liftIO $ putTextLn $ "Chance (not used): " <> tshow chance
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()

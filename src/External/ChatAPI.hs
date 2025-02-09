@@ -548,7 +548,7 @@ handleToolCall toolCallName args md = do
           input  <- ExceptT $ pure (jsonToInput (Proxy @m) tool args          )
           toolHandlerTextError (Proxy @m) tool input
         case toolOutput of
-          Left "SkipOutput" -> return $ Left Skipped
+          Left "Tool Returned Error: SkipOutput" -> return $ Left Skipped
           _ -> return $ Right $ wrapToolOutput toolOutput
         -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
