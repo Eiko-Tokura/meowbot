@@ -10,6 +10,7 @@ module MeowBot.Parser
   , cqcodeExceptFace
   , cqother
   , cqcodeLenient, cqcodeFix
+  , filterOutputTags
   , htmlCodes
   , item
   , commandSeparator, commandSeparator2
@@ -144,6 +145,13 @@ cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . contSecond) $ many $
 cqcodeFix :: Text -> Text
 cqcodeFix x = fromMaybe x $ runParser cqcodeFixP x
 {-# INLINE cqcodeFix #-}
+
+filterOutputTags :: [Text] -> Text -> Text
+filterOutputTags tags x = fromMaybe x $ flip runParser x $ do
+  many $ asum [ tag (T.unpack t) | t <- tags ]
+  many' item
+  where tag s = string "<" >> string s >> string ">" >> manyTill (string "</" >> string s >> string ">") item >> (string "</" >> string s >> string ">")
+{-# INLINABLE filterOutputTags #-}
 
 cqmsg :: (Chars sb) => Parser sb Char MetaMessage
 cqmsg = do

@@ -197,7 +197,7 @@ commandChat = BotCommand Chat $ botT $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
         Right newMsgs' -> do
-          let newMsgs = map (mapMessage MP.cqcodeFix) newMsgs'
+          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "group-nickname"] . MP.cqcodeFix)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus cid newMsgs newStatus
