@@ -51,6 +51,7 @@ doBotAction :: Connection -> BotAction -> Meow ()
 doBotAction conn (BASendPrivate uid txt) = query >>= MeowT . lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)   = query >>= MeowT . lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)      = MeowT . lift $ deleteMsg conn mid
+doBotAction conn (BAActionAPI af)           = query >>= MeowT . lift . actionAPI conn . ActionForm af . Just . pack . show . message_number
 doBotAction _    (BAAsync act)      = do
   $(logDebug) "BAAsync put into set"
   modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)

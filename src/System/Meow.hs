@@ -140,6 +140,8 @@ data BotAction
       Text       -- ^ Text, the message to send
   | BARetractMsg
       MessageId  -- ^ MessageId, the message to delete (retract)
+  | BAActionAPI
+      ActionAPI  -- ^ General actionAPI, the action to perform
   | BAAsync
       (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
   | BAPureAsync
