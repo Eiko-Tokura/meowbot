@@ -531,5 +531,5 @@ instance MonadIO m => ToolClass m SkipTool where
   type ToolOutput SkipTool = ParamToData (StringP "skip" "Skipped")
   data ToolError  SkipTool = SkipOutput deriving (Show)
   toolName _ _ = "skip"
-  toolDescription _ _ = "You can skip response using the skip tool, if you think there isn't anything interesting to say."
+  toolDescription _ _ = "You can skip response using the skip tool, if you think there isn't anything interesting to say. Example output: {\"tool\": \"skip\", \"args\": {}}"
   toolHandler _ _ ObjT0Nil = ExceptT $ return $ Left SkipOutput

@@ -42,7 +42,7 @@ type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
-maxMessageInState = 27
+maxMessageInState = 30
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
