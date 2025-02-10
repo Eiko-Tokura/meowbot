@@ -47,7 +47,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd whe
   type ToolOutput NoteToolAdd = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the added note"])
   data ToolError NoteToolAdd = NoteAddError Text deriving Show
   toolName _ _ = "note_add"
-  toolDescription _ _ = "Add a note, You can use the tools to take notes if you want to memorize things that people teach you, the title will be added to your system prompt."
+  toolDescription _ _ = "Add a note, You can use the note tools to take notes if you want to memorize things that people teach you, or you learn about the people more. The title will be added to your system prompt which becomes part of your memory."
   toolHandler _ _ ((StringT title) :%* (StringT content) :%* ObjT0Nil) = do
     botname <- lift getBotName
     cid <- effectEWith' (const $ NoteAddError "no cid found") $ getCid
