@@ -1,6 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia, DerivingStrategies #-}
 {-# LANGUAGE TypeApplications, AllowAmbiguousTypes, TypeFamilies #-}
 
 module External.ChatAPI
@@ -438,6 +438,8 @@ newtype ChatT md tools m a = ChatT { runChatT :: ExceptT Text (ReaderStateT (Cha
   deriving newtype (Functor, Applicative, Monad, MonadIO)
   deriving (MonadState ChatStatus, MonadReader (ChatParams md tools)) via ExceptT Text (ReaderStateT (ChatParams md tools) ChatStatus m)
 
+deriving newtype instance MonadLogger m => MonadLogger (ChatT md tools m)
+
 instance MonadTrans (ChatT md tools) where
   lift = ChatT . lift . lift
 
@@ -460,7 +462,7 @@ agent = do
       --liftIO $ putStrLn "Fetching chat completion response..."
       response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
       amsg' <- liftE . pureE $ getMessage response
-      liftIO $ printMessage amsg'
+      $(logInfo) $ showMessage amsg'
       case parseToolCall (content amsg') of
         Nothing -> return $ [amsg']
         Just (Nothing, ToolCallPair toolName args) -> do
@@ -471,7 +473,7 @@ agent = do
           case skip_toolmsg of
             Left Skipped -> liftE $ throwE "Skipped"
             Right toolmsg -> do
-              liftIO $ printMessage toolmsg
+              $(logInfo) $ showMessage toolmsg
               modify $ \st -> st
                 { chatStatusToolDepth      = chatStatusToolDepth st + 1
                 , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
@@ -486,7 +488,7 @@ agent = do
           case skip_toolmsg of
             Left Skipped -> liftE $ throwE "Skipped"
             Right toolmsg -> do
-              liftIO $ printMessage toolmsg
+              $(logInfo) $ showMessage toolmsg
               modify $ \st -> st
                 { chatStatusToolDepth      = chatStatusToolDepth st + 1
                 , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
