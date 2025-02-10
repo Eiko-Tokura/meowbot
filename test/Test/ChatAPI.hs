@@ -3,10 +3,11 @@ module Test.ChatAPI where
 import Control.Monad.Except
 import External.ChatAPI
 import External.ChatAPI.Tool
-import Utils.Text
+import Network.HTTP.Client (Manager)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Network.HTTP.Client (Manager)
+import Utils.Logging
+import Utils.Text
 
 timeoutHttp :: Int
 timeoutHttp = 30 * 1000000
@@ -26,7 +27,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (Local DeepSeekR1_14B) '[]
-        res <- runExceptT $ messageChat params [UserMessage "你好"]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r  -> return $ unpack r
@@ -44,7 +45,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (DeepSeek DeepSeekChat) '[]
-        res <- runExceptT $ messageChat params [UserMessage "你好"]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -62,7 +63,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[]
-        res <- runExceptT $ messageChat params [UserMessage "你好"]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -80,7 +81,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
-        res <- runExceptT $ messageChat params 
+        res <- runStdoutLoggingT . runExceptT $ messageChat params 
           [ UserMessage "What is the time now?"
           , AssistantMessage "{\"tool\": \"time\", \"args\": {\"timezone\": 8}}" Nothing Nothing
           , UserMessage "{\"tool_output\": \"2025-02-09 13:05:55.689695563 UTC\"}"
@@ -102,7 +103,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
-        res <- runExceptT $ messagesChat params [UserMessage "现在几点了"]
+        res <- runStdoutLoggingT . runExceptT $ messagesChat params [UserMessage "现在几点了"]
         case res of
           Left err -> assertFailure $ "messagesChat failed: " ++ show err
           Right res -> mapM_ printMessage res

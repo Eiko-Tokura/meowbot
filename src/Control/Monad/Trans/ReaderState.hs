@@ -57,6 +57,10 @@ instance MonadLogger m => MonadLogger (ReaderStateT r s m) where
   monadLoggerLog loc src lvl msg = lift $ monadLoggerLog loc src lvl msg
   {-# INLINE monadLoggerLog #-}
 
+instance MonadLoggerIO m => MonadLoggerIO (ReaderStateT r s m) where
+  askLoggerIO = lift askLoggerIO
+  {-# INLINE askLoggerIO #-}
+
 instance Monad m => MonadReader r (ReaderStateT r s m) where
   ask = ReaderStateT $ \r s -> return (r, s)
   {-# INLINE ask #-}

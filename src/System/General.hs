@@ -21,6 +21,7 @@ newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
 -- so avoid running long blocking operations in this monad, use async and staged actions instead.
 -- type System mods = SystemT () AllData mods (LoggingT IO) ()
 
+
 -- | The monad transformer that the bot runs in.
 newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
   { runMeowT ::
@@ -39,6 +40,8 @@ newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
     ( MonadReader ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
     , MonadState (AllModuleLocalStates mods, OtherData)
     ) via ReaderStateT ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r)) (AllModuleLocalStates mods, OtherData) (LoggingT m)
+
+deriving instance MonadIO m => MonadLoggerIO (MeowT r mods m)
 
 -----------------------------------------------------------------------
 instance MonadTrans (MeowT r mods) where

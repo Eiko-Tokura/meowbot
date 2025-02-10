@@ -1,5 +1,5 @@
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
 {-# LANGUAGE TypeApplications, AllowAmbiguousTypes, TypeFamilies #-}
 
@@ -17,6 +17,7 @@ import Control.Applicative
 import Control.Monad.Except
 import Control.Monad.ExceptionReturn
 import Control.Monad.Trans.ReaderState
+import Control.Monad.Logger
 import Network.HTTP.Client hiding (Proxy)
 import Data.Aeson as A
 import Data.Bifunctor
@@ -25,6 +26,7 @@ import Data.Text (Text, pack)
 import Data.HList
 import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.ByteString.Lazy as BL
@@ -345,16 +347,18 @@ getApiKeyByModel (OpenAI _)   apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
 getApiKeyByModel (DeepSeek _) apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
 getApiKeyByModel (Local _)    _      = NoAPIKeyRequired
 
-fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
+fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse manager _ apiKey model msg = do
   -- let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
   -- let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
   -- manager <- liftIO $ newManager customManagerSettings
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
   let requestBody = generateRequestBody @md @ts @m model msg --promptMessage prompt
-  liftIO $ putStrLn "------------------- Message Start -------------------"
-  liftIO $ mapM_ printMessage msg
-  liftIO $ putStrLn "------------------- Message End ---------------------"
+  $(logInfo) $ T.intercalate "\n" $
+    [ ""
+    , "------------------- Message Start -------------------" ]
+    <> map showMessage msg <>
+    [ "------------------- Message End ---------------------" ]
   -- liftIO $ putStrLn "------------------- Request Body -------------------"
   -- liftIO $ putStrLn $ "Request body = " <> show requestBody
   case getApiKeyByModel (chatModel @md) apiKey of
@@ -416,7 +420,7 @@ readApiKeyFile = ExceptT
   . try @SomeException
   $ read <$> readFile apiKeyFile
 
-simpleChat :: (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> ChatParams md ts -> String -> ExceptT Text m Text
+simpleChat :: (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> ChatParams md ts -> String -> ExceptT Text m Text
 simpleChat man timeOut model prompt = do
   apiKey <- readApiKeyFile
   result <- ExceptT $ fetchChatCompletionResponse man timeOut apiKey model [promptMessage prompt]
@@ -441,7 +445,7 @@ liftE :: Monad m => ExceptT Text m a -> ChatT md tools m a
 liftE = ChatT . ExceptT . lift . runExceptT
 
 -- | Enhanced message chat with tool handling
-agent :: (MonadIO m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
+agent :: (MonadIO m, MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
 agent = do
   params    <- ask
   prevMsgs  <- gets chatStatusMessages
@@ -491,22 +495,25 @@ agent = do
               ([amsg, toolmsg] <>) <$> agent
 
 printMessage :: Message -> IO ()
-printMessage (SystemMessage c)             = putStrLn $ "SystemMessage: "     <> T.unpack c
-printMessage (UserMessage c)               = putStrLn $ "UserMessage: "       <> T.unpack c
-printMessage (AssistantMessage c Nothing _)  = putStrLn $ "AssistantMessage: "  <> T.unpack c
-printMessage (AssistantMessage c (Just t) _) = putStrLn $ "AssistantThinking: " <> T.unpack t <> "\nAssistantMessage: " <> T.unpack c
-printMessage (ToolMessage c tm)            = putStrLn $ "ToolMessage: "       <> T.unpack c <> "\nToolMeta: "         <> show tm
+printMessage = TIO.putStrLn . showMessage
+
+showMessage :: Message -> Text
+showMessage (SystemMessage c)             = "SystemMessage: "     <> c
+showMessage (UserMessage c)               = "UserMessage: "       <> c
+showMessage (AssistantMessage c Nothing _)  = "AssistantMessage: "  <> c
+showMessage (AssistantMessage c (Just t) _) = "AssistantThinking: " <> t <> "\nAssistantMessage: " <> c
+showMessage (ToolMessage c tm)            = "ToolMessage: "       <> c <> "\nToolMeta: "         <> toText tm
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will only read apiKey from chat setting
-statusChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
+statusChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
 statusChat = runReaderStateT . runExceptT . runChatT $ agent
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will read apiKey from file if no api key is found in the chat setting
-statusChatReadAPIKey :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
+statusChatReadAPIKey :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> ChatStatus -> m (Either Text [Message], ChatStatus)
 statusChatReadAPIKey params st = do
   apiKey <- either (const Nothing) Just <$> liftIO (runExceptT readApiKeyFile)
   let params' = params { chatSetting = (chatSetting params) { systemApiKeys = systemApiKeys (chatSetting params) <|> apiKey } }
@@ -515,7 +522,7 @@ statusChatReadAPIKey params st = do
 -- | Tool calls are discarded in the output
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
-messageChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m Message
+messageChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m Message
 messageChat params prevMsg
   | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap (fmap last . fst) $ statusChat @md params (ChatStatus 0 0 prevMsg)
   | otherwise = do
@@ -527,7 +534,7 @@ messageChat params prevMsg
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
 -- returns the list of new messages: assistant tool calls followed by the final response
-messagesChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
+messagesChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
 messagesChat params prevMsg
   | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap fst $ statusChat @md params (ChatStatus 0 0 prevMsg)
   | otherwise = do

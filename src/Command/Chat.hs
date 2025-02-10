@@ -38,7 +38,7 @@ import Data.Additional.Default
 
 import Probability.Foundation
 
-type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete] -- empty for now
+type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete]
 type ModelChat = Local DeepSeekR1_14B
 
 maxMessageInState :: Int
@@ -132,12 +132,15 @@ commandChat = BotCommand Chat $ botT $ do
         , botSettingDefaultModel =<< botSetting
         ]
       newChatState = SM.empty :: AllChatState
+      nullify :: Maybe Text -> Maybe Text
+      nullify (Just s) | T.null s = Nothing
+      nullify x = x
       toUserMessage :: CQMessage -> Message
       toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
         --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
         [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
         , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
-        , fmap (\t -> "<group-nickname>" <> t <> "</group-nickname>") (senderCard =<< sender cqmsg)
+        , fmap (\t -> "<group-nickname>" <> t <> "</group-nickname>") (nullify $ senderCard =<< sender cqmsg)
         , Just ": "
         , message cqmsg -- use raw message instead
         ]
@@ -182,12 +185,14 @@ commandChat = BotCommand Chat $ botT $ do
       Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
         statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
 
+  logger <- askLoggerIO
+
   asyncAction <- liftIO $ do
     async $ do
       (eNewMsg, newStatus) <- ioeResponse
       case eNewMsg of
         Left err -> do
-          putTextLn $ "Error: " <> err
+          flip runLoggingT logger $ $(logError) $ "Error: " <> err
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []

@@ -3,12 +3,14 @@ module Utils.Logging
   , logThroughCont
   , logForkFinally
   , logCatch
+  , useLoggerInExceptT
   , unsafeInterleaveLoggingTIO
   ) where
 
 import Control.Monad.Logger
 import Control.Concurrent
 import Control.Exception
+import Control.Monad.Except
 import Control.Monad.IO.Class
 import System.IO.Unsafe (unsafeInterleaveIO)
 
@@ -33,3 +35,7 @@ logCatch action handler = do
 unsafeInterleaveLoggingTIO :: LoggingT IO a -> LoggingT IO a
 unsafeInterleaveLoggingTIO (LoggingT f) = LoggingT $ \r -> unsafeInterleaveIO $ f r
 {-# INLINE unsafeInterleaveLoggingTIO #-}
+
+useLoggerInExceptT :: Monad m => (Loc -> LogSource -> LogLevel -> LogStr -> IO ()) -> ExceptT e (LoggingT m) a -> ExceptT e m a
+useLoggerInExceptT logger = ExceptT . flip runLoggingT logger . runExceptT
+{-# INLINE useLoggerInExceptT #-}

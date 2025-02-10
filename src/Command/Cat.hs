@@ -30,6 +30,7 @@ import Data.Bifunctor
 
 import Utils.RunDB
 import Utils.Persist
+import Utils.Logging
 import Data.PersistModel
 import Module.ConnectionManager
 
@@ -107,6 +108,7 @@ commandCat = BotCommand Cat $ botT $ do
       lChatModelMsg <- if activeChat
         then pureMaybe Nothing  -- disable cat command when active chat, we will use chat command instead
         else pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
+      logger <- askLoggerIO
       let addManager md cs = ChatParams md cs man timeout
       let rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
           params = fst . head $ rlChatModelMsg   -- take the last message model
@@ -116,15 +118,19 @@ commandCat = BotCommand Cat $ botT $ do
             Left  paramCat      ->
               case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
                 Nothing ->
+                  useLoggerInExceptT logger $ do
                   messagesChat @ModelCat @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
+                  useLoggerInExceptT logger $ do
                   messagesChat @a @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
             Right paramSuperCat ->
               case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
                 Nothing ->
+                  useLoggerInExceptT logger $ do
                   messagesChat @ModelSuperCat @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
+                  useLoggerInExceptT logger $ do
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
       asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
