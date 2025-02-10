@@ -90,8 +90,13 @@ commandChat = BotCommand Chat $ botT $ do
       appendNoteListing t = case noteListing of
         Nothing       -> t
         Just noteList -> t <> "\n\n---\n\nNotes:\n" <> noteList
+      appendCQHelp :: Text -> Text
+      appendCQHelp t = t <> "\n\n---\n\n" <> T.intercalate "\n"
+        [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person who is replied to will be notified."
+        , "You can include '[CQ:at,id=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
+        ]
       msys = ChatSetting
-        ( fmap (API.SystemMessage . appendNoteListing) $ asum
+        ( fmap (API.SystemMessage . appendNoteListing . appendCQHelp) $ asum
           [ botSettingPerChatSystemMessage =<< botSettingPerChat
           , fmap content . systemMessage =<< lookup cid (chatSettings sd)
           , globalSysMsg $ botmodules
@@ -137,8 +142,8 @@ commandChat = BotCommand Chat $ botT $ do
       nullify x = x
       toUserMessage :: CQMessage -> Message
       toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
-        --[ (\t -> "<role>" <> t <> "</role>") . roleToText <$> senderRole sender
         [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
+        , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqmsg)
         , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
         , fmap (\t -> "<group-nickname>" <> t <> "</group-nickname>") (nullify $ senderCard =<< sender cqmsg)
         , Just ": "
@@ -197,7 +202,7 @@ commandChat = BotCommand Chat $ botT $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
         Right newMsgs' -> do
-          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "group-nickname"] . MP.cqcodeFix)) newMsgs'
+          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "group-nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus cid newMsgs newStatus
