@@ -310,6 +310,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingSystemAPIKeyDeepSeek = Nothing
       , botSettingActiveChat           = Just False
       , botSettingActiveProbability    = Nothing
+      , botSettingMaxMessageInState    = Nothing
       }
     insertMany_ [ BotSettingPerChat
       { botSettingPerChatBotName          = maybeBotName botname
@@ -324,6 +325,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingPerChatSystemAPIKeyDeepSeek = apiKeyDeepSeek =<< systemApiKeys chatSetting
       , botSettingPerChatActiveChat       = Nothing
       , botSettingPerChatActiveProbability = Nothing
+      , botSettingPerChatMaxMessageInState = Nothing
       } | (chatId, chatSetting) <- chatSettings sd]
     insertMany_ [ InUserGroup
       { inUserGroupBotName          = maybeBotName botname

@@ -427,9 +427,9 @@ simpleChat man timeOut model prompt = do
   return $ fromRight "" $ content <$> getMessage result
 
 data ChatStatus = ChatStatus
-  { chatStatusToolDepth      :: Int
-  , chatStatusTotalToolCalls :: Int
-  , chatStatusMessages       :: [Message]
+  { chatStatusToolDepth      :: !Int
+  , chatStatusTotalToolCalls :: !Int
+  , chatStatusMessages       :: ![Message]
   } deriving (Show, Eq, Generic, NFData)
 
 -- | Remember that ExceptT is right monad transformer, it composes inside out

@@ -41,8 +41,6 @@ import Probability.Foundation
 type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete]
 type ModelChat = Local DeepSeekR1_14B
 
-maxMessageInState :: Int
-maxMessageInState = 30
 -- we will have to mantain a ChatState for each chat
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
@@ -132,6 +130,10 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatActiveProbability =<< botSettingPerChat
         , botSettingActiveProbability =<< botSetting
         ] -- ^ probability to chat actively
+      maxMessageInState = fromMaybe 24 $ asum
+        [ botSettingPerChatMaxMessageInState =<< botSettingPerChat
+        , botSettingMaxMessageInState =<< botSetting
+        ] -- ^ maximum number of messages to keep in state
       modelCat = fromMaybe modelCat $ runPersistUseShow <$> asum
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
@@ -145,7 +147,7 @@ commandChat = BotCommand Chat $ botT $ do
         [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
         , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqmsg)
         , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
-        , fmap (\t -> "<group-nickname>" <> t <> "</group-nickname>") (nullify $ senderCard =<< sender cqmsg)
+        , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqmsg)
         , Just ": "
         , message cqmsg -- use raw message instead
         ]
@@ -202,10 +204,10 @@ commandChat = BotCommand Chat $ botT $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
         Right newMsgs' -> do
-          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "group-nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
+          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
-            mergeChatStatus cid newMsgs newStatus
+            mergeChatStatus maxMessageInState cid newMsgs newStatus
             meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)]
               (T.intercalate "\n---\n" . map content $ filter (\case
                   AssistantMessage { pureToolCall = Just True } -> False
@@ -227,8 +229,8 @@ markMeow cid meowStat = do
     Just chatState ->
       putType $ SM.insert cid chatState { meowStatus = meowStat } allChatState
 
-mergeChatStatus :: ChatId -> [Message] -> ChatStatus -> Meow ()
-mergeChatStatus cid newMsgs newStatus = do
+mergeChatStatus :: Int -> ChatId -> [Message] -> ChatStatus -> Meow ()
+mergeChatStatus maxMessageInState cid newMsgs newStatus = do
   allChatState <- getTypeWithDef SM.empty
   let chatState = SM.lookup cid allChatState
   case chatState of
