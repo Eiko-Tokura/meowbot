@@ -102,7 +102,7 @@ cqcodeExceptFace = do
   cqtype :: Text <- some' $ itemNot ','
   just ','
   case cqtype of
-    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int
+    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int <*> optMaybe ($(stringQ_ ",name=") >> T.pack <$> many item)
     "reply" -> $(stringQ_ "id=") >> CQReply <$> int
     "face"  -> zero
     str     -> cqother str
@@ -116,7 +116,7 @@ cqcodeLenient = do
   cqtype :: Text <- some' $ itemNot ','
   just ',' >> spaces0
   case cqtype of
-    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int
+    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int <*> optMaybe ($(stringQ_ ",name=") >> T.pack <$> many item)
     "reply" -> $(stringQ_ "id=") >> CQReply <$> int
     str     -> cqother str
   <* just ']'
@@ -124,22 +124,24 @@ cqcodeLenient = do
 
 -- | This function is used to fix inaccurate output of Meowmeow
 cqcodeFixP :: (Chars sb) => Parser sb Char Text
-cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . contSecond) $ many $ cqcodeLenient |+| getItem @Char
-  where contSecond :: [Either a Char] -> [Either a Text]
-        contSecond
-          = concat
-          . fmap (\case
-              l@(Left _:_)  -> [ Left x | Left x <- l ]
-              r@(Right _:_) -> [ Right $ packable [ c | Right c <- r ] ]
-              []            -> []
-            )
-          . groupBy
-              (\x y -> case (x, y) of
-                (Left _, Left _) -> True
-                (Right _, Right _) -> True
-                _ -> False
-              )
+cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . collectRightCharsText) $ many $ cqcodeLenient |+| getItem @Char
 {-# INLINE cqcodeFixP #-}
+
+collectRightCharsText :: [Either a Char] -> [Either a Text]
+collectRightCharsText 
+  = concat
+  . fmap (\case
+      l@(Left _:_)  -> [ Left x | Left x <- l ]
+      r@(Right _:_) -> [ Right $ packable [ c | Right c <- r ] ]
+      []            -> []
+    )
+  . groupBy
+      (\x y -> case (x, y) of
+        (Left _, Left _) -> True
+        (Right _, Right _) -> True
+        _ -> False
+      )
+{-# INLINE collectRightCharsText #-}
 
 -- | This function is used to fix inaccurate output of Meowmeow
 cqcodeFix :: Text -> Text
@@ -159,6 +161,7 @@ cqmsg = do
   return MetaMessage
     { onlyMessage = packable $ fromMaybe "" $ runParser htmlDecode $ rights leither
     , cqcodes = lefts leither
+    , mixedMessage = collectRightCharsText leither
     , replyTo = listToMaybe [id | CQReply id <- lefts leither]
     , metaMessageItems = []
     , additionalData = []

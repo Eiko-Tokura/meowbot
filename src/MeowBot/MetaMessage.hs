@@ -15,6 +15,7 @@ import External.ChatAPI (Message(..), ChatStatus(..))
 data MetaMessage = MetaMessage
   { onlyMessage :: Text
   , cqcodes :: [CQCode]
+  , mixedMessage :: [Either CQCode Text]
   , replyTo :: Maybe Int
   , metaMessageItems :: [MetaMessageItem]
   --, withChatSetting :: Maybe ChatSetting
@@ -34,6 +35,7 @@ generateMetaMessage :: Text -> [AdditionalData] -> [MetaMessageItem] -> MetaMess
 generateMetaMessage str adt items = MetaMessage
   { onlyMessage = str
   , cqcodes     = [cqcode | MCQCode cqcode <- items]
+  , mixedMessage = [Left cqcode | MCQCode cqcode <- items] ++ [Right str]
   , replyTo     = listToMaybe [mid | MReplyTo mid <- items]
   , metaMessageItems = items
   --, withChatSetting = listToMaybe [set | MChatSetting set <- items]

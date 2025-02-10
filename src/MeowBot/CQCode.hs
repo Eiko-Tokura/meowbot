@@ -16,7 +16,7 @@ import Utils.Base64
 import Utils.Persist
 
 data CQCode
-  = CQAt Int
+  = CQAt Int (Maybe Text)
   | CQReply Int
   | CQRecord Text
   | CQImage Text
@@ -28,7 +28,8 @@ data CQCode
 -- note: we should create a newtype like EscapedText or RawText to avoid mixing unescaped and escaped text
 
 embedCQCode :: CQCode -> Text
-embedCQCode (CQAt qq)     = "[CQ:at,qq=" <> pack (show qq) <> "]"
+embedCQCode (CQAt qq Nothing)     = "[CQ:at,qq=" <> pack (show qq) <> "]"
+embedCQCode (CQAt qq (Just name))     = "[CQ:at,qq=" <> pack (show qq) <> ",name=" <> name <> "]"
 embedCQCode (CQReply id)  = "[CQ:reply,id=" <> pack (show id) <> "]"
 embedCQCode (CQImage str) = "[CQ:image,file=file://" <> str <> "]"
 embedCQCode (CQImage64 str) = "[CQ:image,file=base64://" <> bsToText (runBase64 str) <> "]"

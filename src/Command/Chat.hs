@@ -31,6 +31,7 @@ import Data.PersistModel
 import Data.Proxy
 import Data.HList
 import Data.Coerce
+import MeowBot.CQCode
 import Utils.RunDB
 import Utils.Maybe
 import Utils.Persist
@@ -149,8 +150,33 @@ commandChat = BotCommand Chat $ botT $ do
         , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
         , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqmsg)
         , Just ": "
-        , message cqmsg -- use raw message instead
+        , selectedContent . mixedMessage <$> metaMessage cqmsg
         ]
+
+      selectedContent :: [Either CQCode Text] -> Text
+      selectedContent []                          = ""
+      selectedContent (Right t:rest)              = t <> selectedContent rest
+      selectedContent (Left (CQImage _):rest)     = "[CQ:image,url=<too_long>]" <> selectedContent rest
+      selectedContent (Left (CQRecord _):rest)    = "[CQ:record,url=<too_long>]" <> selectedContent rest
+      selectedContent (Left cq@(CQAt {}):rest)    = embedCQCode cq <> selectedContent rest
+      selectedContent (Left cq@(CQReply {}):rest) = embedCQCode cq <> selectedContent rest
+      selectedContent (Left cq@(CQOther "face" _):rest)     = embedCQCode cq <> selectedContent rest
+      selectedContent (Left cq@(CQOther "markdown" _):rest) = embedCQCode cq <> selectedContent rest
+      selectedContent (Left (CQOther "image" meta):rest)
+        = case (filter (flip elem ["summary"] . fst) meta) of
+            []       -> "[CQ:image,data=<unknown_data>]"
+            filtered -> embedCQCode (CQOther "image" filtered)
+        <> selectedContent rest
+      selectedContent (Left (CQOther "mface" meta):rest)
+        = case (filter (flip elem ["summary"] . fst) meta) of
+            []       -> "[CQ:mface,data=<unknown_data>]"
+            filtered -> embedCQCode (CQOther "mface" filtered)
+        <> selectedContent rest
+      selectedContent (Left (CQOther cqtype _):rest)
+        = "[CQ:" <> cqtype <> ",data=<unknown_data>]"
+        <> selectedContent rest
+      selectedContent (Left _:rest) = selectedContent rest
+
       updateChatState :: AllChatState -> AllChatState
       updateChatState s =
         let state = SM.lookup cid s in

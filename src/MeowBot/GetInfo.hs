@@ -13,7 +13,10 @@ beingAt :: Meow Bool
 beingAt = fmap (fromMaybe False) . runMaybeT $ do
   cqmsg  <- MaybeT $ queries (fmap cqcodes . metaMessage . getNewMsg)
   selfId <- MaybeT $ queries (fmap ((\(UserId uid) -> uid) . selfId) . selfInfo)
-  return $ not . null . filter (== CQAt selfId) $ cqmsg
+  return $ not . null . filter (\case
+      CQAt uid _ -> uid == selfId
+      _          -> False
+    ) $ cqmsg
 {-# INLINABLE beingAt #-}
 
 -- | Whether the newest message replies to the bot
