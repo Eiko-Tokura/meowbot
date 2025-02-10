@@ -192,9 +192,10 @@ data ActionAPI
     , setFriendAddRequestRemark :: Text
     }
   | SetGroupAddRequest
-    { setGroupAddRequestId      :: UserId
-    , setGroupAddRequestFlag    :: Flag
-    , setGroupAddRequestReason  :: Text
+    { setGroupAddRequestFlag         :: Flag
+    , setGroupAddRequestSubType      :: RequestGroupSubType
+    , setGroupAddRequestApprove      :: Bool
+    , setGroupAddRequestRefuseReason :: Maybe Text -- ^ only when you refuse
     }
   -- | GetFriendList
   deriving (Show, Eq, Read, Generic)
@@ -249,9 +250,12 @@ instance ToJSON ActionAPI where
     , "flag" .= flag
     , "remark" .= remark
     ]
-  toJSON (SetGroupAddRequest uid flag reason) = object
-    [ "user_id" .= uid
-    , "flag" .= flag
+  toJSON (SetGroupAddRequest flag subtype approve reason) = object
+    [ "flag" .= flag
+    , "approve" .= approve
+    , "sub_type" .= case subtype of
+        RequestGroupAdd    -> "add" :: Text
+        RequestGroupInvite -> "invite"
     , "reason" .= reason
     ]
 

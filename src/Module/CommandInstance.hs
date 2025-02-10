@@ -141,4 +141,10 @@ handleRequestEvent conn str cqmsg = do
       $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
       $(logInfo) $ " -> Approving the request."
       lift . lift $ actionAPI conn $ ActionForm (SetFriendAddRequest uid flag "") Nothing
+    Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> void $ runMaybeT $ do
+      gid <- MaybeT $ return $ groupId cqmsg
+      uid <- MaybeT $ return $ userId cqmsg
+      $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
+      $(logInfo) $ " -> Approving the request."
+      lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing 
     _ -> return ()
