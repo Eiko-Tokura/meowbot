@@ -50,6 +50,24 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
     ]
+  , testGroup "OpenRouter API"
+    [ testCaseInfo "Say hi" $ do
+        let params = ChatParams
+              { chatMarkDown = False
+              , chatSetting = ChatSetting
+                { systemMessage = Nothing
+                , systemTemp = Nothing
+                , systemMaxToolDepth = Nothing
+                , systemApiKeys = Nothing
+                }
+              , chatManager = man
+              , chatTimeout = timeoutHttp
+              } :: ChatParams (OpenRouter DeepSeekR1_Free) '[]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
+        case content <$> res of
+          Left err -> assertFailure $ "messageChat failed: " ++ show err
+          Right r -> return $ unpack r
+    ]
   , testGroup "OpenAI API"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams

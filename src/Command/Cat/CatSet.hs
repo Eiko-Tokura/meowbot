@@ -27,6 +27,7 @@ modelsInUse :: CFList ChatAPI Proxy
   , DeepSeek DeepSeekReasoner
   , OpenAI   GPT4oMini
   , OpenAI   GPT4o
+  , OpenRouter DeepSeekR1_Free
   ]
 modelsInUse = def
 

@@ -17,6 +17,7 @@ module MeowBot.Parser
   , headCommand
   , canBeEmpty
   , parseByRead
+  , onlyMessage
   , MetaMessage(..)
   , CQCode(..)
   , ChatSetting(..)
@@ -32,7 +33,7 @@ import External.ChatAPI (ChatSetting(..))
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe)
-import Data.Either(lefts, rights, fromRight)
+import Data.Either(lefts, fromRight)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.List (groupBy)
@@ -132,7 +133,7 @@ collectRightCharsText
   = concat
   . fmap (\case
       l@(Left _:_)  -> [ Left x | Left x <- l ]
-      r@(Right _:_) -> [ Right $ packable [ c | Right c <- r ] ]
+      r@(Right _:_) -> [ Right $ packable $ htmlDecodeFunction [ c | Right c <- r ] ]
       []            -> []
     )
   . groupBy
@@ -159,8 +160,8 @@ cqmsg :: (Chars sb) => Parser sb Char MetaMessage
 cqmsg = do
   leither <- many $ cqcodeExceptFace |+| getItem
   return MetaMessage
-    { onlyMessage = packable $ fromMaybe "" $ runParser htmlDecode $ rights leither
-    , cqcodes = lefts leither
+    -- onlyMessage = packable $ fromMaybe "" $ runParser htmlDecode $ rights leither
+    { cqcodes = lefts leither
     , mixedMessage = collectRightCharsText leither
     , replyTo = listToMaybe [id | CQReply id <- lefts leither]
     , metaMessageItems = []

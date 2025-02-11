@@ -6,7 +6,7 @@
 module External.ChatAPI
   ( simpleChat, Message(..), mapMessage, statusChat, messageChat, messagesChat, statusChatReadAPIKey
   , ChatModel(..)
-  , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
+  , OpenAIModel(..), DeepSeekModel(..), LocalModel(..), OpenRouterModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   , ChatAPI(..), APIKey(..)
   , printMessage
@@ -40,26 +40,30 @@ data ChatModel
   = OpenAI OpenAIModel
   | DeepSeek DeepSeekModel
   | Local LocalModel
+  | OpenRouter OpenRouterModel
   deriving (Show, Read, Eq)
 
-data OpenAIModel   = GPT4oMini | GPT4o deriving (Show, Read, Eq)
-data DeepSeekModel = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel    = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
+data OpenAIModel     = GPT4oMini | GPT4o deriving (Show, Read, Eq)
+data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
+data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
+data OpenRouterModel = DeepSeekR1_Free deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
-modelEndpoint OpenAI {}   = "https://api.openai.com/v1/chat/completions"
-modelEndpoint DeepSeek {} = "https://api.deepseek.com/chat/completions"
-modelEndpoint Local {}    = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
+modelEndpoint OpenAI {}     = "https://api.openai.com/v1/chat/completions"
+modelEndpoint DeepSeek {}   = "https://api.deepseek.com/chat/completions"
+modelEndpoint Local {}      = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
+modelEndpoint OpenRouter {} = "https://openrouter.ai/api/v1/chat/completions"
 
 instance ToJSON ChatModel where
-  toJSON (OpenAI GPT4oMini)          = "gpt-4o-mini"
-  toJSON (OpenAI GPT4o)              = "gpt-4o"
-  toJSON (DeepSeek DeepSeekChat)     = "deepseek-chat"
-  toJSON (DeepSeek DeepSeekReasoner) = "deepseek-reasoner"
-  toJSON (Local DeepSeekR1_14B)      = "deepseek-r1:14b"
-  toJSON (Local DeepSeekR1_32B)      = "deepseek-r1:32b"
-  toJSON (Local Qwen2_5_32B)         = "qwen2.5:32b"
-  toJSON (Local Command_R_Latest)    = "command-r:latest"
+  toJSON (OpenAI GPT4oMini)           = "gpt-4o-mini"
+  toJSON (OpenAI GPT4o)               = "gpt-4o"
+  toJSON (DeepSeek DeepSeekChat)      = "deepseek-chat"
+  toJSON (DeepSeek DeepSeekReasoner)  = "deepseek-reasoner"
+  toJSON (Local DeepSeekR1_14B)       = "deepseek-r1:14b"
+  toJSON (Local DeepSeekR1_32B)       = "deepseek-r1:32b"
+  toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
+  toJSON (Local Command_R_Latest)     = "command-r:latest"
+  toJSON (OpenRouter DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -134,6 +138,10 @@ instance ChatAPI (Local Command_R_Latest) where
   chatModel  = Local Command_R_Latest
   type ChatCompletionResponse (Local Command_R_Latest) = ChatCompletionResponseOllama
 
+instance ChatAPI (OpenRouter DeepSeekR1_Free) where
+  chatModel  = OpenRouter DeepSeekR1_Free
+  type ChatCompletionResponse (OpenRouter DeepSeekR1_Free) = ChatCompletionResponseOpenAI
+
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
   , object     :: Text
@@ -166,10 +174,10 @@ data Message
   deriving (Generic, Eq, Ord, Read, NFData)
 
 mapMessage :: (Text -> Text) -> Message -> Message
-mapMessage f (SystemMessage    c) = SystemMessage    $ f c
-mapMessage f (UserMessage      c) = UserMessage      $ f c
+mapMessage f (SystemMessage    c)     = SystemMessage    $ f c
+mapMessage f (UserMessage      c)     = UserMessage      $ f c
 mapMessage f (AssistantMessage c t p) = AssistantMessage (f c) (f <$> t) p
-mapMessage f (ToolMessage      c m) = ToolMessage      (f c) m
+mapMessage f (ToolMessage      c m)   = ToolMessage      (f c) m
 
 -- | Wrapper for model dependent content (toJSON and FromJSON)
 newtype ModelDependent m a = ModelDependent { runModelDependent :: a }
@@ -214,14 +222,14 @@ parseThinking ct = maybe (Nothing, ct)
        )
     ) ct
 
--- | Warning: due to the deepseek model unable to recognize the role "tool", we use "system" instead
+-- | Warning: due to the deepseek model unable to recognize the role "tool", we use "user" instead
 instance ToJSON (ModelDependent (DeepSeek DeepSeekReasoner) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c Nothing _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c (Just think) _))
     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (DeepSeek a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
@@ -235,6 +243,8 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   toJSON (ModelDependent (AssistantMessage c _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   -- ^ we haven't implemented tool role for openai model yet, so we use user role instead
+
+deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message) 
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
@@ -252,14 +262,7 @@ instance ToJSON (ModelDependent (Local DeepSeekR1_32B) Message) where
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
   -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
 
-instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message) where
-  toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
-  toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c Nothing _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c (Just think) _))
-    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
-  -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
+deriving via (ModelDependent (Local DeepSeekR1_32B) Message) instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message)
 
 apiKeyFile :: FilePath
 apiKeyFile = "apiKey"
@@ -278,6 +281,8 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     , "temperature" .= temperature chatReq
     ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
+
+deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (OpenRouter b) ChatRequest)
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
@@ -309,9 +314,10 @@ generateRequestBody param mes = encode $ ModelDependent @md $
     , messages     = sysMessage : mes
     , temperature  = fromMaybe 0.5 (systemTemp $ chatSetting param)
     , stream       = case chatModel @md of
-        DeepSeek _ -> Just False
-        OpenAI _   -> Nothing
-        Local _    -> Just False
+        DeepSeek _   -> Just False
+        OpenAI _     -> Nothing
+        Local _      -> Just False
+        OpenRouter _ -> Just False
     -- , tools       = Nothing
     }
   where sysMessage = generateSystemPrompt @md @ts @m param
@@ -334,8 +340,9 @@ generateSystemPrompt params
         (fmap content . systemMessage $ chatSetting params)
 
 data APIKey = APIKey
-  { apiKeyOpenAI :: Maybe Text
-  , apiKeyDeepSeek :: Maybe Text
+  { apiKeyOpenAI     :: Maybe Text
+  , apiKeyDeepSeek   :: Maybe Text
+  , apiKeyOpenRouter :: Maybe Text
   } deriving (Show, Read, Eq, Generic, NFData)
 
 data GetAPIKey
@@ -343,9 +350,10 @@ data GetAPIKey
   | APIKeyRequired (Maybe Text)
 
 getApiKeyByModel :: ChatModel -> APIKey -> GetAPIKey
-getApiKeyByModel (OpenAI _)   apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
-getApiKeyByModel (DeepSeek _) apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
-getApiKeyByModel (Local _)    _      = NoAPIKeyRequired
+getApiKeyByModel (OpenAI _)     apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
+getApiKeyByModel (DeepSeek _)   apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
+getApiKeyByModel (Local _)    _        = NoAPIKeyRequired
+getApiKeyByModel (OpenRouter _) apiKey = APIKeyRequired $ apiKeyOpenRouter apiKey
 
 fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse manager _ apiKey model msg = do
@@ -402,12 +410,6 @@ instance GetMessage (ChatCompletionResponseOpenAI) where
 
 instance GetMessage (ChatCompletionResponseOllama) where
   getMessage = return . ollamaResponse
-
--- displayResponse :: ChatCompletionResponse -> Text
--- displayResponse inp = let chos = choices inp in
---   case chos of
---     []         -> ""
---     headChos:_ -> (content . message) headChos
 
 readApiKeyFile :: MonadIO m => ExceptT Text m APIKey
 readApiKeyFile = ExceptT
@@ -500,11 +502,11 @@ printMessage :: Message -> IO ()
 printMessage = TIO.putStrLn . showMessage
 
 showMessage :: Message -> Text
-showMessage (SystemMessage c)             = "SystemMessage: "     <> c
-showMessage (UserMessage c)               = "UserMessage: "       <> c
+showMessage (SystemMessage c)               = "SystemMessage: "     <> c
+showMessage (UserMessage c)                 = "UserMessage: "       <> c
 showMessage (AssistantMessage c Nothing _)  = "AssistantMessage: "  <> c
 showMessage (AssistantMessage c (Just t) _) = "AssistantThinking: " <> t <> "\nAssistantMessage: " <> c
-showMessage (ToolMessage c tm)            = "ToolMessage: "       <> c <> "\nToolMeta: "         <> toText tm
+showMessage (ToolMessage c tm)              = "ToolMessage: "       <> c <> "\nToolMeta: "         <> toText tm
 
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params

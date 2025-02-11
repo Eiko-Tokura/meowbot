@@ -237,9 +237,13 @@ loadSavedDataDB botName glob = do
           { systemMessage      = SystemMessage <$> botSettingPerChatSystemMessage c
           , systemTemp         = botSettingPerChatSystemTemp c
           , systemMaxToolDepth = botSettingPerChatSystemMaxToolDepth c
-          , systemApiKeys      = case (botSettingPerChatSystemAPIKeyOpenAI c, botSettingPerChatSystemAPIKeyDeepSeek c) of
-              (Nothing, Nothing) -> Nothing
-              (a, b)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b }
+          , systemApiKeys      = case
+            ( botSettingPerChatSystemAPIKeyOpenAI c
+            , botSettingPerChatSystemAPIKeyDeepSeek c
+            , botSettingPerChatSystemAPIKeyOpenRouter c
+            ) of
+              (Nothing, Nothing, Nothing) -> Nothing
+              (a, b, c)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c }
           }) | c <- botSettingsPerChat]
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
@@ -299,18 +303,19 @@ newSavedDataDB botconfig glob sd = do
     -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
     -- deleteWhere ([] :: [Filter BookDB])
     insert_ $ BotSetting
-      { botSettingBotName              = maybeBotName botname
-      , botSettingDefaultModel         = coerce $ Just (DeepSeek DeepSeekChat)
-      , botSettingDefaultModelS        = coerce $ Just (DeepSeek DeepSeekReasoner)
-      , botSettingDisplayThinking      = Nothing
-      , botSettingSystemMessage        = globalSysMsg $ botModules botconfig
-      , botSettingSystemTemp           = Nothing
-      , botSettingSystemMaxToolDepth   = Just 5
-      , botSettingSystemAPIKeyOpenAI   = Nothing
-      , botSettingSystemAPIKeyDeepSeek = Nothing
-      , botSettingActiveChat           = Just False
-      , botSettingActiveProbability    = Nothing
-      , botSettingMaxMessageInState    = Nothing
+      { botSettingBotName                = maybeBotName botname
+      , botSettingDefaultModel           = coerce $ Just (DeepSeek DeepSeekChat)
+      , botSettingDefaultModelS          = coerce $ Just (DeepSeek DeepSeekReasoner)
+      , botSettingDisplayThinking        = Nothing
+      , botSettingSystemMessage          = globalSysMsg $ botModules botconfig
+      , botSettingSystemTemp             = Nothing
+      , botSettingSystemMaxToolDepth     = Just 5
+      , botSettingSystemAPIKeyOpenAI     = Nothing
+      , botSettingSystemAPIKeyDeepSeek   = Nothing
+      , botSettingSystemAPIKeyOpenRouter = Nothing
+      , botSettingActiveChat             = Just False
+      , botSettingActiveProbability      = Nothing
+      , botSettingMaxMessageInState      = Nothing
       }
     insertMany_ [ BotSettingPerChat
       { botSettingPerChatBotName          = maybeBotName botname
@@ -320,10 +325,11 @@ newSavedDataDB botconfig glob sd = do
       , botSettingPerChatDisplayThinking  = Nothing
       , botSettingPerChatSystemMessage    = content <$> systemMessage chatSetting
       , botSettingPerChatSystemTemp       = systemTemp chatSetting
-      , botSettingPerChatSystemMaxToolDepth = systemMaxToolDepth chatSetting
-      , botSettingPerChatSystemAPIKeyOpenAI = apiKeyOpenAI =<< systemApiKeys chatSetting
-      , botSettingPerChatSystemAPIKeyDeepSeek = apiKeyDeepSeek =<< systemApiKeys chatSetting
-      , botSettingPerChatActiveChat       = Nothing
+      , botSettingPerChatSystemMaxToolDepth     = systemMaxToolDepth chatSetting
+      , botSettingPerChatSystemAPIKeyOpenAI     = apiKeyOpenAI =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyDeepSeek   = apiKeyDeepSeek =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyOpenRouter = apiKeyOpenRouter =<< systemApiKeys chatSetting
+      , botSettingPerChatActiveChat        = Nothing
       , botSettingPerChatActiveProbability = Nothing
       , botSettingPerChatMaxMessageInState = Nothing
       } | (chatId, chatSetting) <- chatSettings sd]
@@ -334,8 +340,8 @@ newSavedDataDB botconfig glob sd = do
       } | (userId, userGroup) <- userGroups sd]
     insertMany_ [ InGroupGroup
       { inGroupGroupBotName         = maybeBotName botname
-      , inGroupGroupGroupId          = groupId
-      , inGroupGroupGroupGroup       = groupGroup
+      , inGroupGroupGroupId         = groupId
+      , inGroupGroupGroupGroup      = groupGroup
       } | (groupId, groupGroup) <- groupGroups sd]
     insertMany_ [ CommandRuleDB
       { commandRuleDBBotName        = maybeBotName botname

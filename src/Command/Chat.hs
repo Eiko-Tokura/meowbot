@@ -140,12 +140,15 @@ commandChat = BotCommand Chat $ botT $ do
         , botSettingDefaultModel =<< botSetting
         ]
       newChatState = SM.empty :: AllChatState
+
       nullify :: Maybe Text -> Maybe Text
       nullify (Just s) | T.null s = Nothing
       nullify x = x
+
       toUserMessage :: CQMessage -> Message
       toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
-        [ fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
+        [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqmsg)
+        , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
         , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqmsg)
         , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
         , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqmsg)
@@ -231,7 +234,7 @@ commandChat = BotCommand Chat $ botT $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
         Right newMsgs' -> do
-          let newMsgs = map (mapMessage (MP.filterOutputTags ["msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
+          let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus maxMessageInState cid newMsgs newStatus

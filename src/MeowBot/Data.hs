@@ -341,11 +341,11 @@ instance FromJSON Sender where
 data Role = ROwner | RAdmin | RMember | RUnknown
   deriving (Show, Read, Eq, Generic, NFData, Bounded, Enum)
 
-roleToText :: Role -> Text
-roleToText ROwner  = "owner"
-roleToText RAdmin  = "admin"
-roleToText RMember = "member"
-roleToText RUnknown = "unknown"
+roleToText :: Role -> Maybe Text
+roleToText ROwner   = Just "群主"
+roleToText RAdmin   = Just "群管理"
+roleToText RMember  = Nothing -- ^ not displaying if it's a member
+roleToText RUnknown = Just "未知"
 
 instance FromJSON Role where
   parseJSON = withText "Role" $ \case

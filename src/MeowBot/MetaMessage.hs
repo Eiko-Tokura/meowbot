@@ -9,18 +9,21 @@ import GHC.Generics (Generic)
 import Data.Additional
 import Data.Maybe
 import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Either (rights)
 
 import External.ChatAPI (Message(..), ChatStatus(..))
 
 data MetaMessage = MetaMessage
-  { onlyMessage :: Text
-  , cqcodes :: [CQCode]
+  { cqcodes :: [CQCode]
   , mixedMessage :: [Either CQCode Text]
   , replyTo :: Maybe Int
   , metaMessageItems :: [MetaMessageItem]
-  --, withChatSetting :: Maybe ChatSetting
   , additionalData :: [AdditionalData]
   } deriving (Show, Eq, Generic, NFData)
+
+onlyMessage :: MetaMessage -> Text
+onlyMessage = T.concat . rights . mixedMessage
 
 instance HasAdditionalData MetaMessage where
   getAdditionalData = additionalData
@@ -33,12 +36,10 @@ data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MChatSetting ChatSe
 
 generateMetaMessage :: Text -> [AdditionalData] -> [MetaMessageItem] -> MetaMessage
 generateMetaMessage str adt items = MetaMessage
-  { onlyMessage = str
-  , cqcodes     = [cqcode | MCQCode cqcode <- items]
+  { cqcodes     = [cqcode | MCQCode cqcode <- items]
   , mixedMessage = [Left cqcode | MCQCode cqcode <- items] ++ [Right str]
   , replyTo     = listToMaybe [mid | MReplyTo mid <- items]
   , metaMessageItems = items
-  --, withChatSetting = listToMaybe [set | MChatSetting set <- items]
   , additionalData = adt
   }
 
