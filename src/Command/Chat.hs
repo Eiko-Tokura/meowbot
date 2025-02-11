@@ -162,6 +162,7 @@ commandChat = BotCommand Chat $ botT $ do
       selectedContent (Left cq@(CQReply {}):rest) = embedCQCode cq <> selectedContent rest
       selectedContent (Left cq@(CQOther "face" _):rest)     = embedCQCode cq <> selectedContent rest
       selectedContent (Left cq@(CQOther "markdown" _):rest) = embedCQCode cq <> selectedContent rest
+      selectedContent (Left cq@(CQOther "json" _):rest)     = embedCQCode cq <> selectedContent rest
       selectedContent (Left (CQOther "image" meta):rest)
         = case (filter (flip elem ["summary"] . fst) meta) of
             []       -> "[CQ:image,data=<unknown_data>]"
