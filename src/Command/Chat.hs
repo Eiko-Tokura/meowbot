@@ -92,7 +92,7 @@ commandChat = BotCommand Chat $ botT $ do
       appendCQHelp :: Text -> Text
       appendCQHelp t = t <> "\n\n---\n\n" <> T.intercalate "\n"
         [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person who is replied to will be notified."
-        , "You can include '[CQ:at,id=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
+        , "You can include '[CQ:at,qq=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
         ]
       msys = ChatSetting
         ( fmap (API.SystemMessage . appendNoteListing . appendCQHelp) $ asum
