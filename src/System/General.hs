@@ -68,6 +68,10 @@ instance Monad m => MonadReadable BotName (MeowT r mods m) where
   query = queries nameOfBot
   {-# INLINE query #-}
 
+instance Monad m => MonadReadable BotId (MeowT r mods m) where
+  query = queries botId
+  {-# INLINE query #-}
+
 -- instance Monad m => MonadReadable CQMessage (MeowT r mods m) where
 --   query = asks (getNewMsg . fst . fst)
 --   {-# INLINE query #-}

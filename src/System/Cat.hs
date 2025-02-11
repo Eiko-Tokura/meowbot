@@ -159,6 +159,7 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
           { canUseGroupCommands   = withDefault (identifier <$> allGroupCommands)   (coerce commandFlags)
           , canUsePrivateCommands = withDefault (identifier <$> allPrivateCommands) (coerce commandFlags)
           , nameOfBot = BotName $ listToMaybe [ nameBot | UseName nameBot <- identityFlags ]
+          , botId = fromMaybe 0 $ listToMaybe [ idBot | UseId idBot <- identityFlags ]
           , globalSysMsg = mGlobalSysMsg
           , proxyTChans = []--proxyData
           , logFile = [ logFile | LogFlag logFile <- logFlags ]
@@ -169,7 +170,8 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
 initAllData :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> LoggingT IO AllData
 initAllData botconfig glob = do
   let mods = botModules botconfig
-  savedDataDB   <-                              runExceptT $ loadSavedDataDB   (nameOfBot mods) glob
+      botid = botId mods
+  savedDataDB   <-                              runExceptT $ loadSavedDataDB botid glob
   savedDataFile <- unsafeInterleaveLoggingTIO $ runExceptT $ loadSavedDataFile (nameOfBot mods)
   case (savedDataDB, savedDataFile) of
     (Right savedDataDB, _) -> do
@@ -221,15 +223,15 @@ loadSavedDataFile botName = do
       $(logInfo) "No saved data file found! o.o"
       throwE "No saved data file found! o.o"
 
-loadSavedDataDB :: (LogDatabase `In` mods) => BotName -> AllModuleGlobalStates mods -> ExceptT Text (LoggingT IO) SavedData
-loadSavedDataDB botName glob = do
+loadSavedDataDB :: (LogDatabase `In` mods) => BotId -> AllModuleGlobalStates mods -> ExceptT Text (LoggingT IO) SavedData
+loadSavedDataDB botid glob = do
   let pool = databasePool (getF @LogDatabase glob)
-  _                    <- fmap entityVal . effectE    $ runSqlPool (selectList [BotSettingBotName          ==. maybeBotName botName] [LimitTo 1]) pool
-  botSettingsPerChat   <- fmap (map entityVal) . lift $ runSqlPool (selectList [BotSettingPerChatBotName   ==. maybeBotName botName] []) pool
-  inUserGroups         <- fmap (map entityVal) . lift $ runSqlPool (selectList [InUserGroupBotName         ==. maybeBotName botName] []) pool
-  inGroupGroups        <- fmap (map entityVal) . lift $ runSqlPool (selectList [InGroupGroupBotName        ==. maybeBotName botName] []) pool
-  commandRulesDB       <- fmap (map entityVal) . lift $ runSqlPool (selectList [CommandRuleDBBotName       ==. maybeBotName botName] []) pool
-  savedAdditionalDatas <- fmap (map entityVal) . lift $ runSqlPool (selectList [SavedAdditionalDataBotName ==. maybeBotName botName] []) pool
+  _                    <- fmap entityVal . effectE    $ runSqlPool (selectList [BotSettingBotId ==. botid] [LimitTo 1]) pool
+  botSettingsPerChat   <- fmap (map entityVal) . lift $ runSqlPool (selectList [BotSettingPerChatBotId ==. botid] []) pool
+  inUserGroups         <- fmap (map entityVal) . lift $ runSqlPool (selectList [InUserGroupBotId ==. botid] []) pool
+  inGroupGroups        <- fmap (map entityVal) . lift $ runSqlPool (selectList [InGroupGroupBotId ==. botid] []) pool
+  commandRulesDB       <- fmap (map entityVal) . lift $ runSqlPool (selectList [CommandRuleDBBotId ==. botid] []) pool
+  savedAdditionalDatas <- fmap (map entityVal) . lift $ runSqlPool (selectList [SavedAdditionalDataBotId ==. botid] []) pool
   bookDBs              <- fmap (map entityVal) . lift $ runSqlPool (selectList [] []) pool
   let
       chatIds_chatSettings =
@@ -294,16 +296,11 @@ newSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates 
 newSavedDataDB botconfig glob sd = do
   let pool = databasePool (getF @LogDatabase glob)
       botname = nameOfBot (botModules botconfig)
+      botid = botId $ botModules botconfig
   runSqlPool (do
-    -- deleteWhere [BotSettingBotName          ==. maybeBotName botname]
-    -- deleteWhere [BotSettingPerChatBotName   ==. maybeBotName botname]
-    -- deleteWhere [InUserGroupBotName         ==. maybeBotName botname]
-    -- deleteWhere [InGroupGroupBotName        ==. maybeBotName botname]
-    -- deleteWhere [CommandRuleDBBotName       ==. maybeBotName botname]
-    -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
-    -- deleteWhere ([] :: [Filter BookDB])
     insert_ $ BotSetting
       { botSettingBotName                = maybeBotName botname
+      , botSettingBotId                  = botId $ botModules botconfig
       , botSettingDefaultModel           = coerce $ Just (DeepSeek DeepSeekChat)
       , botSettingDefaultModelS          = coerce $ Just (DeepSeek DeepSeekReasoner)
       , botSettingDisplayThinking        = Nothing
@@ -319,6 +316,7 @@ newSavedDataDB botconfig glob sd = do
       }
     insertMany_ [ BotSettingPerChat
       { botSettingPerChatBotName          = maybeBotName botname
+      , botSettingPerChatBotId            = botId $ botModules botconfig
       , botSettingPerChatChatId           = chatId
       , botSettingPerChatDefaultModel     = Nothing
       , botSettingPerChatDefaultModelS    = Nothing
@@ -335,20 +333,24 @@ newSavedDataDB botconfig glob sd = do
       } | (chatId, chatSetting) <- chatSettings sd]
     insertMany_ [ InUserGroup
       { inUserGroupBotName          = maybeBotName botname
+      , inUserGroupBotId            = botid
       , inUserGroupUserId           = userId
       , inUserGroupUserGroup        = userGroup
       } | (userId, userGroup) <- userGroups sd]
     insertMany_ [ InGroupGroup
       { inGroupGroupBotName         = maybeBotName botname
+      , inGroupGroupBotId           = botid
       , inGroupGroupGroupId         = groupId
       , inGroupGroupGroupGroup      = groupGroup
       } | (groupId, groupGroup) <- groupGroups sd]
     insertMany_ [ CommandRuleDB
       { commandRuleDBBotName        = maybeBotName botname
+      , commandRuleDBBotId          = botid
       , commandRuleDBCommandRule    = commandRule
       } | commandRule <- commandRules sd]
     insertMany_ [ SavedAdditionalData
       { savedAdditionalDataBotName  = maybeBotName botname
+      , savedAdditionalDataBotId    = botid
       , savedAdditionalDataAdditionalData = PersistUseShow savedAdditional
       } | savedAdditional <- savedAdditional sd]
     insertMany_ [ BookDB

@@ -30,6 +30,8 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
 BotSetting -- Overlappable by BotSettingPerChat
   botName          String                     Maybe
+  botId            BotId
+  UniqueBotId      botId
   defaultModel     (PersistUseShow ChatModel) Maybe
   defaultModelS    (PersistUseShow ChatModel) Maybe
   displayThinking        Bool                 Maybe
@@ -45,7 +47,9 @@ BotSetting -- Overlappable by BotSettingPerChat
 
 BotSettingPerChat -- Overlapping BotSetting
   botName          String                     Maybe
+  botId            BotId
   chatId           ChatId
+  UniqueBotIdChatId botId chatId
   defaultModel     (PersistUseShow ChatModel) Maybe
   defaultModelS    (PersistUseShow ChatModel) Maybe
   displayThinking        Bool                 Maybe
@@ -69,20 +73,24 @@ AssistantNote
 
 CommandRuleDB
   botName        String      Maybe
+  botId          BotId
   commandRule    CommandRule
 
 InUserGroup
   botName        String      Maybe
+  botId          BotId
   userId         UserId
   userGroup      UserGroup
 
 InGroupGroup
   botName        String      Maybe
+  botId          BotId
   groupId        GroupId
   groupGroup     GroupGroup
 
 SavedAdditionalData
   botName        String      Maybe
+  botId          BotId
   additionalData (PersistUseShow Saved_AdditionalData)
 
 BookDB
@@ -93,6 +101,7 @@ BookDB
 
 ChatMessage
   botName        String        Maybe
+  botId          BotId
   time           UTCTime
   eventType      (PersistUseInt64 CQEventType)
   messageId      MessageId     Maybe
@@ -132,6 +141,7 @@ HangmanRanking
 instance Default BotSetting where
   def = BotSetting
     { botSettingBotName                = Nothing
+    , botSettingBotId                  = BotId 0
     , botSettingDefaultModel           = Nothing
     , botSettingDefaultModelS          = Nothing
     , botSettingDisplayThinking        = Nothing
@@ -149,6 +159,7 @@ instance Default BotSetting where
 instance Default BotSettingPerChat where
   def = BotSettingPerChat
     { botSettingPerChatBotName                = Nothing
+    , botSettingPerChatBotId                  = BotId 0
     , botSettingPerChatChatId                 = PrivateChat 0
     , botSettingPerChatDefaultModel           = Nothing
     , botSettingPerChatDefaultModelS          = Nothing
@@ -182,13 +193,14 @@ botSettingSystemAPIKey bs = case
   (Nothing, Nothing, Nothing) -> Nothing
   (a, b, c) -> Just $ APIKey a b c
 
-cqMessageToChatMessage :: BotName -> CQMessage -> Maybe ChatMessage
-cqMessageToChatMessage botname cqm = do
+cqMessageToChatMessage :: BotId -> BotName -> CQMessage -> Maybe ChatMessage
+cqMessageToChatMessage botid botname cqm = do
   cid <- GroupChat <$> groupId cqm <|> PrivateChat <$> userId cqm
   aid <- absoluteId cqm
   utc <- posixSecondsToUTCTime . fromIntegral <$> time cqm <|> utcTime cqm
   return $ ChatMessage
     { chatMessageBotName        = coerce botname
+    , chatMessageBotId          = botid
     , chatMessageTime           = utc
     , chatMessageEventType      = PersistUseInt64 $ eventType cqm
     , chatMessageMessageId      = messageId cqm

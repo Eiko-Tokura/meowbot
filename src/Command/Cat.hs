@@ -54,13 +54,14 @@ commandCat = BotCommand Cat $ botT $ do
   whole_chat <- query
   botmodules <- query
   botname    <- query
+  botid      <- query
   mcatSetCommand <- (`MP.runParser` msg) <$> lift (commandParserTransformByBotName catSetParser)
   ConnectionManagerModuleG man timeout <- query
   case mcatSetCommand of
     Just catSetCommand -> catSet catSetCommand
     Nothing -> do
-      botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
-      botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
+      botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotId ==. botid] []
+      botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       let sd = savedData other_data
       let activeChat = fromMaybe False $ asum
             [ botSettingPerChatActiveChat =<< botSettingPerChat

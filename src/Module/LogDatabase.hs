@@ -55,7 +55,8 @@ instance
     mscq        <- askSystem @(TVar (Maybe SentCQMessage)) >>= liftIO . atomically . readTVar
     let mcq = coerce mrcq <|> coerce mscq
     botname     <- gets (nameOfBot . botModules . botConfig . snd)
-    mNewMessage <- gets (cqMessageToChatMessage botname . getNewMsg . wholechat . snd)
+    botid       <- gets (botId . botModules . botConfig . snd)
+    mNewMessage <- gets (cqMessageToChatMessage botid botname . getNewMsg . wholechat . snd)
     case (mcq, mNewMessage) of
       (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage, SelfMessage]) $ do
         readModuleStateG (Proxy @LogDatabase) >>= lift . runSqlPool (insert_ newMessage) . databasePool

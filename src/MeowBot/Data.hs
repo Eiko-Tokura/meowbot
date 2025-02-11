@@ -1,7 +1,7 @@
 {-# LANGUAGE DerivingStrategies, DeriveAnyClass, OverloadedStrings, DerivingVia #-}
 module MeowBot.Data
   ( module MeowBot.MetaMessage
-  , UserId(..), GroupId(..), ChatId(..)
+  , UserId(..), GroupId(..), ChatId(..), BotId(..)
   , ChatRoom
   , WholeChat--, AllData(..), OtherData(..)
   --, SavedData(..)
@@ -49,6 +49,9 @@ import Database.Persist.Sqlite
 data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read, Generic, NFData)
 
+newtype BotId = BotId { unBotId :: Int } deriving (Show, Eq, Ord, Read, Generic)
+  deriving newtype (PersistField, PersistFieldSql, NFData, Num)
+
 -- | Structured and Unstructured Chat
 -- recent messages top, older messages bottom
 type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
@@ -59,7 +62,7 @@ newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
 type RunningMode     = [DebugFlag]
 data DebugFlag       = DebugJson | DebugCQMessage deriving (Eq, Show)
 data RunningFlag     = RunClient String Int | RunServer String Int deriving (Eq, Show)
-data IdentityFlag    = UseName String | UseSysMsg String deriving (Eq, Show)
+data IdentityFlag    = UseName String | UseId BotId | UseSysMsg String deriving (Eq, Show)
 data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
 data LogFlag         = LogFlag FilePath deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
@@ -77,6 +80,7 @@ data BotModules = BotModules
   { canUseGroupCommands   :: [CommandId]
   , canUsePrivateCommands :: [CommandId]
   , nameOfBot             :: BotName
+  , botId                 :: BotId
   , globalSysMsg          :: Maybe Text
   , proxyTChans           :: [ProxyData]
   , logFile               :: [FilePath]

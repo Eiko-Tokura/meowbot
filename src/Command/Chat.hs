@@ -81,10 +81,11 @@ commandChat = BotCommand Chat $ botT $ do
   -- whole_chat :: WholeChat <- query
   botmodules <- query
   botname    <- query
+  botid      <- query
   ConnectionManagerModuleG man timeout <- query
   noteListing <- lift $ getNoteListing botname cid
-  botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotName ==. maybeBotName botname] []
-  botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotName ==. maybeBotName botname] []
+  botSetting        <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotId botid)
+  botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotIdChatId botid cid)
   let appendNoteListing :: Text -> Text
       appendNoteListing t = case noteListing of
         Nothing       -> t

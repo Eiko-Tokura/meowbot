@@ -27,17 +27,18 @@ commandUser = BotCommand User $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   userParser' <- lift $ commandParserTransformByBotName userParser
   botname <- queries maybeBotName
+  botid   <- query
   um <- pureMaybe $ MP.runParser userParser' msg
   other <- lift query
   let sd = savedData other
   let (actions, sd', db) = case um of
-        UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = L.insert (uid, ug) $ userGroups sd}, runDB $ do p <- selectFirst [InUserGroupBotName ==. botname, InUserGroupUserId ==. uid, InUserGroupUserGroup ==. ug] []; maybe (insert_ $ InUserGroup botname uid ug) (const $ return ()) p)
+        UserManagement Add ug (Just uid)     -> ([reportUM other cid um], sd {userGroups = L.insert (uid, ug) $ userGroups sd}, runDB $ do p <- selectFirst [InUserGroupBotName ==. botname, InUserGroupUserId ==. uid, InUserGroupUserGroup ==. ug] []; maybe (insert_ $ InUserGroup botname botid uid ug) (const $ return ()) p)
         UserManagement Remove ug (Just uid)  -> ([reportUM other cid um], sd {userGroups = filter (/= (uid, ug)) $ userGroups sd}, runDB $ deleteWhere [InUserGroupBotName ==. botname, InUserGroupUserId ==. uid, InUserGroupUserGroup ==. ug])
         UserManagement List _ _              -> ([reportUM other cid um], sd, return ())
-        GroupManagement Add gg (Just gid)    -> ([reportUM other cid um], sd {groupGroups = L.insert (gid, gg) $ groupGroups sd}, runDB $ do p <- selectFirst [InGroupGroupBotName ==. botname, InGroupGroupGroupId ==. gid, InGroupGroupGroupGroup ==. gg] []; maybe (insert_ $ InGroupGroup botname gid gg) (const $ return ()) p)
+        GroupManagement Add gg (Just gid)    -> ([reportUM other cid um], sd {groupGroups = L.insert (gid, gg) $ groupGroups sd}, runDB $ do p <- selectFirst [InGroupGroupBotName ==. botname, InGroupGroupGroupId ==. gid, InGroupGroupGroupGroup ==. gg] []; maybe (insert_ $ InGroupGroup botname botid gid gg) (const $ return ()) p)
         GroupManagement Remove gg (Just gid) -> ([reportUM other cid um], sd {groupGroups = filter (/= (gid, gg)) $ groupGroups sd}, runDB $ deleteWhere [InGroupGroupBotName ==. botname, InGroupGroupGroupId ==. gid, InGroupGroupGroupGroup ==. gg])
         GroupManagement List _ _             -> ([reportUM other cid um], sd, return ())
-        RuleManagement Add (Just cr)         -> ([reportUM other cid um], sd {commandRules = L.insert cr $ commandRules sd}, runDB $ do p <- selectFirst [CommandRuleDBBotName ==. botname, CommandRuleDBCommandRule ==. cr] []; maybe (insert_ $ CommandRuleDB botname cr) (const $ return ()) p)
+        RuleManagement Add (Just cr)         -> ([reportUM other cid um], sd {commandRules = L.insert cr $ commandRules sd}, runDB $ do p <- selectFirst [CommandRuleDBBotName ==. botname, CommandRuleDBCommandRule ==. cr] []; maybe (insert_ $ CommandRuleDB botname botid cr) (const $ return ()) p)
         RuleManagement Remove (Just cr)      -> ([reportUM other cid um], sd {commandRules = filter (/= cr) $ commandRules sd}, runDB $ deleteWhere [CommandRuleDBBotName ==. botname, CommandRuleDBCommandRule ==. cr])
         RuleManagement List _                -> ([reportUM other cid um], sd, return ())
         _ -> ([], sd, return ())
