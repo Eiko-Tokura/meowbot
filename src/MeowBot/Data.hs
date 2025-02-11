@@ -197,6 +197,10 @@ data ActionAPI
     , setGroupAddRequestApprove      :: Bool
     , setGroupAddRequestRefuseReason :: Maybe Text -- ^ only when you refuse
     }
+  | SendPoke
+    { sendPokeUserId :: UserId
+    , sendPokeChatId :: ChatId
+    }
   -- | GetFriendList
   deriving (Show, Eq, Read, Generic)
 
@@ -258,6 +262,13 @@ instance ToJSON ActionAPI where
         RequestGroupInvite -> "invite"
     , "reason" .= reason
     ]
+  toJSON (SendPoke uid (GroupChat gid)) = object
+    [ "user_id" .= uid
+    , "group_id" .= gid
+    ]
+  toJSON (SendPoke uid (PrivateChat _)) = object
+    [ "user_id" .= uid
+    ]
 
 actionString :: ActionAPI -> Text
 actionString SendPrivateMessage{}   = "send_private_msg"
@@ -272,6 +283,7 @@ actionString SetGroupLeave{}        = "set_group_leave"
 actionString SetGroupSpecialTitle{} = "set_group_special_title"
 actionString SetFriendAddRequest{}  = "set_friend_add_request"
 actionString SetGroupAddRequest{}   = "set_group_add_request"
+actionString SendPoke{}             = "send_poke"
 
 data ActionForm = ActionForm
   { action :: ActionAPI

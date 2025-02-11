@@ -1,19 +1,21 @@
 {-# LANGUAGE UndecidableInstances #-}
 module External.ChatAPI.MeowTool where
 
-import Control.Monad.ExceptionReturn
 import Control.Monad.Except
+import Control.Monad.ExceptionReturn
 import Control.Monad.Reader
-import Data.Time.Clock
+import Data.HList
 import Data.PersistModel
+import Data.Time.Clock
+import Control.Concurrent.STM
 import External.ChatAPI.MeowToolEnv
 import External.ChatAPI.Tool
 import MeowBot.BotStructure
+import Module
 import Module.LogDatabase
-import Utils.RunDB hiding (In)
-import Data.HList
-import qualified Data.Text as T
 import System.Meow
+import Utils.RunDB hiding (In)
+import qualified Data.Text as T
 
 data NoteToolRead
 data NoteToolAdd
@@ -106,6 +108,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete 
       Nothing -> throwError $ NoteDeleteError "Note not found"
     return $ IntT note_id :%* ObjT0Nil
 
+
 listNoteTitles :: BotName -> ChatId -> Meow [(Int, Text)]
 listNoteTitles botname cid
   = fmap (fmap (\(Entity _ note) -> (assistantNoteNoteId note, assistantNoteTitle note)))
@@ -124,3 +127,29 @@ getNoteListing bn cid = do
         ]
       | (note_id, title) <- xs
       ]
+
+
+-- | The tool to send like or send poke
+data ActionTool
+
+instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r mods) ActionTool where
+  type ToolInput ActionTool = ParamToData 
+    (ObjectP0 
+      [ StringP "action" "action can be 'like' or 'poke'"
+      , IntP "user_id" "user_id of the target user"
+      ]
+    )
+  type ToolOutput ActionTool = ParamToData (ObjectP0 '[])
+  data ToolError ActionTool = ActionError Text deriving Show
+  toolName _ _ = "action"
+  toolDescription _ _ = "Send a like or a poke"
+  toolHandler _ _ ((StringT act) :%* (IntT user_id) :%* ObjT0Nil) = do
+    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    cid <- effectEWith' (const $ ActionError "no ChatId found") $ getCid
+    botAction <- liftIO $ readTVarIO tvarBotAction
+    action <- case act of
+      "like" -> return . pure $ BAActionAPI (SendLike (UserId user_id) 10)
+      "poke" -> return . pure $ BAActionAPI (SendPoke (UserId user_id) cid)
+      _ -> throwError $ ActionError "action can only be 'like' or 'poke'"
+    liftIO $ atomically $ writeTVar tvarBotAction $ botAction ++ [return action]
+    return ObjT0Nil

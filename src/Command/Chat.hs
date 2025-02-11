@@ -39,7 +39,7 @@ import Data.Additional.Default
 
 import Probability.Foundation
 
-type MeowTools = '[TimeTool, SkipTool, NoteToolRead, NoteToolAdd, NoteToolDelete]
+type MeowTools = '[TimeTool, SkipTool, ActionTool, NoteToolAdd, NoteToolRead, NoteToolDelete]
 type ModelChat = Local DeepSeekR1_14B
 
 -- we will have to mantain a ChatState for each chat
