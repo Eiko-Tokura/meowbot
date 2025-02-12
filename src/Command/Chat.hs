@@ -42,17 +42,6 @@ import Probability.Foundation
 type MeowTools = '[TimeTool, SkipTool, ActionTool, NoteToolAdd, NoteToolRead, NoteToolDelete]
 type ModelChat = Local DeepSeekR1_14B
 
--- we will have to mantain a ChatState for each chat
-data ChatState = ChatState
-  { chatStatus :: !ChatStatus
-  , meowStatus :: !MeowStatus -- ^ avoids crafting too many messages simultaneously
-  } deriving (Show, Eq, Typeable)
-
-data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
-
-type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state, use strict map
-instance IsAdditionalData AllChatState      -- use getTypeWithDef
-
 -- | A new command that enables the bot to chat with users
 -- should be more powerful than the previous legacy command Cat
 -- maybe we will eventually deprecate the old command Cat

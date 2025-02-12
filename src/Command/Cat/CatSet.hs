@@ -7,16 +7,29 @@ import MeowBot
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser
 import qualified Data.Text as T
+import qualified Data.Map.Strict as SM
 import Data.Default
+import Data.Additional.Default
 import Data.HList
 import Data.Proxy
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans
+import Control.Monad.Trans.ReaderState
 import Control.Monad
 import Utils.RunDB
 import Utils.Persist
 import Data.PersistModel
 import External.ChatAPI hiding (SystemMessage)
+
+-- we will have to mantain a ChatState for each chat in the Chat command (not Cat command)
+data ChatState = ChatState
+  { chatStatus :: !ChatStatus
+  , meowStatus :: !MeowStatus -- ^ avoids crafting too many messages simultaneously
+  } deriving (Show, Eq, Typeable)
+
+data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
+
+type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state, use strict map
+instance IsAdditionalData AllChatState      -- use getTypeWithDef
 
 modelsInUse :: CFList ChatAPI Proxy
   [ Local       DeepSeekR1_14B
@@ -39,6 +52,7 @@ data CatSetCommand
   = Set   DefaultOrPerChat BotSettingItem
   | UnSet DefaultOrPerChat BotSettingItem
   | View  DefaultOrPerChat BotSettingItem
+  | Clear
   deriving (Show)
 
 data DefaultOrPerChat = Default | PerChat | PerChatWithChatId ChatId deriving (Show)
@@ -60,35 +74,37 @@ data BotSettingItem
   deriving (Show)
 
 catSetParser :: Parser T.Text Char CatSetCommand
-catSetParser = MP.headCommand "cat-" >> do
-  action <- asum
-    [ MP.string "set"   >> return Set
-    , MP.string "unset" >> return UnSet
-    , MP.string "view"  >> return View
-    ]
-  MP.spaces
-  range <- asum
-    [ MP.string "default" *> return Default <* MP.spaces
-    , MP.string "perchat" *> MP.spaces *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
-    , MP.string "perchat" *> return PerChat <* MP.spaces
-    , return PerChat
-    ]
-  return $ action range (DisplayThinking Nothing)
-  asum
-    [ MP.string "displayThinking"      >> fmap (action range) (DisplayThinking      <$> MP.optMaybe (MP.spaces >> MP.bool))
-    , MP.string "defaultModelSuper"    >> fmap (action range) (DefaultModelSuper    <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-    , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-    , MP.string "systemMessage"        >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-    , MP.string "systemTemp"           >> fmap (action range) (SystemTemp           <$> MP.optMaybe (MP.spaces >> MP.nFloat))
-    , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
-    , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-    , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-    , MP.string "systemAPIKeyOpenRouter" >> fmap (action range) (SystemAPIKeyOpenRouter <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-    , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-    , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
-    , MP.string "atReply"              >> fmap (action range) (AtReply              <$> MP.optMaybe (MP.spaces >> MP.bool))
-    , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
-    ]
+catSetParser =
+  (MP.headCommand "cat-" >> do
+    action <- asum
+      [ MP.string "set"   >> return Set
+      , MP.string "unset" >> return UnSet
+      , MP.string "view"  >> return View
+      ]
+    MP.spaces
+    range <- asum
+      [ MP.string "default" *> return Default <* MP.spaces
+      , MP.string "perchat" *> MP.spaces *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
+      , MP.string "perchat" *> return PerChat <* MP.spaces
+      , return PerChat
+      ]
+    return $ action range (DisplayThinking Nothing)
+    asum
+      [ MP.string "displayThinking"      >> fmap (action range) (DisplayThinking      <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "defaultModelSuper"    >> fmap (action range) (DefaultModelSuper    <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+      , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+      , MP.string "systemMessage"        >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemTemp"           >> fmap (action range) (SystemTemp           <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+      , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
+      , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIKeyOpenRouter" >> fmap (action range) (SystemAPIKeyOpenRouter <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "atReply"              >> fmap (action range) (AtReply              <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+      ]
+    ) <|> (MP.headCommand "cat-clear" >> return Clear)
   where chatIdP = asum
           [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
           , MP.string "group" >> MP.spaces >> GroupChat   . GroupId <$> MP.int
@@ -116,15 +132,20 @@ helpCatSet = T.intercalate "\n" $
   , "    systemMaxToolDepth :: Int"
   , "    systemAPIKeyOpenAI :: Text"
   , "    systemAPIKeyDeepSeek :: Text"
+  , "    systemAPIKeyOpenRouter :: Text"
+  , "    systemAPIKeySiliconFlow :: Text"
   , "    activeChat :: Bool"
   , "    atReply :: Bool"
   , "    activeProbability :: Double"
   , ""
-  , "* ChatModel can be one of " <> T.intercalate ", " modelsInUseText
+  , "* ChatModel can be one of \n" <> T.intercalate ", " modelsInUseText
   , ""
   , "Example:"
   , ":cat-set default displayThinking true"
   , ":cat-set perchat defaultModel Local DeepSeekR1_32B"
+  , ""
+  , "Clear chat context (only effective in chat mode):"
+  , ":cat-clear"
   ]
 
 ----------------------------------- catSet -----------------------------------
@@ -337,6 +358,29 @@ catSet (View (PerChatWithChatId cid) item) = do
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
+
+catSet Clear = do
+  let newChatState = SM.empty ::SM.Map ChatId ChatState 
+
+  (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+
+  let updateChatState :: ChatId -> (ChatState -> ChatState) -> AllChatState -> AllChatState
+      updateChatState cid f s =
+        let state = SM.lookup cid s in
+        case state of
+          Just cs -> SM.insert cid (f cs) s
+          Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 []) MeowIdle) s
+
+      clear :: ChatState -> ChatState
+      clear _ = ChatState (ChatStatus 0 0 []) MeowIdle
+
+  allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
+  -- ^ get the chat state and clear it
+
+  lift . putType $ allChatState
+  -- ^ update in the state
+
+  return [baSendToChatId cid "Chat state cleared"]
 
 class MaybeRedacted a where
   redacted :: a -> Text
