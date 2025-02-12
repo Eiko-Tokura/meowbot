@@ -42,6 +42,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   systemAPIKeyDeepSeek   Text                 Maybe
   systemAPIKeyOpenRouter Text                 Maybe
   activeChat             Bool                 Maybe
+  atReply                Bool                 Maybe
   activeProbability      Double               Maybe
   maxMessageInState      Int                  Maybe
 
@@ -60,6 +61,7 @@ BotSettingPerChat -- Overlapping BotSetting
   systemAPIKeyDeepSeek   Text                 Maybe
   systemAPIKeyOpenRouter Text                 Maybe
   activeChat             Bool                 Maybe
+  atReply                Bool                 Maybe
   activeProbability      Double               Maybe
   maxMessageInState      Int                  Maybe
 
@@ -152,6 +154,7 @@ instance Default BotSetting where
     , botSettingSystemAPIKeyDeepSeek   = Nothing
     , botSettingSystemAPIKeyOpenRouter = Nothing
     , botSettingActiveChat             = Nothing
+    , botSettingAtReply                = Nothing
     , botSettingActiveProbability      = Nothing
     , botSettingMaxMessageInState      = Nothing
     }
@@ -171,6 +174,7 @@ instance Default BotSettingPerChat where
     , botSettingPerChatSystemAPIKeyDeepSeek   = Nothing
     , botSettingPerChatSystemAPIKeyOpenRouter = Nothing
     , botSettingPerChatActiveChat             = Nothing
+    , botSettingPerChatAtReply                = Nothing
     , botSettingPerChatActiveProbability      = Nothing
     , botSettingPerChatMaxMessageInState      = Nothing
     }

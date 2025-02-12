@@ -311,6 +311,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingSystemAPIKeyDeepSeek   = Nothing
       , botSettingSystemAPIKeyOpenRouter = Nothing
       , botSettingActiveChat             = Just False
+      , botSettingAtReply                = Nothing
       , botSettingActiveProbability      = Nothing
       , botSettingMaxMessageInState      = Nothing
       }
@@ -328,6 +329,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingPerChatSystemAPIKeyDeepSeek   = apiKeyDeepSeek =<< systemApiKeys chatSetting
       , botSettingPerChatSystemAPIKeyOpenRouter = apiKeyOpenRouter =<< systemApiKeys chatSetting
       , botSettingPerChatActiveChat        = Nothing
+      , botSettingPerChatAtReply           = Nothing
       , botSettingPerChatActiveProbability = Nothing
       , botSettingPerChatMaxMessageInState = Nothing
       } | (chatId, chatSetting) <- chatSettings sd]

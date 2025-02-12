@@ -52,6 +52,7 @@ data BotSettingItem
   | SystemAPIKeyOpenAI   (Maybe Text)
   | SystemAPIKeyDeepSeek (Maybe Text)
   | ActiveChat           (Maybe Bool)
+  | AtReply              (Maybe Bool)
   | ActiveProbability    (Maybe Double)
   deriving (Show)
 
@@ -80,6 +81,7 @@ catSetParser = MP.headCommand "cat-" >> do
     , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
+    , MP.string "atReply"              >> fmap (action range) (AtReply              <$> MP.optMaybe (MP.spaces >> MP.bool))
     , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
     ]
   where chatIdP = asum
@@ -110,6 +112,7 @@ helpCatSet = T.intercalate "\n" $
   , "    systemAPIKeyOpenAI :: Text"
   , "    systemAPIKeyDeepSeek :: Text"
   , "    activeChat :: Bool"
+  , "    atReply :: Bool"
   , "    activeProbability :: Double"
   , ""
   , "* ChatModel can be one of " <> T.intercalate ", " modelsInUseText
@@ -154,6 +157,9 @@ catSet (Set Default item) = do
     ActiveChat           mdt -> do
       lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingActiveChat =. mdt])
       return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
+    AtReply              mdt -> do
+      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingAtReply =. mdt])
+      return [ baSendToChatId cid $ "AtReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
@@ -201,6 +207,9 @@ catSet (Set (PerChatWithChatId cid) item) = do
     ActiveChat           mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatActiveChat =. mdt]
       return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
+    AtReply              mdt -> do
+      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatAtReply =. mdt]
+      return [ baSendToChatId cid' $ "AtReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
@@ -216,6 +225,7 @@ catSet (UnSet range item) =
     SystemAPIKeyOpenAI   _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
     SystemAPIKeyDeepSeek _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
     ActiveChat           _ -> catSet (Set range $ ActiveChat Nothing)
+    AtReply              _ -> catSet (Set range $ AtReply Nothing)
     ActiveProbability    _ -> catSet (Set range $ ActiveProbability Nothing)
 catSet (View Default item) = do
   botname <- query
@@ -248,6 +258,9 @@ catSet (View Default item) = do
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
+    AtReply              _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid $ "AtReply: " <> tshow mdt]
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
@@ -287,6 +300,9 @@ catSet (View (PerChatWithChatId cid) item) = do
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
+    AtReply              _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      return [baSendToChatId cid' $ "AtReply: " <> tshow mdt]
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]

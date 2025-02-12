@@ -128,7 +128,11 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatActiveChat =<< botSettingPerChat
         , botSettingActiveChat =<< botSetting
         ] -- ^ whether to chat actively randomly
-      activeProbability = fromMaybe 0.05 $ asum
+      atReply = fromMaybe True $ asum
+        [ botSettingPerChatAtReply =<< botSettingPerChat
+        , botSettingAtReply =<< botSetting
+        ] -- ^ whether to reply when ated
+      activeProbability = fromMaybe 0.013 $ asum
         [ botSettingPerChatActiveProbability =<< botSettingPerChat
         , botSettingActiveProbability =<< botSetting
         ] -- ^ probability to chat actively
@@ -213,7 +217,7 @@ commandChat = BotCommand Chat $ botT $ do
   chatState <- pureMaybe $ SM.lookup cid allChatState
 
   $(logDebug) "Determining if reply"
-  determineIfReply activeProbability cid msg botname msys chatState
+  determineIfReply atReply activeProbability cid msg botname msys chatState
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
@@ -275,17 +279,19 @@ mergeChatStatus maxMessageInState cid newMsgs newStatus = do
           }
         allChatState
 
-determineIfReply :: Double -> ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
+determineIfReply :: Bool -> Double -> ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply atReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
-  replied <- lift $ boolMaybe <$> beingReplied
+  replied <- if atReply 
+    then lift $ boolMaybe <$> beingReplied
+    else return Nothing
   ated    <- lift $ boolMaybe <$> beingAt
   let chanceReply = boolMaybe $ chance <= prob
       parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed <|> replied <|> ated
-determineIfReply _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
+determineIfReply _ _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
-determineIfReply _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ = empty
