@@ -257,19 +257,19 @@ catSet (Set (PerChatWithChatId cid) item) = do
 
 catSet (UnSet range item) =
   case item of
-    DisplayThinking      _ -> catSet (Set range $ DisplayThinking Nothing)
-    DefaultModel         _ -> catSet (Set range $ DefaultModel Nothing)
-    DefaultModelSuper    _ -> catSet (Set range $ DefaultModelSuper Nothing)
-    SystemMessage        _ -> catSet (Set range $ SystemMessage Nothing)
-    SystemTemp           _ -> catSet (Set range $ SystemTemp Nothing)
-    SystemMaxToolDepth   _ -> catSet (Set range $ SystemMaxToolDepth Nothing)
-    SystemAPIKeyOpenAI   _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
-    SystemAPIKeyDeepSeek _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
-    SystemAPIKeyOpenRouter _ -> catSet (Set range $ SystemAPIKeyOpenRouter Nothing)
+    DisplayThinking         _ -> catSet (Set range $ DisplayThinking Nothing)
+    DefaultModel            _ -> catSet (Set range $ DefaultModel Nothing)
+    DefaultModelSuper       _ -> catSet (Set range $ DefaultModelSuper Nothing)
+    SystemMessage           _ -> catSet (Set range $ SystemMessage Nothing)
+    SystemTemp              _ -> catSet (Set range $ SystemTemp Nothing)
+    SystemMaxToolDepth      _ -> catSet (Set range $ SystemMaxToolDepth Nothing)
+    SystemAPIKeyOpenAI      _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
+    SystemAPIKeyDeepSeek    _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
+    SystemAPIKeyOpenRouter  _ -> catSet (Set range $ SystemAPIKeyOpenRouter Nothing)
     SystemAPIKeySiliconFlow _ -> catSet (Set range $ SystemAPIKeySiliconFlow Nothing)
-    ActiveChat           _ -> catSet (Set range $ ActiveChat Nothing)
-    AtReply              _ -> catSet (Set range $ AtReply Nothing)
-    ActiveProbability    _ -> catSet (Set range $ ActiveProbability Nothing)
+    ActiveChat              _ -> catSet (Set range $ ActiveChat Nothing)
+    AtReply                 _ -> catSet (Set range $ AtReply Nothing)
+    ActiveProbability       _ -> catSet (Set range $ ActiveProbability Nothing)
 catSet (View Default item) = do
   botid <- query
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
