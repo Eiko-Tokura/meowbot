@@ -300,22 +300,22 @@ newSavedDataDB botconfig glob sd = do
       botid = botId $ botModules botconfig
   runSqlPool (do
     insert_ $ BotSetting
-      { botSettingBotName                = maybeBotName botname
-      , botSettingBotId                  = botId $ botModules botconfig
-      , botSettingDefaultModel           = coerce $ Just (DeepSeek DeepSeekChat)
-      , botSettingDefaultModelS          = coerce $ Just (DeepSeek DeepSeekReasoner)
-      , botSettingDisplayThinking        = Nothing
-      , botSettingSystemMessage          = globalSysMsg $ botModules botconfig
-      , botSettingSystemTemp             = Nothing
-      , botSettingSystemMaxToolDepth     = Just 5
-      , botSettingSystemAPIKeyOpenAI     = Nothing
-      , botSettingSystemAPIKeyDeepSeek   = Nothing
-      , botSettingSystemAPIKeyOpenRouter = Nothing
+      { botSettingBotName                 = maybeBotName botname
+      , botSettingBotId                   = botId $ botModules botconfig
+      , botSettingDefaultModel            = coerce $ Just (DeepSeek DeepSeekChat)
+      , botSettingDefaultModelS           = coerce $ Just (DeepSeek DeepSeekReasoner)
+      , botSettingDisplayThinking         = Nothing
+      , botSettingSystemMessage           = globalSysMsg $ botModules botconfig
+      , botSettingSystemTemp              = Nothing
+      , botSettingSystemMaxToolDepth      = Just 5
+      , botSettingSystemAPIKeyOpenAI      = Nothing
+      , botSettingSystemAPIKeyDeepSeek    = Nothing
+      , botSettingSystemAPIKeyOpenRouter  = Nothing
       , botSettingSystemAPIKeySiliconFlow = Nothing
-      , botSettingActiveChat             = Just False
-      , botSettingAtReply                = Nothing
-      , botSettingActiveProbability      = Nothing
-      , botSettingMaxMessageInState      = Nothing
+      , botSettingActiveChat              = Just False
+      , botSettingAtReply                 = Nothing
+      , botSettingActiveProbability       = Nothing
+      , botSettingMaxMessageInState       = Nothing
       }
     insertMany_ [ BotSettingPerChat
       { botSettingPerChatBotName          = maybeBotName botname
@@ -326,10 +326,10 @@ newSavedDataDB botconfig glob sd = do
       , botSettingPerChatDisplayThinking  = Nothing
       , botSettingPerChatSystemMessage    = content <$> systemMessage chatSetting
       , botSettingPerChatSystemTemp       = systemTemp chatSetting
-      , botSettingPerChatSystemMaxToolDepth     = systemMaxToolDepth chatSetting
-      , botSettingPerChatSystemAPIKeyOpenAI     = apiKeyOpenAI =<< systemApiKeys chatSetting
-      , botSettingPerChatSystemAPIKeyDeepSeek   = apiKeyDeepSeek =<< systemApiKeys chatSetting
-      , botSettingPerChatSystemAPIKeyOpenRouter = apiKeyOpenRouter =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemMaxToolDepth      = systemMaxToolDepth chatSetting
+      , botSettingPerChatSystemAPIKeyOpenAI      = apiKeyOpenAI =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyDeepSeek    = apiKeyDeepSeek =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyOpenRouter  = apiKeyOpenRouter =<< systemApiKeys chatSetting
       , botSettingPerChatSystemAPIKeySiliconFlow = apiKeySiliconFlow =<< systemApiKeys chatSetting
       , botSettingPerChatActiveChat        = Nothing
       , botSettingPerChatAtReply           = Nothing
