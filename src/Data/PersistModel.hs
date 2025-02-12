@@ -34,17 +34,18 @@ BotSetting -- Overlappable by BotSettingPerChat
   UniqueBotId      botId
   defaultModel     (PersistUseShow ChatModel) Maybe
   defaultModelS    (PersistUseShow ChatModel) Maybe
-  displayThinking        Bool                 Maybe
-  systemMessage          Text                 Maybe
-  systemTemp             Double               Maybe
-  systemMaxToolDepth     Int                  Maybe
-  systemAPIKeyOpenAI     Text                 Maybe
-  systemAPIKeyDeepSeek   Text                 Maybe
-  systemAPIKeyOpenRouter Text                 Maybe
-  activeChat             Bool                 Maybe
-  atReply                Bool                 Maybe
-  activeProbability      Double               Maybe
-  maxMessageInState      Int                  Maybe
+  displayThinking         Bool                 Maybe
+  systemMessage           Text                 Maybe
+  systemTemp              Double               Maybe
+  systemMaxToolDepth      Int                  Maybe
+  systemAPIKeyOpenAI      Text                 Maybe
+  systemAPIKeyDeepSeek    Text                 Maybe
+  systemAPIKeyOpenRouter  Text                 Maybe
+  systemAPIKeySiliconFlow Text                Maybe
+  activeChat              Bool                 Maybe
+  atReply                 Bool                 Maybe
+  activeProbability       Double               Maybe
+  maxMessageInState       Int                  Maybe
 
 BotSettingPerChat -- Overlapping BotSetting
   botName          String                     Maybe
@@ -53,17 +54,18 @@ BotSettingPerChat -- Overlapping BotSetting
   UniqueBotIdChatId botId chatId
   defaultModel     (PersistUseShow ChatModel) Maybe
   defaultModelS    (PersistUseShow ChatModel) Maybe
-  displayThinking        Bool                 Maybe
-  systemMessage          Text                 Maybe
-  systemTemp             Double               Maybe
-  systemMaxToolDepth     Int                  Maybe
-  systemAPIKeyOpenAI     Text                 Maybe
-  systemAPIKeyDeepSeek   Text                 Maybe
-  systemAPIKeyOpenRouter Text                 Maybe
-  activeChat             Bool                 Maybe
-  atReply                Bool                 Maybe
-  activeProbability      Double               Maybe
-  maxMessageInState      Int                  Maybe
+  displayThinking         Bool                 Maybe
+  systemMessage           Text                 Maybe
+  systemTemp              Double               Maybe
+  systemMaxToolDepth      Int                  Maybe
+  systemAPIKeyOpenAI      Text                 Maybe
+  systemAPIKeyDeepSeek    Text                 Maybe
+  systemAPIKeyOpenRouter  Text                 Maybe
+  systemAPIKeySiliconFlow Text                 Maybe
+  activeChat              Bool                 Maybe
+  atReply                 Bool                 Maybe
+  activeProbability       Double               Maybe
+  maxMessageInState       Int                  Maybe
 
 AssistantNote
   botName        String      Maybe
@@ -142,41 +144,43 @@ HangmanRanking
 
 instance Default BotSetting where
   def = BotSetting
-    { botSettingBotName                = Nothing
-    , botSettingBotId                  = BotId 0
-    , botSettingDefaultModel           = Nothing
-    , botSettingDefaultModelS          = Nothing
-    , botSettingDisplayThinking        = Nothing
-    , botSettingSystemMessage          = Nothing
-    , botSettingSystemTemp             = Nothing
-    , botSettingSystemMaxToolDepth     = Nothing
-    , botSettingSystemAPIKeyOpenAI     = Nothing
-    , botSettingSystemAPIKeyDeepSeek   = Nothing
-    , botSettingSystemAPIKeyOpenRouter = Nothing
-    , botSettingActiveChat             = Nothing
-    , botSettingAtReply                = Nothing
-    , botSettingActiveProbability      = Nothing
-    , botSettingMaxMessageInState      = Nothing
+    { botSettingBotName                 = Nothing
+    , botSettingBotId                   = BotId 0
+    , botSettingDefaultModel            = Nothing
+    , botSettingDefaultModelS           = Nothing
+    , botSettingDisplayThinking         = Nothing
+    , botSettingSystemMessage           = Nothing
+    , botSettingSystemTemp              = Nothing
+    , botSettingSystemMaxToolDepth      = Nothing
+    , botSettingSystemAPIKeyOpenAI      = Nothing
+    , botSettingSystemAPIKeyDeepSeek    = Nothing
+    , botSettingSystemAPIKeyOpenRouter  = Nothing
+    , botSettingSystemAPIKeySiliconFlow = Nothing
+    , botSettingActiveChat              = Nothing
+    , botSettingAtReply                 = Nothing
+    , botSettingActiveProbability       = Nothing
+    , botSettingMaxMessageInState       = Nothing
     }
 
 instance Default BotSettingPerChat where
   def = BotSettingPerChat
-    { botSettingPerChatBotName                = Nothing
-    , botSettingPerChatBotId                  = BotId 0
-    , botSettingPerChatChatId                 = PrivateChat 0
-    , botSettingPerChatDefaultModel           = Nothing
-    , botSettingPerChatDefaultModelS          = Nothing
-    , botSettingPerChatDisplayThinking        = Nothing
-    , botSettingPerChatSystemMessage          = Nothing
-    , botSettingPerChatSystemTemp             = Nothing
-    , botSettingPerChatSystemMaxToolDepth     = Nothing
-    , botSettingPerChatSystemAPIKeyOpenAI     = Nothing
-    , botSettingPerChatSystemAPIKeyDeepSeek   = Nothing
-    , botSettingPerChatSystemAPIKeyOpenRouter = Nothing
-    , botSettingPerChatActiveChat             = Nothing
-    , botSettingPerChatAtReply                = Nothing
-    , botSettingPerChatActiveProbability      = Nothing
-    , botSettingPerChatMaxMessageInState      = Nothing
+    { botSettingPerChatBotName                 = Nothing
+    , botSettingPerChatBotId                   = BotId 0
+    , botSettingPerChatChatId                  = PrivateChat 0
+    , botSettingPerChatDefaultModel            = Nothing
+    , botSettingPerChatDefaultModelS           = Nothing
+    , botSettingPerChatDisplayThinking         = Nothing
+    , botSettingPerChatSystemMessage           = Nothing
+    , botSettingPerChatSystemTemp              = Nothing
+    , botSettingPerChatSystemMaxToolDepth      = Nothing
+    , botSettingPerChatSystemAPIKeyOpenAI      = Nothing
+    , botSettingPerChatSystemAPIKeyDeepSeek    = Nothing
+    , botSettingPerChatSystemAPIKeyOpenRouter  = Nothing
+    , botSettingPerChatSystemAPIKeySiliconFlow = Nothing
+    , botSettingPerChatActiveChat              = Nothing
+    , botSettingPerChatAtReply                 = Nothing
+    , botSettingPerChatActiveProbability       = Nothing
+    , botSettingPerChatMaxMessageInState       = Nothing
     }
 
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
@@ -184,18 +188,20 @@ botSettingPerChatSystemAPIKey bspc = case
   ( botSettingPerChatSystemAPIKeyOpenAI bspc
   , botSettingPerChatSystemAPIKeyDeepSeek bspc
   , botSettingPerChatSystemAPIKeyOpenRouter bspc
+  , botSettingPerChatSystemAPIKeySiliconFlow bspc
   ) of
-  (Nothing, Nothing, Nothing) -> Nothing
-  (a, b, c) -> Just $ APIKey a b c
+  (Nothing, Nothing, Nothing, Nothing) -> Nothing
+  (a, b, c, d) -> Just $ APIKey a b c d
 
 botSettingSystemAPIKey :: BotSetting -> Maybe APIKey
 botSettingSystemAPIKey bs = case
   ( botSettingSystemAPIKeyOpenAI bs
   , botSettingSystemAPIKeyDeepSeek bs
   , botSettingSystemAPIKeyOpenRouter bs
+  , botSettingSystemAPIKeySiliconFlow bs
   ) of
-  (Nothing, Nothing, Nothing) -> Nothing
-  (a, b, c) -> Just $ APIKey a b c
+  (Nothing, Nothing, Nothing, Nothing) -> Nothing
+  (a, b, c, d) -> Just $ APIKey a b c d
 
 cqMessageToChatMessage :: BotId -> BotName -> CQMessage -> Maybe ChatMessage
 cqMessageToChatMessage botid botname cqm = do

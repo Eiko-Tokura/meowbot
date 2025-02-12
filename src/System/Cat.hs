@@ -243,9 +243,10 @@ loadSavedDataDB botid glob = do
             ( botSettingPerChatSystemAPIKeyOpenAI c
             , botSettingPerChatSystemAPIKeyDeepSeek c
             , botSettingPerChatSystemAPIKeyOpenRouter c
+            , botSettingPerChatSystemAPIKeySiliconFlow c
             ) of
-              (Nothing, Nothing, Nothing) -> Nothing
-              (a, b, c)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c }
+              (Nothing, Nothing, Nothing, Nothing) -> Nothing
+              (a, b, c, d)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c, apiKeySiliconFlow = d }
           }) | c <- botSettingsPerChat]
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
@@ -310,6 +311,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingSystemAPIKeyOpenAI     = Nothing
       , botSettingSystemAPIKeyDeepSeek   = Nothing
       , botSettingSystemAPIKeyOpenRouter = Nothing
+      , botSettingSystemAPIKeySiliconFlow = Nothing
       , botSettingActiveChat             = Just False
       , botSettingAtReply                = Nothing
       , botSettingActiveProbability      = Nothing
@@ -328,6 +330,7 @@ newSavedDataDB botconfig glob sd = do
       , botSettingPerChatSystemAPIKeyOpenAI     = apiKeyOpenAI =<< systemApiKeys chatSetting
       , botSettingPerChatSystemAPIKeyDeepSeek   = apiKeyDeepSeek =<< systemApiKeys chatSetting
       , botSettingPerChatSystemAPIKeyOpenRouter = apiKeyOpenRouter =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeySiliconFlow = apiKeySiliconFlow =<< systemApiKeys chatSetting
       , botSettingPerChatActiveChat        = Nothing
       , botSettingPerChatAtReply           = Nothing
       , botSettingPerChatActiveProbability = Nothing

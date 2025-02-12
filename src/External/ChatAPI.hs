@@ -6,7 +6,8 @@
 module External.ChatAPI
   ( simpleChat, Message(..), mapMessage, statusChat, messageChat, messagesChat, statusChatReadAPIKey
   , ChatModel(..)
-  , OpenAIModel(..), DeepSeekModel(..), LocalModel(..), OpenRouterModel(..)
+  , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
+  , OpenRouterModel(..), SiliconFlowModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   , ChatAPI(..), APIKey(..)
   , printMessage
@@ -41,18 +42,21 @@ data ChatModel
   | DeepSeek DeepSeekModel
   | Local LocalModel
   | OpenRouter OpenRouterModel
+  | SiliconFlow SiliconFlowModel
   deriving (Show, Read, Eq)
 
 data OpenAIModel     = GPT4oMini | GPT4o deriving (Show, Read, Eq)
 data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
 data OpenRouterModel = DeepSeekR1_Free deriving (Show, Read, Eq)
+data SiliconFlowModel = SF_DeepSeekV3 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
-modelEndpoint OpenAI {}     = "https://api.openai.com/v1/chat/completions"
-modelEndpoint DeepSeek {}   = "https://api.deepseek.com/chat/completions"
-modelEndpoint Local {}      = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
-modelEndpoint OpenRouter {} = "https://openrouter.ai/api/v1/chat/completions"
+modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
+modelEndpoint DeepSeek {}    = "https://api.deepseek.com/chat/completions"
+modelEndpoint Local {}       = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
+modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
+modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
 
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)           = "gpt-4o-mini"
@@ -64,6 +68,7 @@ instance ToJSON ChatModel where
   toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
   toJSON (Local Command_R_Latest)     = "command-r:latest"
   toJSON (OpenRouter DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
+  toJSON (SiliconFlow SF_DeepSeekV3)  = "deepseek-ai/DeepSeek-V3"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -141,6 +146,10 @@ instance ChatAPI (Local Command_R_Latest) where
 instance ChatAPI (OpenRouter DeepSeekR1_Free) where
   chatModel  = OpenRouter DeepSeekR1_Free
   type ChatCompletionResponse (OpenRouter DeepSeekR1_Free) = ChatCompletionResponseOpenAI
+
+instance ChatAPI (SiliconFlow SF_DeepSeekV3) where
+  chatModel  = SiliconFlow SF_DeepSeekV3
+  type ChatCompletionResponse (SiliconFlow SF_DeepSeekV3) = ChatCompletionResponseOpenAI
 
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
@@ -245,6 +254,7 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   -- ^ we haven't implemented tool role for openai model yet, so we use user role instead
 
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message) 
+deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (SiliconFlow b) Message)
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
@@ -283,6 +293,7 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (OpenRouter b) ChatRequest)
+deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (SiliconFlow b) ChatRequest)
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
@@ -314,10 +325,11 @@ generateRequestBody param mes = encode $ ModelDependent @md $
     , messages     = sysMessage : mes
     , temperature  = fromMaybe 0.5 (systemTemp $ chatSetting param)
     , stream       = case chatModel @md of
-        DeepSeek _   -> Just False
-        OpenAI _     -> Nothing
-        Local _      -> Just False
-        OpenRouter _ -> Just False
+        DeepSeek _    -> Just False
+        OpenAI _      -> Nothing
+        Local _       -> Just False
+        OpenRouter _  -> Just False
+        SiliconFlow _ -> Just False
     -- , tools       = Nothing
     }
   where sysMessage = generateSystemPrompt @md @ts @m param
@@ -340,9 +352,10 @@ generateSystemPrompt params
         (fmap content . systemMessage $ chatSetting params)
 
 data APIKey = APIKey
-  { apiKeyOpenAI     :: Maybe Text
-  , apiKeyDeepSeek   :: Maybe Text
-  , apiKeyOpenRouter :: Maybe Text
+  { apiKeyOpenAI      :: Maybe Text
+  , apiKeyDeepSeek    :: Maybe Text
+  , apiKeyOpenRouter  :: Maybe Text
+  , apiKeySiliconFlow :: Maybe Text
   } deriving (Show, Read, Eq, Generic, NFData)
 
 data GetAPIKey
@@ -350,10 +363,11 @@ data GetAPIKey
   | APIKeyRequired (Maybe Text)
 
 getApiKeyByModel :: ChatModel -> APIKey -> GetAPIKey
-getApiKeyByModel (OpenAI _)     apiKey = APIKeyRequired $ apiKeyOpenAI apiKey
-getApiKeyByModel (DeepSeek _)   apiKey = APIKeyRequired $ apiKeyDeepSeek apiKey
-getApiKeyByModel (Local _)    _        = NoAPIKeyRequired
-getApiKeyByModel (OpenRouter _) apiKey = APIKeyRequired $ apiKeyOpenRouter apiKey
+getApiKeyByModel (OpenAI _)     apiKey  = APIKeyRequired $ apiKeyOpenAI apiKey
+getApiKeyByModel (DeepSeek _)   apiKey  = APIKeyRequired $ apiKeyDeepSeek apiKey
+getApiKeyByModel (Local _)    _         = NoAPIKeyRequired
+getApiKeyByModel (OpenRouter _) apiKey  = APIKeyRequired $ apiKeyOpenRouter apiKey
+getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow apiKey
 
 fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse manager _ apiKey model msg = do

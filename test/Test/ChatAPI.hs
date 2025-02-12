@@ -14,7 +14,25 @@ timeoutHttp = 30 * 1000000
 
 testChatAPI :: Manager -> TestTree
 testChatAPI man = testGroup "ChatAPI Round Trip"
-  [ testGroup "Local Model DeepSeekR1_14B"
+  [ testGroup "SiliconFlow DeepSeekV3"
+    [ testCaseInfo "Say hi" $ do
+        let params = ChatParams
+              { chatMarkDown = False
+              , chatSetting = ChatSetting
+                { systemMessage = Nothing
+                , systemTemp = Nothing
+                , systemMaxToolDepth = Nothing
+                , systemApiKeys = Nothing
+                }
+              , chatManager = man
+              , chatTimeout = timeoutHttp
+              } :: ChatParams (SiliconFlow SF_DeepSeekV3) '[]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
+        case content <$> res of
+          Left err -> assertFailure $ "messageChat failed: " ++ show err
+          Right r  -> return $ unpack r
+    ]
+  , testGroup "Local Model DeepSeekR1_14B"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
