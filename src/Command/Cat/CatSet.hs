@@ -52,6 +52,8 @@ data BotSettingItem
   | SystemMaxToolDepth   (Maybe Int)
   | SystemAPIKeyOpenAI   (Maybe Text)
   | SystemAPIKeyDeepSeek (Maybe Text)
+  | SystemAPIKeyOpenRouter (Maybe Text)
+  | SystemAPIKeySiliconFlow (Maybe Text)
   | ActiveChat           (Maybe Bool)
   | AtReply              (Maybe Bool)
   | ActiveProbability    (Maybe Double)
@@ -81,6 +83,8 @@ catSetParser = MP.headCommand "cat-" >> do
     , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
     , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+    , MP.string "systemAPIKeyOpenRouter" >> fmap (action range) (SystemAPIKeyOpenRouter <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+    , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
     , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
     , MP.string "atReply"              >> fmap (action range) (AtReply              <$> MP.optMaybe (MP.spaces >> MP.bool))
     , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
@@ -155,6 +159,12 @@ catSet (Set Default item) = do
     SystemAPIKeyDeepSeek mdt -> do
       lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeyDeepSeek =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
+    SystemAPIKeyOpenRouter mdt -> do
+      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeyOpenRouter =. mdt])
+      return [ baSendToChatId cid $ "SystemAPIKeyOpenRouter set to " <> tshow mdt ]
+    SystemAPIKeySiliconFlow mdt -> do
+      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeySiliconFlow =. mdt])
+      return [ baSendToChatId cid $ "SystemAPIKeySiliconFlow set to " <> tshow mdt ]
     ActiveChat           mdt -> do
       lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingActiveChat =. mdt])
       return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
@@ -201,10 +211,16 @@ catSet (Set (PerChatWithChatId cid) item) = do
       return [ baSendToChatId cid' $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
-      return [ baSendToChatId cid' $ "SystemAPIKeyOpenAI set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemAPIKeyOpenAI set to " <> redacted mdt ]
     SystemAPIKeyDeepSeek mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
-      return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
+      return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> redacted mdt ]
+    SystemAPIKeyOpenRouter mdt -> do
+      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyOpenRouter =. mdt]
+      return [ baSendToChatId cid' $ "SystemAPIKeyOpenRouter set to " <> redacted mdt ]
+    SystemAPIKeySiliconFlow mdt -> do
+      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeySiliconFlow =. mdt]
+      return [ baSendToChatId cid' $ "SystemAPIKeySiliconFlow set to " <> redacted mdt ]
     ActiveChat           mdt -> do
       lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatActiveChat =. mdt]
       return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
@@ -225,6 +241,8 @@ catSet (UnSet range item) =
     SystemMaxToolDepth   _ -> catSet (Set range $ SystemMaxToolDepth Nothing)
     SystemAPIKeyOpenAI   _ -> catSet (Set range $ SystemAPIKeyOpenAI Nothing)
     SystemAPIKeyDeepSeek _ -> catSet (Set range $ SystemAPIKeyDeepSeek Nothing)
+    SystemAPIKeyOpenRouter _ -> catSet (Set range $ SystemAPIKeyOpenRouter Nothing)
+    SystemAPIKeySiliconFlow _ -> catSet (Set range $ SystemAPIKeySiliconFlow Nothing)
     ActiveChat           _ -> catSet (Set range $ ActiveChat Nothing)
     AtReply              _ -> catSet (Set range $ AtReply Nothing)
     ActiveProbability    _ -> catSet (Set range $ ActiveProbability Nothing)
@@ -252,10 +270,16 @@ catSet (View Default item) = do
       return [baSendToChatId cid $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenAI . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemAPIKeyOpenAI: " <> tshow mdt]
+      return [baSendToChatId cid $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
-      return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
+      return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
+    SystemAPIKeyOpenRouter _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenRouter . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
+    SystemAPIKeySiliconFlow _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeySiliconFlow . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      return [baSendToChatId cid $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
       return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
@@ -294,10 +318,16 @@ catSet (View (PerChatWithChatId cid) item) = do
       return [baSendToChatId cid' $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
-      return [baSendToChatId cid' $ "SystemAPIKeyOpenAI: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
-      return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> tshow mdt]
+      return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
+    SystemAPIKeyOpenRouter _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      return [baSendToChatId cid' $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
+    SystemAPIKeySiliconFlow _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      return [baSendToChatId cid' $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
@@ -308,3 +338,12 @@ catSet (View (PerChatWithChatId cid) item) = do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
 
+class MaybeRedacted a where
+  redacted :: a -> Text
+
+instance MaybeRedacted Text where
+  redacted = const "<redacted>"
+
+instance MaybeRedacted a => MaybeRedacted (Maybe a) where
+  redacted Nothing = "Nothing"
+  redacted (Just x) = "Just (" <> redacted x <> ")"

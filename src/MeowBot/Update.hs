@@ -22,7 +22,7 @@ import Debug.Trace
 import System.General
 import Module
 
-forestSizeForEachChat = 96 -- ^ controls how many trees to keep in each chat room
+forestSizeForEachChat = 64 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
 updateSelfInfo :: (MonadReadable AllData m, MonadModifiable AllData m) => CQMessage -> m ()
