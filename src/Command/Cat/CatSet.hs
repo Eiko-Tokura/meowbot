@@ -83,26 +83,27 @@ catSetParser =
       ]
     MP.spaces
     range <- asum
-      [ MP.string "default" *> return Default <* MP.spaces
-      , MP.string "perchat" *> MP.spaces *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
-      , MP.string "perchat" *> return PerChat <* MP.spaces
+      [ MP.string "default" *> return Default  <* MP.spaces
+      , MP.string "perchat" *> MP.spaces
+            *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
+      , MP.string "perchat" *> return PerChat  <* MP.spaces
       , return PerChat
       ]
     return $ action range (DisplayThinking Nothing)
     asum
-      [ MP.string "displayThinking"      >> fmap (action range) (DisplayThinking      <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "defaultModelSuper"    >> fmap (action range) (DefaultModelSuper    <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-      , MP.string "defaultModel"         >> fmap (action range) (DefaultModel         <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-      , MP.string "systemMessage"        >> fmap (action range) (SystemMessage        <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemTemp"           >> fmap (action range) (SystemTemp           <$> MP.optMaybe (MP.spaces >> MP.nFloat))
-      , MP.string "systemMaxToolDepth"   >> fmap (action range) (SystemMaxToolDepth   <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
-      , MP.string "systemAPIKeyOpenAI"   >> fmap (action range) (SystemAPIKeyOpenAI   <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIkeyDeepSeek" >> fmap (action range) (SystemAPIKeyDeepSeek <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIKeyOpenRouter" >> fmap (action range) (SystemAPIKeyOpenRouter <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      [ MP.string "displayThinking"         >> fmap (action range) (DisplayThinking         <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "defaultModelSuper"       >> fmap (action range) (DefaultModelSuper       <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+      , MP.string "defaultModel"            >> fmap (action range) (DefaultModel            <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
+      , MP.string "systemMessage"           >> fmap (action range) (SystemMessage           <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemTemp"              >> fmap (action range) (SystemTemp              <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+      , MP.string "systemMaxToolDepth"      >> fmap (action range) (SystemMaxToolDepth      <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
+      , MP.string "systemAPIKeyOpenAI"      >> fmap (action range) (SystemAPIKeyOpenAI      <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIkeyDeepSeek"    >> fmap (action range) (SystemAPIKeyDeepSeek    <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIKeyOpenRouter"  >> fmap (action range) (SystemAPIKeyOpenRouter  <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "activeChat"           >> fmap (action range) (ActiveChat           <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "atReply"              >> fmap (action range) (AtReply              <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "activeProbability"    >> fmap (action range) (ActiveProbability    <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+      , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> MP.nFloat))
       ]
     ) <|> (MP.headCommand "cat-clear" >> return Clear)
   where chatIdP = asum
@@ -155,45 +156,46 @@ catSet (Set Default item) = do
   (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
   botid <- query
+  let selector = [BotSettingBotId ==. botid]
   case item of
     DisplayThinking      mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingDisplayThinking =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingDisplayThinking =. mdt])
       return [ baSendToChatId cid $ "DisplayThinking set to " <> tshow mdt ]
     DefaultModel         mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingDefaultModel =. fmap PersistUseShow mdt])
+      lift $ runDB (updateWhere selector [BotSettingDefaultModel =. fmap PersistUseShow mdt])
       return [ baSendToChatId cid $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingDefaultModelS =. fmap PersistUseShow mdt])
+      lift $ runDB (updateWhere selector [BotSettingDefaultModelS =. fmap PersistUseShow mdt])
       return [ baSendToChatId cid $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemMessage =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemMessage =. mdt])
       return [ baSendToChatId cid $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemTemp =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemTemp =. mdt])
       return [ baSendToChatId cid $ "SystemTemp set to " <> tshow mdt ]
     SystemMaxToolDepth   mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemMaxToolDepth =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemMaxToolDepth =. mdt])
       return [ baSendToChatId cid $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeyOpenAI =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyOpenAI =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyOpenAI set to " <> tshow mdt ]
     SystemAPIKeyDeepSeek mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeyDeepSeek =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyDeepSeek =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
     SystemAPIKeyOpenRouter mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeyOpenRouter =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyOpenRouter =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyOpenRouter set to " <> tshow mdt ]
     SystemAPIKeySiliconFlow mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingSystemAPIKeySiliconFlow =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeySiliconFlow =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeySiliconFlow set to " <> tshow mdt ]
     ActiveChat           mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingActiveChat =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingActiveChat =. mdt])
       return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
     AtReply              mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingAtReply =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingAtReply =. mdt])
       return [ baSendToChatId cid $ "AtReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
-      lift $ runDB (updateWhere [BotSettingBotId ==. botid] [BotSettingActiveProbability =. mdt])
+      lift $ runDB (updateWhere selector [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
 
 catSet (Set PerChat item) = do
@@ -211,45 +213,46 @@ catSet (Set (PerChatWithChatId cid) item) = do
       { botSettingPerChatChatId = cid
       , botSettingPerChatBotId = botid
       }
+  let selector = [BotSettingPerChatBotId ==. botid, BotSettingPerChatChatId ==. cid]
   case item of
     DisplayThinking      mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatDisplayThinking =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayThinking =. mdt]
       return [ baSendToChatId cid' $ "DisplayThinking set to " <> tshow mdt ]
     DefaultModel         mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
       return [ baSendToChatId cid' $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatDefaultModelS =. fmap PersistUseShow mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatDefaultModelS =. fmap PersistUseShow mdt]
       return [ baSendToChatId cid' $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemMessage =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemMessage =. mdt]
       return [ baSendToChatId cid' $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemTemp =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemTemp =. mdt]
       return [ baSendToChatId cid' $ "SystemTemp set to " <> tshow mdt ]
     SystemMaxToolDepth   mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemMaxToolDepth =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemMaxToolDepth =. mdt]
       return [ baSendToChatId cid' $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyOpenAI set to " <> redacted mdt ]
     SystemAPIKeyDeepSeek mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> redacted mdt ]
     SystemAPIKeyOpenRouter mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeyOpenRouter =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenRouter =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyOpenRouter set to " <> redacted mdt ]
     SystemAPIKeySiliconFlow mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatSystemAPIKeySiliconFlow =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeySiliconFlow =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeySiliconFlow set to " <> redacted mdt ]
     ActiveChat           mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatActiveChat =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatActiveChat =. mdt]
       return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
     AtReply              mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatAtReply =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatAtReply =. mdt]
       return [ baSendToChatId cid' $ "AtReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
-      lift $ runDB $ updateWhere [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] [BotSettingPerChatActiveProbability =. mdt]
+      lift $ runDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
 
 catSet (UnSet range item) =
@@ -268,47 +271,48 @@ catSet (UnSet range item) =
     AtReply              _ -> catSet (Set range $ AtReply Nothing)
     ActiveProbability    _ -> catSet (Set range $ ActiveProbability Nothing)
 catSet (View Default item) = do
-  botname <- query
+  botid <- query
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+  let selector = [BotSettingBotId ==. botid]
   case item of
     DisplayThinking      _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDisplayThinking . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DisplayThinking: " <> tshow mdt]
     DefaultModel         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDefaultModel . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDefaultModelS . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingDefaultModelS . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemMessage . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemTemp . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemTemp . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemMaxToolDepth . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemMaxToolDepth . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenAI . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
     SystemAPIKeyOpenRouter _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenRouter . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
     SystemAPIKeySiliconFlow _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeySiliconFlow . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
     AtReply              _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "AtReply: " <> tshow mdt]
     ActiveProbability    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst [BotSettingBotName ==. maybeBotName botname] []
+      mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
 
 catSet (View PerChat item) = do
@@ -318,45 +322,46 @@ catSet (View PerChat item) = do
 catSet (View (PerChatWithChatId cid) item) = do
   botid <- query
   (_, cid', _, _, _) <- MaybeT $ getEssentialContent <$> query
+  let selector = [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid]
   case item of
     DisplayThinking      _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "DisplayThinking: " <> tshow mdt]
     DefaultModel         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
     SystemAPIKeyOpenRouter _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
     SystemAPIKeySiliconFlow _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
     AtReply              _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "AtReply: " <> tshow mdt]
     ActiveProbability    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
 
 catSet Clear = do
