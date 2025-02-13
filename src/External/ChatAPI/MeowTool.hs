@@ -142,14 +142,13 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
   type ToolOutput ActionTool = ParamToData (ObjectP0 '[])
   data ToolError ActionTool = ActionError Text deriving Show
   toolName _ _ = "action"
-  toolDescription _ _ = "Send a like or a poke"
+  toolDescription _ _ = "Send a like (点赞) or a poke (戳一戳) to a user"
   toolHandler _ _ ((StringT act) :%* (IntT user_id) :%* ObjT0Nil) = do
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
     cid <- effectEWith' (const $ ActionError "no ChatId found") $ getCid
-    botAction <- liftIO $ readTVarIO tvarBotAction
     action <- case act of
       "like" -> return . pure $ BAActionAPI (SendLike (UserId user_id) 10)
       "poke" -> return . pure $ BAActionAPI (SendPoke (UserId user_id) cid)
       _ -> throwError $ ActionError "action can only be 'like' or 'poke'"
-    liftIO $ atomically $ writeTVar tvarBotAction $ botAction ++ [return action]
+    liftIO $ atomically $ modifyTVar tvarBotAction $ (<> [return action])
     return ObjT0Nil
