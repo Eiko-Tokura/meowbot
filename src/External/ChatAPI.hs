@@ -239,12 +239,13 @@ instance ToJSON (ModelDependent (DeepSeek DeepSeekReasoner) Message) where
   toJSON (ModelDependent (AssistantMessage c (Just think) _))
     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
+  -- ^ deepseek model does not support tool role, and we use user role instead
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (DeepSeek a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   toJSON (ModelDependent (AssistantMessage c _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
@@ -565,7 +566,7 @@ data Skipped = Skipped
 handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m (Either Skipped Message)
 handleToolCall toolCallName args md = do
   -- Find matching tool
-  output <-
+  eOutput <-
     case pickConstraint (Proxy @(ToolClass m)) (Proxy @ts) ((== toolCallName) . toolName (Proxy @m)) of
       Just toolCont -> toolCont $ \tool -> do
         toolOutput <- lift $ runExceptT $ do
@@ -577,7 +578,7 @@ handleToolCall toolCallName args md = do
         -- Execute tool, tool error is caught and wrapped for agent to handle
       Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
 
-  case output of
+  case eOutput of
     Left Skipped -> return $ Left Skipped
     Right output -> do
       -- Build updated message history

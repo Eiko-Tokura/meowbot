@@ -140,14 +140,14 @@ commandChat = BotCommand Chat $ botT $ do
       nullify x = x
 
       toUserMessage :: CQMessage -> Message
-      toUserMessage cqmsg = UserMessage $ mconcat $ catMaybes $
-        [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqmsg)
-        , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqmsg)
-        , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqmsg)
-        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqmsg)
-        , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqmsg)
+      toUserMessage cqm = UserMessage $ mconcat $ catMaybes $
+        [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
+        , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
+        , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
+        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
+        , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
         , Just ": "
-        , selectedContent . mixedMessage <$> metaMessage cqmsg
+        , selectedContent . mixedMessage <$> metaMessage cqm
         ]
 
       selectedContent :: [Either CQCode Text] -> Text
@@ -247,17 +247,18 @@ commandChat = BotCommand Chat $ botT $ do
 markMeow :: ChatId -> MeowStatus -> Meow ()
 markMeow cid meowStat = do
   allChatState <- getTypeWithDef SM.empty
-  let chatState = SM.lookup cid allChatState
-  case chatState of
+  let mchatState = SM.lookup cid allChatState
+  case mchatState of
     Nothing -> pure ()
-    Just chatState ->
+    Just chatState -> do
       putType $ SM.insert cid chatState { meowStatus = meowStat } allChatState
+      $(logDebug) $ "Marked meow status to " <> tshow meowStat
 
 mergeChatStatus :: Int -> ChatId -> [Message] -> ChatStatus -> Meow ()
 mergeChatStatus maxMessageInState cid newMsgs newStatus = do
   allChatState <- getTypeWithDef SM.empty
-  let chatState = SM.lookup cid allChatState
-  case chatState of
+  let mchatState = SM.lookup cid allChatState
+  case mchatState of
     Nothing -> pure ()
     Just chatState ->
       putType $ SM.insert cid

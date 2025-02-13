@@ -24,7 +24,7 @@ instance MeowModule r AllData ConnectionManagerModule where
   getInitDataL _ = (Just ConnectionManagerInitDataL, empty)
 
   initModule _ _ = do
-    let customTimeout = 50 * 1000000 -- 60 seconds in microseconds
+    let customTimeout = 70 * 1000000 -- 70 seconds in microseconds
     let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
     manager <- liftIO $ newManager customManagerSettings
     $(logInfo) "Connection Manager Initialized"

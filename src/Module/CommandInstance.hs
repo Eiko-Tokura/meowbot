@@ -123,11 +123,11 @@ instance
           RequestEvent -> handleRequestEvent conn nameBot cqmsg
           _ -> return ()
         where
-          updateStates nameBot cqmsg = do
-            cqmsg' <- (\mid -> cqmsg {absoluteId = Just mid}) <$> increaseAbsoluteId
+          updateStates name cqm = do
+            cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> increaseAbsoluteId
             change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
             updateSavedAdditionalData
-            $(logInfo) $ pack nameBot <> " <- " <> pack (showCQ cqmsg')
+            $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
     -- | creating a new async to receive the next message
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
