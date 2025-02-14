@@ -109,14 +109,15 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete 
     return $ IntT note_id :%* ObjT0Nil
 
 
-listNoteTitles :: BotName -> ChatId -> Meow [(Int, Text)]
-listNoteTitles botname cid
-  = fmap (fmap (\(Entity _ note) -> (assistantNoteNoteId note, assistantNoteTitle note)))
+listNoteTitleAndContents :: BotName -> ChatId -> Meow [(Int, (Text, Text))]
+listNoteTitleAndContents botname cid
+  = fmap (fmap (\(Entity _ note) -> (assistantNoteNoteId note, (assistantNoteTitle note, assistantNoteContent note))))
   . runDB $ selectList [AssistantNoteBotName ==. maybeBotName botname, AssistantNoteChatId ==. cid] []
 
+-- | Get the note listing, including the note_id, title and content (truncated to 20 characters)
 getNoteListing :: BotName -> ChatId -> Meow (Maybe Text)
 getNoteListing bn cid = do
-  noteTitles <- listNoteTitles bn cid
+  noteTitles <- listNoteTitleAndContents bn cid
   return $ case noteTitles of
     [] -> Nothing
     xs -> Just $ T.unlines $
@@ -124,8 +125,11 @@ getNoteListing bn cid = do
         [ toText note_id
         , ". "
         , title
+        , " :"
+        , T.take 20 content
+        , if T.length content > 20 then "..." else ""
         ]
-      | (note_id, title) <- xs
+      | (note_id, (title, content)) <- xs
       ]
 
 
@@ -139,10 +143,11 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
       , IntP "user_id" "user_id of the target user"
       ]
     )
-  type ToolOutput ActionTool = ParamToData (ObjectP0 '[])
+  type ToolOutput ActionTool = ParamToData (ObjectP0 '[StringP "result" "the result of the action"])
   data ToolError ActionTool = ActionError Text deriving Show
   toolName _ _ = "action"
-  toolDescription _ _ = "Send a like (点赞) or a poke (戳一戳) to a user"
+  toolDescription _ _ =  "Send a like (点赞) or a poke (戳一戳) to a user. Example Output : "
+                      <> "{\"tool\": \"action\", \"args\": {\"action\": \"like\", \"user_id\": <user_id>}}"
   toolHandler _ _ ((StringT act) :%* (IntT user_id) :%* ObjT0Nil) = do
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
     cid <- effectEWith' (const $ ActionError "no ChatId found") $ getCid
@@ -151,4 +156,4 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
       "poke" -> return . pure $ BAActionAPI (SendPoke (UserId user_id) cid)
       _ -> throwError $ ActionError "action can only be 'like' or 'poke'"
     liftIO $ atomically $ modifyTVar tvarBotAction $ (<> [return action])
-    return ObjT0Nil
+    return $ StringT "success" :%* ObjT0Nil

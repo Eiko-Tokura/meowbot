@@ -177,8 +177,8 @@ commandChat = BotCommand Chat $ botT $ do
 
       updateChatState :: AllChatState -> AllChatState
       updateChatState s =
-        let state = SM.lookup cid s in
-        case state of
+        let mstate = SM.lookup cid s in
+        case mstate of
           Just cs -> SM.insert cid
             cs
               { chatStatus = (chatStatus cs)

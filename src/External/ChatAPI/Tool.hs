@@ -405,15 +405,15 @@ parseToolCall :: Text -> Maybe (Maybe Text, ToolCallPair)
 parseToolCall txt
   =   fmap (Nothing, ) (decode (encodeUtf8LBS txt))
   <|> (parseToolCallText txt)
-  where parseToolCallText txt
-          | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":", "```json"]
-             = let start = T.drop 7 $ T.dropWhile (/= '`') txt
+  where parseToolCallText t
+          | all (`T.isInfixOf` t) ["{\"tool\":", "\"args\":", "```json"]
+             = let start = T.drop 7 $ T.dropWhile (/= '`') t
                    mid = runParser (manyTill' (string "```") getItem <* string "```") start :: Maybe Text
                in fmap (Nothing,) . decode =<< encodeUtf8LBS <$> mid
-          | all (`T.isInfixOf` txt) ["{\"tool\":", "\"args\":"]
-             = let parse = runParser ((,) <$> manyTill' (string "{\"tool\":") getItem <*> (some' getItem <* end)) txt :: Maybe (Text, Text)
+          | all (`T.isInfixOf` t) ["{\"tool\":", "\"args\":"]
+             = let parsed = runParser ((,) <$> manyTill' (string "{\"tool\":") getItem <*> (some' getItem <* end)) txt :: Maybe (Text, Text)
                in do
-                (start, toolText) <- parse
+                (start, toolText) <- parsed
                 let toolBS = encodeUtf8LBS toolText
                 decodedToolPair <- decode toolBS
                 case T.null (T.strip start) of
@@ -477,9 +477,9 @@ instance MonadIO m => ToolClass m FibonacciTool where
         liftIO $ putTextLn $ "[TOOL]The result is " <> tshow (fib n)
         return $ StringT $ toText $ fib n
     where fib :: Int -> Integer
-          fib n = go n 0 1
+          fib m = go m 0 1
           go 0 a _ = a
-          go n a b = go (n-1) b (a+b)
+          go m a b = go (m-1) b (a+b)
 
 -- | Check dummy input output json parsing
 sanityCheckFibonacciTool :: IO ()
