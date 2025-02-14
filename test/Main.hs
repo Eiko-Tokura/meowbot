@@ -6,6 +6,7 @@ import Command.Poll
 import Test.Tasty
 import Test.Tasty.HUnit
 import Test.ChatAPI
+import Test.SearchScrape
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
 
@@ -20,6 +21,7 @@ tests man = testGroup "Tests"
     , testCase "Poll Parser" pollParserTest
     ]
   , testTools
+  , testSearchScrape
   , testChatAPI man
   ]
   -- testSavedAdditional

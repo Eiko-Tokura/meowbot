@@ -10,6 +10,8 @@ import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
+import External.ChatAPI.Tool.Search
+import External.ChatAPI.Tool.Scrape
 import External.ChatAPI.MeowTool
 import External.ChatAPI.MeowToolEnv
 import qualified MeowBot.Parser as MP
@@ -39,7 +41,17 @@ import Data.Additional.Default
 
 import Probability.Foundation
 
-type MeowTools = '[TimeTool, SkipTool, ActionTool, NoteToolAdd, NoteToolRead, NoteToolDelete]
+type MeowTools = 
+  [ TimeTool
+  , SkipTool
+  , ActionTool
+  , NoteToolAdd
+  , NoteToolRead
+  , NoteToolDelete
+  , ScrapeTool
+  , SearchTool
+  ]
+
 type ModelChat = Local DeepSeekR1_14B
 
 -- | A new command that enables the bot to chat with users

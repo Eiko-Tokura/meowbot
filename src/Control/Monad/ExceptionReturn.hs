@@ -68,6 +68,16 @@ instance ExceptionOverride Maybe emsg where
   pureEWith' msgf = effectEWith' msgf . return
   {-# INLINE pureEWith' #-}
 
+instance ExceptionOverride (Either e) e where
+  effectEWith' msgf mfa = ExceptT $ do
+    fa <- mfa
+    case fa of
+      Left e  -> return $ Left $ msgf (Left e)
+      Right a -> return $ Right a
+  {-# INLINE effectEWith' #-}
+  pureEWith' msgf = effectEWith' msgf . return
+  {-# INLINE pureEWith' #-}
+
 instance ToText e Text => ExceptionReturn (Either e) Text where
   conversionToEither Nothing     = first toText
   conversionToEither (Just msg)  = first $ (msg `append`) . toText

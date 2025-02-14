@@ -96,14 +96,14 @@ catSetParser =
       , MP.string "defaultModel"            >> fmap (action range) (DefaultModel            <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
       , MP.string "systemMessage"           >> fmap (action range) (SystemMessage           <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemTemp"              >> fmap (action range) (SystemTemp              <$> MP.optMaybe (MP.spaces >> MP.nFloat))
-      , MP.string "systemMaxToolDepth"      >> fmap (action range) (SystemMaxToolDepth      <$> MP.optMaybe (MP.spaces >> MP.intRange 1 100))
+      , MP.string "systemMaxToolDepth"      >> fmap (action range) (SystemMaxToolDepth      <$> MP.optMaybe (MP.spaces >> MP.intRange 1 10))
       , MP.string "systemAPIKeyOpenAI"      >> fmap (action range) (SystemAPIKeyOpenAI      <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIkeyDeepSeek"    >> fmap (action range) (SystemAPIKeyDeepSeek    <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIKeyOpenRouter"  >> fmap (action range) (SystemAPIKeyOpenRouter  <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> MP.nFloat))
+      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.21 && x >= 0) MP.nFloat))
       ]
     ) <|> (MP.headCommand "cat-clear" >> return Clear)
   where chatIdP = asum

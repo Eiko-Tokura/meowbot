@@ -70,6 +70,33 @@ library item
 
     default-language: GHC2024
 
+-- | A library that provides
+-- * google search (via python)
+-- * web scraping, providing a function that cleans up the html and return text content
+library search-scrape-text
+
+    exposed-modules: Search
+                   , Scrape
+
+-- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -finfo-table-map -fdistinct-constructor-tables -j8
+
+    build-depends: base  >=4.7 && <5
+                 , data-default
+                 , http-client
+                 , mtl
+                 , scalpel >= 0.6 && < 0.7
+                 , template-haskell
+                 , text
+                 , transformers
+                 , process
+                 , aeson
+                 , base64-bytestring
+                 , bytestring
+
+    hs-source-dirs:   search-scrape-text
+
+    default-language: GHC2024
 
 library meowbot-lib
     -- .hs or .lhs file containing the Main module.
@@ -117,6 +144,8 @@ library meowbot-lib
                    , External.ChatAPI.MeowTool
                    , External.ChatAPI.MeowToolEnv
                    , External.ChatAPI.Tool
+                   , External.ChatAPI.Tool.Search
+                   , External.ChatAPI.Tool.Scrape
                    , External.MarkdownImage
                    , External.ProxyWS
                    , MeowBot
@@ -184,6 +213,7 @@ library meowbot-lib
                  , random
                  , resource-pool
                  , safe
+                 , search-scrape-text
                  , servant
                  , servant-client
                  , stm
@@ -262,6 +292,7 @@ test-suite meowbot-test
     main-is: Main.hs
 
     other-modules: Test.ChatAPI
+                 , Test.SearchScrape
 
     build-depends: base
                  , tasty
@@ -271,6 +302,7 @@ test-suite meowbot-test
                  , http-client
                  , http-client-tls
                  , data-default
+                 , search-scrape-text
 
     default-language: GHC2024
 

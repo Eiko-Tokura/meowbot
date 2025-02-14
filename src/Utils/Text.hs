@@ -8,6 +8,7 @@ module Utils.Text
   , lazyPack, lazyUnpack, tlshow
   , TextUtils(..)
   , putTextLn, putLazyTextLn
+  , readFileText, readFileLazyText
   , ToText(..)
   ) where
 
@@ -36,6 +37,10 @@ class TextUtils t where
   textToByteString :: t -> CorrespondingByteString t
 
   textToLazyByteString :: t -> BL.ByteString
+
+  textUnlines :: [t] -> t
+
+  textLines :: t -> [t]
   ----------------- IO functions -------------------
   restrictLength :: Int -> t -> t
 
@@ -49,12 +54,20 @@ putTextLn = TIO.putStrLn
 putLazyTextLn :: LazyText -> IO ()
 putLazyTextLn = TLIO.putStrLn
 
+readFileText :: FilePath -> IO Text
+readFileText = TIO.readFile
+
+readFileLazyText :: FilePath -> IO LazyText
+readFileLazyText = TLIO.readFile
+
 instance TextUtils T.Text where
   type CorrespondingByteString T.Text = B.ByteString
   pack                 = T.pack
   unpack               = T.unpack
   textToByteString     = TE.encodeUtf8
   textToLazyByteString = TLE.encodeUtf8 . TL.fromStrict
+  textUnlines          = T.unlines
+  textLines            = T.lines
   restrictLength n     = T.take n
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
@@ -68,6 +81,8 @@ instance TextUtils LazyText where
   unpack               = TL.unpack
   textToByteString     = TLE.encodeUtf8
   textToLazyByteString = TLE.encodeUtf8
+  textUnlines          = TL.unlines
+  textLines            = TL.lines
   restrictLength n     = TL.take (fromIntegral n)
   {-# INLINE pack #-}
   {-# INLINE unpack #-}
