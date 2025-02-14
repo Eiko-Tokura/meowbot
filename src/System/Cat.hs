@@ -10,6 +10,7 @@ import Control.Exception
 import System
 import Utils.Logging
 import Data.HList
+import Data.Default
 import MeowBot
 import MeowBot.CommandRule
 import Network.WebSockets
@@ -235,7 +236,7 @@ loadSavedDataDB botid glob = do
   bookDBs              <- fmap (map entityVal) . lift $ runSqlPool (selectList [] []) pool
   let
       chatIds_chatSettings =
-        [( botSettingPerChatChatId c, ChatSetting
+        [( botSettingPerChatChatId c, def
           { systemMessage      = SystemMessage <$> botSettingPerChatSystemMessage c
           , systemTemp         = botSettingPerChatSystemTemp c
           , systemMaxToolDepth = botSettingPerChatSystemMaxToolDepth c

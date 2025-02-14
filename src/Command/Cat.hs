@@ -23,6 +23,7 @@ import Control.Monad.Trans.ReaderState
 import Control.Monad.Except
 import Control.Concurrent
 
+import Data.Default
 import Data.HList
 import Data.Proxy
 import Data.Coerce
@@ -94,6 +95,7 @@ commandCat = BotCommand Cat $ botT $ do
                      , botSettingSystemAPIKey =<< botSetting
                      ]
                    )
+                   Nothing
       let modelCat = fromMaybe (modelCat) $ runPersistUseShow <$> asum
             [ botSettingPerChatDefaultModel =<< botSettingPerChat
             , botSettingDefaultModel =<< botSetting
@@ -208,8 +210,8 @@ catParser (BotName (Just botname)) msys = do
       MP.commandSeparator
       str <- MP.some MP.item
       case modelStr of
-         "supercat" -> return . (, str) . Right $ \cp -> cp md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
-         _          -> return . (, str) . Left  $ \cp -> cp md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
+         "supercat" -> return . (, str) . Right $ \cp -> cp md (Just msys `chatSettingAlternative` def {systemTemp = Just 0.2})
+         _          -> return . (, str) . Left  $ \cp -> cp md (Just msys `chatSettingAlternative` def {systemTemp = Just 0.7})
 catParser (BotName Nothing) msys = do
   MP.spaces0
   parseCat <|> parseMeowMeow
@@ -226,9 +228,8 @@ catParser (BotName Nothing) msys = do
       MP.commandSeparator
       str <- MP.some MP.item
       case modelStr of
-         "supercat" -> return . (, str) . Right $ \cp -> cp md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.2) Nothing Nothing)
-         _          -> return . (, str) . Left  $ \cp -> cp md (Just msys `chatSettingAlternative` ChatSetting Nothing (Just 0.7) Nothing Nothing)
-
+         "supercat" -> return . (, str) . Right $ \cp -> cp md (Just msys `chatSettingAlternative` def {systemTemp = Just 0.2})
+         _          -> return . (, str) . Left  $ \cp -> cp md (Just msys `chatSettingAlternative` def {systemTemp = Just 0.7})
 replyCatParser :: (Chars sb) => BotName -> ChatSetting -> Parser sb Char (ChatSettingPerModel m1 m2 ts, String)
 replyCatParser name msys = catParser name msys <|> ( do
   MP.spaces0

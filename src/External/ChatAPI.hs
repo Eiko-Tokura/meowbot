@@ -22,6 +22,7 @@ import Control.Monad.Logger
 import Network.HTTP.Client hiding (Proxy)
 import Data.Aeson as A
 import Data.Bifunctor
+import Data.Default
 import Data.Either
 import Data.Text (Text, pack)
 import Data.HList
@@ -45,10 +46,10 @@ data ChatModel
   | SiliconFlow SiliconFlowModel
   deriving (Show, Read, Eq)
 
-data OpenAIModel     = GPT4oMini | GPT4o deriving (Show, Read, Eq)
+data OpenAIModel     = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
-data OpenRouterModel = DeepSeekR1_Free deriving (Show, Read, Eq)
+data OpenRouterModel = OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
@@ -61,13 +62,15 @@ modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)           = "gpt-4o-mini"
   toJSON (OpenAI GPT4o)               = "gpt-4o"
+  toJSON (OpenAI O3Mini)              = "o3-mini"
   toJSON (DeepSeek DeepSeekChat)      = "deepseek-chat"
   toJSON (DeepSeek DeepSeekReasoner)  = "deepseek-reasoner"
   toJSON (Local DeepSeekR1_14B)       = "deepseek-r1:14b"
   toJSON (Local DeepSeekR1_32B)       = "deepseek-r1:32b"
   toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
   toJSON (Local Command_R_Latest)     = "command-r:latest"
-  toJSON (OpenRouter DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
+  toJSON (OpenRouter OR_DeepSeekR1)   = "deepseek/deepseek-r1"
+  toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
   toJSON (SiliconFlow SF_DeepSeekV3)  = "deepseek-ai/DeepSeek-V3"
 
 -- | Modified ChatParams with tool support
@@ -80,24 +83,29 @@ data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
   }
 
 data ChatSetting = ChatSetting
-  { systemMessage      :: Maybe Message
-  , systemTemp         :: Maybe Double
-  , systemMaxToolDepth :: Maybe Int       -- ^ Maximum tool call attempts
-  , systemApiKeys      :: Maybe APIKey       -- ^ API keys for chat models
+  { systemMessage        :: Maybe Message
+  , systemTemp           :: Maybe Double
+  , systemMaxToolDepth   :: Maybe Int       -- ^ Maximum tool call attempts
+  , systemApiKeys        :: Maybe APIKey       -- ^ API keys for chat models
+  , chatTruncateThinking :: Maybe Bool
   } deriving (Show, Eq, Read, Generic, NFData)
+
+instance Default ChatSetting where
+  def = ChatSetting Nothing Nothing Nothing Nothing Nothing
 
 defaultSystemMaxToolDepth :: Int
 defaultSystemMaxToolDepth = 5
 
 chatSettingMaybeWrapper :: Maybe ChatSetting -> ChatSetting
-chatSettingMaybeWrapper = fromMaybe (ChatSetting Nothing Nothing Nothing Nothing)
+chatSettingMaybeWrapper = fromMaybe def
 
 chatSettingAlternative :: Maybe ChatSetting -> ChatSetting -> ChatSetting
-chatSettingAlternative mnew def = ChatSetting
-  { systemMessage      = (systemMessage =<< mnew)      <|> systemMessage def
-  , systemTemp         = (systemTemp =<< mnew)         <|> systemTemp    def
-  , systemMaxToolDepth = (systemMaxToolDepth =<< mnew) <|> systemMaxToolDepth def
-  , systemApiKeys      = (systemApiKeys =<< mnew)      <|> systemApiKeys def
+chatSettingAlternative mnew alt = ChatSetting
+  { systemMessage        = (systemMessage        =<< mnew) <|> systemMessage alt
+  , systemTemp           = (systemTemp           =<< mnew) <|> systemTemp    alt
+  , systemMaxToolDepth   = (systemMaxToolDepth   =<< mnew) <|> systemMaxToolDepth alt
+  , systemApiKeys        = (systemApiKeys        =<< mnew) <|> systemApiKeys alt
+  , chatTruncateThinking = (chatTruncateThinking =<< mnew) <|> chatTruncateThinking alt
   }
 
 class GetMessage a where
@@ -143,9 +151,9 @@ instance ChatAPI (Local Command_R_Latest) where
   chatModel  = Local Command_R_Latest
   type ChatCompletionResponse (Local Command_R_Latest) = ChatCompletionResponseOllama
 
-instance ChatAPI (OpenRouter DeepSeekR1_Free) where
-  chatModel  = OpenRouter DeepSeekR1_Free
-  type ChatCompletionResponse (OpenRouter DeepSeekR1_Free) = ChatCompletionResponseOpenAI
+instance ChatAPI (OpenRouter OR_DeepSeekR1_Free) where
+  chatModel  = OpenRouter OR_DeepSeekR1_Free
+  type ChatCompletionResponse (OpenRouter OR_DeepSeekR1_Free) = ChatCompletionResponseOpenAI
 
 instance ChatAPI (SiliconFlow SF_DeepSeekV3) where
   chatModel  = SiliconFlow SF_DeepSeekV3
@@ -188,6 +196,11 @@ mapMessage f (UserMessage      c)     = UserMessage      $ f c
 mapMessage f (AssistantMessage c t p) = AssistantMessage (f c) (f <$> t) p
 mapMessage f (ToolMessage      c m)   = ToolMessage      (f c) m
 
+-- | Removes the thinking part of the assistant message
+truncateThinking :: Message -> Message
+truncateThinking (AssistantMessage c (Just _) p) = AssistantMessage c Nothing p
+truncateThinking m = m
+
 -- | Wrapper for model dependent content (toJSON and FromJSON)
 newtype ModelDependent m a = ModelDependent { runModelDependent :: a }
   deriving (Show, Eq, Generic)
@@ -213,8 +226,11 @@ instance FromJSON Message where
       "system"    -> SystemMessage    <$> v .: "content"
       "user"      -> UserMessage      <$> v .: "content"
       "assistant" -> do
-          ct <- v .: "content"
-          let (thinking, ct') = parseThinking ct
+          ct        <- v .:  "content"
+          reasoning <- v .:? "reasoning"
+          let (thinking, ct') = case (reasoning, parseThinking ct) of
+                (Just r, _) -> (Just r, ct)
+                (_, p)      -> p
           return $ AssistantMessage ct' thinking Nothing
       "tool"      -> do
           ToolMessage <$> (v .: "content") <*> v .:? "toolMeta"
@@ -293,7 +309,6 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
-deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (OpenRouter b) ChatRequest)
 deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (SiliconFlow b) ChatRequest)
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
@@ -304,6 +319,32 @@ instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
     ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
     -- <> [ "tools" .= tls | Just tls <- [tools chatReq] ]
+
+instance ToJSON (ModelDependent (OpenRouter a) ChatRequest) where
+  toJSON (ModelDependent chatReq) = A.object $
+    [ "model" .= chatReqModel chatReq
+    , "messages" .= map (ModelDependent @(OpenRouter a)) (messages chatReq)
+    , "temperature" .= temperature chatReq
+    , "provider" .= A.object
+      [ "sort" .= ("price" :: Text)
+      ]
+    , "logprobs" .= False
+    , "include_reasoning" .= True
+    ]
+    <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
+
+instance {-# OVERLAPPING #-} ToJSON (ModelDependent (OpenRouter OR_DeepSeekR1_Free) ChatRequest) where
+  toJSON (ModelDependent chatReq) = A.object $
+    [ "model" .= chatReqModel chatReq
+    , "messages" .= map (ModelDependent @(OpenRouter OR_DeepSeekR1_Free)) (messages chatReq)
+    , "temperature" .= temperature chatReq
+    , "provider" .= A.object
+      [ "ignore" .= [ "Targon" :: Text ] -- ^ ignore Targon
+      ]
+    , "logprobs" .= False
+    , "include_reasoning" .= True
+    ]
+    <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 -- | Ollama compatible format
 instance ToJSON (ModelDependent (Local a) ChatRequest) where
@@ -467,7 +508,8 @@ liftE = ChatT . ExceptT . lift . runExceptT
 agent :: (MonadIO m, MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
 agent = do
   params    <- ask
-  prevMsgs  <- gets chatStatusMessages
+  trunThink <- asks (fromMaybe True . chatTruncateThinking . chatSetting)
+  prevMsgs  <- (if trunThink then map truncateThinking else id) <$> gets chatStatusMessages
   toolDepth <- gets chatStatusToolDepth
   mapiKeys  <- asks (systemApiKeys . chatSetting)
   apiKeys   <- liftE $ pureEMsg "No API key found!" mapiKeys
@@ -482,11 +524,11 @@ agent = do
       $(logInfo) $ showMessage amsg'
       case parseToolCall (content amsg') of
         Nothing -> return $ [amsg']
-        Just (Nothing, ToolCallPair toolName args) -> do
+        Just (Nothing, ToolCallPair toolCallName args) -> do
           let amsg = case amsg' of
                 AssistantMessage {} -> amsg' { pureToolCall = Just True } -- this assistant message is a pure tool call
                 _ -> amsg'
-          skip_toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
+          skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
           case skip_toolmsg of
             Left Skipped -> liftE $ throwE "Skipped"
             Right toolmsg -> do
@@ -497,11 +539,11 @@ agent = do
                 , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
                 }
               ([amsg, toolmsg] <>) <$> agent
-        Just (Just _, ToolCallPair toolName args) -> do
+        Just (Just _, ToolCallPair toolCallName args) -> do
           let amsg = case amsg' of
                 AssistantMessage {} -> amsg' { pureToolCall = Just False } -- this assistant message is a mix of response and tool call
                 _ -> amsg'
-          skip_toolmsg <- handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0) -- replace with actual tool call id
+          skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
           case skip_toolmsg of
             Left Skipped -> liftE $ throwE "Skipped"
             Right toolmsg -> do

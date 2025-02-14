@@ -112,6 +112,7 @@ commandChat = BotCommand Chat $ botT $ do
           , botSettingSystemAPIKey =<< botSetting
           ]
         )
+        Nothing
       sd = savedData other_data
       activeChat = fromMaybe False $ asum
         [ botSettingPerChatActiveChat =<< botSettingPerChat

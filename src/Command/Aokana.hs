@@ -18,6 +18,7 @@ import qualified MeowBot.Parser as MP
 
 import External.ChatAPI (Message(..), ChatSetting(..))
 
+import Data.Default
 import Data.Either
 import Data.Maybe
 import Data.List
@@ -98,7 +99,7 @@ commandAokana = BotCommand Aokana $ botT $ do
             Nothing -> return ()
             Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt
           insertMyResponseHistory cid  -- this will make the message repliable, potentially much more fun!
-                       (generateMetaMessage simplifiedBlock [] (MReplyTo mid : maybeToList (MChatSetting . (\mm -> ChatSetting mm Nothing Nothing Nothing) . Just <$> charPrompt)) )
+                       (generateMetaMessage simplifiedBlock [] (MReplyTo mid : maybeToList (MChatSetting . (\mm -> def {systemMessage = mm}) . Just <$> charPrompt)) )
           return [ baSendToChatId cid simplifiedBlock
                  , baSendToChatId cid $ embedCQCode $ CQRecord $ T.pack $ voicePath cd (T.unpack voice)
                  ]

@@ -8,6 +8,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 import Utils.Logging
 import Utils.Text
+import Data.Default
 
 timeoutHttp :: Int
 timeoutHttp = 30 * 1000000
@@ -18,12 +19,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (SiliconFlow SF_DeepSeekV3) '[]
@@ -36,12 +32,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (Local DeepSeekR1_14B) '[]
@@ -54,12 +45,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (DeepSeek DeepSeekChat) '[]
@@ -72,15 +58,10 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
-              } :: ChatParams (OpenRouter DeepSeekR1_Free) '[]
+              } :: ChatParams (OpenRouter OR_DeepSeekR1_Free) '[]
         res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
@@ -90,12 +71,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[]
@@ -108,12 +84,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCaseInfo "Say time" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
@@ -130,12 +101,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
     [ testCase "Query time" $ do
         let params = ChatParams
               { chatMarkDown = False
-              , chatSetting = ChatSetting
-                { systemMessage = Nothing
-                , systemTemp = Nothing
-                , systemMaxToolDepth = Nothing
-                , systemApiKeys = Nothing
-                }
+              , chatSetting = def
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]

@@ -10,6 +10,7 @@ import qualified MeowBot.Parser as MP
 import MeowBot
 import qualified Data.Text as T
 import Data.Bifunctor
+import Data.Default
 import External.ChatAPI
 
 import Control.Monad.Trans
@@ -44,12 +45,12 @@ commandSetSysMessage = BotCommand System $ botT $ do
 
 updateSysSetting :: Either (Maybe Message) Double -> ChatId -> [(ChatId, ChatSetting)] -> [(ChatId, ChatSetting)]
 updateSysSetting (Left msys) cid []
-  = [(cid, ChatSetting msys Nothing Nothing Nothing)]
-updateSysSetting (Left msys) cid (x0@(cid', ChatSetting _ mt _ _) : xs)
-  | cid == cid' = (cid, ChatSetting msys mt Nothing Nothing) : xs
+  = [(cid, def {systemMessage = msys})]
+updateSysSetting (Left msys) cid (x0@(cid', ChatSetting _ mt _ _ _) : xs)
+  | cid == cid' = (cid, def {systemMessage = msys, systemTemp = mt}) : xs
   | otherwise   = x0 : updateSysSetting (Left msys) cid xs
 updateSysSetting (Right temp) cid []
-  = [(cid, ChatSetting Nothing (Just temp) Nothing Nothing)]
-updateSysSetting (Right temp) cid (x0@(cid', ChatSetting ms _ _ _) : xs)
-  | cid == cid' = (cid, ChatSetting ms (Just temp) Nothing Nothing) : xs
+  = [(cid, def {systemTemp = Just temp})]
+updateSysSetting (Right temp) cid (x0@(cid', ChatSetting ms _ _ _ _) : xs)
+  | cid == cid' = (cid, def {systemMessage = ms, systemTemp = Just temp}) : xs
   | otherwise   = x0 : updateSysSetting (Right temp) cid xs
