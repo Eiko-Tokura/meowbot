@@ -37,6 +37,7 @@ import MeowBot.CQCode
 import Utils.RunDB
 import Utils.Maybe
 import Utils.Persist
+import Utils.List
 import Data.Additional.Default
 
 import Probability.Foundation
@@ -126,6 +127,14 @@ commandChat = BotCommand Chat $ botT $ do
         )
         Nothing
       sd = savedData other_data
+      displayThinking = fromMaybe False $ asum
+        [ botSettingPerChatDisplayThinking =<< botSettingPerChat
+        , botSettingDisplayThinking =<< botSetting
+        ] -- ^ whether to display thinking message
+      displayToolMessage = fromMaybe False $ asum
+        [ botSettingPerChatDisplayToolMessage =<< botSettingPerChat
+        , botSettingDisplayToolMessage =<< botSetting
+        ] -- ^ whether to display tool message
       activeChat = fromMaybe False $ asum
         [ botSettingPerChatActiveChat =<< botSettingPerChat
         , botSettingActiveChat =<< botSetting

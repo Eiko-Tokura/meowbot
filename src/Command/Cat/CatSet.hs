@@ -69,6 +69,7 @@ data DefaultOrPerChat = Default | PerChat | PerChatWithChatId ChatId deriving (S
 
 data BotSettingItem
   = DisplayThinking      (Maybe Bool)
+  | DisplayToolMessage   (Maybe Bool)
   | DefaultModel         (Maybe ChatModel)
   | DefaultModelSuper    (Maybe ChatModel)
   | SystemMessage        (Maybe Text)
@@ -102,6 +103,7 @@ catSetParser =
     return $ action range (DisplayThinking Nothing)
     asum
       [ MP.string "displayThinking"         >> fmap (action range) (DisplayThinking         <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "displayToolMessage"      >> fmap (action range) (DisplayToolMessage      <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "defaultModelSuper"       >> fmap (action range) (DefaultModelSuper       <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
       , MP.string "defaultModel"            >> fmap (action range) (DefaultModel            <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
       , MP.string "systemMessage"           >> fmap (action range) (SystemMessage           <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
@@ -136,6 +138,7 @@ helpCatSet = T.intercalate "\n" $
   , ""
   , "* item is one of "
   , "    displayThinking :: Bool"
+  , "    displayToolMessage :: Bool"
   , "    defaultModel :: ChatModel"
   , "    defaultModelSuper :: ChatModel"
   , "    systemMessage :: Text"
@@ -171,6 +174,9 @@ catSet (Set Default item) = do
     DisplayThinking      mdt -> do
       lift $ runDB (updateWhere selector [BotSettingDisplayThinking =. mdt])
       return [ baSendToChatId cid $ "DisplayThinking set to " <> tshow mdt ]
+    DisplayToolMessage   mdt -> do
+      lift $ runDB (updateWhere selector [BotSettingDisplayToolMessage =. mdt])
+      return [ baSendToChatId cid $ "DisplayToolMessage set to " <> tshow mdt ]
     DefaultModel         mdt -> do
       lift $ runDB (updateWhere selector [BotSettingDefaultModel =. fmap PersistUseShow mdt])
       return [ baSendToChatId cid $ "DefaultModel set to " <> tshow mdt ]
@@ -228,6 +234,9 @@ catSet (Set (PerChatWithChatId cid) item) = do
     DisplayThinking      mdt -> do
       lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayThinking =. mdt]
       return [ baSendToChatId cid' $ "DisplayThinking set to " <> tshow mdt ]
+    DisplayToolMessage   mdt -> do
+      lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayToolMessage =. mdt]
+      return [ baSendToChatId cid' $ "DisplayToolMessage set to " <> tshow mdt ]
     DefaultModel         mdt -> do
       _ <- MaybeT $ if mdt `elem` fmap Just adminRestrictedModels -- requre Admin to set restricted models
           then fmap void $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
@@ -271,6 +280,7 @@ catSet (Set (PerChatWithChatId cid) item) = do
 catSet (UnSet range item) =
   case item of
     DisplayThinking         _ -> catSet (Set range $ DisplayThinking Nothing)
+    DisplayToolMessage      _ -> catSet (Set range $ DisplayToolMessage Nothing)
     DefaultModel            _ -> catSet (Set range $ DefaultModel Nothing)
     DefaultModelSuper       _ -> catSet (Set range $ DefaultModelSuper Nothing)
     SystemMessage           _ -> catSet (Set range $ SystemMessage Nothing)
@@ -291,6 +301,9 @@ catSet (View Default item) = do
     DisplayThinking      _ -> do
       mdt <- lift $ runDB $ fmap (botSettingDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DisplayThinking: " <> tshow mdt]
+    DisplayToolMessage   _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingDisplayToolMessage . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid $ "DisplayToolMessage: " <> tshow mdt]
     DefaultModel         _ -> do
       mdt <- lift $ runDB $ fmap (botSettingDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DefaultModel: " <> tshow mdt]
@@ -340,6 +353,9 @@ catSet (View (PerChatWithChatId cid) item) = do
     DisplayThinking      _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "DisplayThinking: " <> tshow mdt]
+    DisplayToolMessage   _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayToolMessage . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid' $ "DisplayToolMessage: " <> tshow mdt]
     DefaultModel         _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid' $ "DefaultModel: " <> tshow mdt]
