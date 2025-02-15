@@ -93,6 +93,7 @@ library search-scrape-text
                  , aeson
                  , base64-bytestring
                  , bytestring
+                 , tagsoup
 
     hs-source-dirs:   search-scrape-text
 

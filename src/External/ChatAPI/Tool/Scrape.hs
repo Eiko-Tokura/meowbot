@@ -23,5 +23,5 @@ instance ConnectionManagerModule `In` mods => ToolClass (MeowToolEnv r mods) Scr
   toolDescription _ _ = "Scrape a url and extract text content"
   toolHandler _ _ ((StringT url) :%* ObjT0Nil) = do
     man <- asks (manager . getF @ConnectionManagerModule . fst . snd . fst)
-    res <- ExceptT . liftIO $ first ScrapeError <$> scrapeTextWithManagerE man (unpack url)
+    res <- ExceptT . liftIO $ first ScrapeError <$> scrapeTextRemoveScriptsAndStylesE man (unpack url)
     return $ StringT (TL.toStrict res) :%* ObjT0Nil
