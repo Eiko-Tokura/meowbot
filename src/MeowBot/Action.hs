@@ -70,6 +70,9 @@ meowAsyncSplitSendToChatIdFull
   -> [Text]            -- ^ message content
   -> Meow [BotAction]
 meowAsyncSplitSendToChatIdFull _ _ _ _ _ [] = return []
+meowAsyncSplitSendToChatIdFull cid mid adt items _ (txt:[]) = do
+  act1 <- meowSendToChatIdFull cid mid adt items txt
+  return $ act1
 meowAsyncSplitSendToChatIdFull cid mid adt items delay (txt:rest) = do
   act1 <- meowSendToChatIdFull cid mid adt items txt
   act2 <- fmap (pure . BAAsync) . liftIO $ async $ return $ do
