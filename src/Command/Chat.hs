@@ -275,7 +275,7 @@ commandChat = BotCommand Chat $ botT $ do
                       } -> [c | displayToolMessage]
                     m   -> [content m]
                   ) newMsgs
-            meowAsyncSplitSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 2000 splitedMessageToSend
+            meowAsyncSplitSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 2500000 splitedMessageToSend
 
   -- update busy status
   lift $ markMeow cid MeowBusy

@@ -72,9 +72,9 @@ meowAsyncSplitSendToChatIdFull
 meowAsyncSplitSendToChatIdFull _ _ _ _ _ [] = return []
 meowAsyncSplitSendToChatIdFull cid mid adt items delay (txt:rest) = do
   act1 <- meowSendToChatIdFull cid mid adt items txt
-  act2 <- fmap (pure . BAAsync) . liftIO $ do
-    threadDelay delay
-    async $ return $ meowAsyncSplitSendToChatIdFull cid mid adt items delay rest
+  act2 <- fmap (pure . BAAsync) . liftIO $ async $ return $ do
+      liftIO $ threadDelay delay
+      meowAsyncSplitSendToChatIdFull cid mid adt items delay rest
   return $ act1 <> act2
 
 -- | Turnning an meow action that returns an action that asynchronously returns a Meow [BotAction] into a Meow [BotAction]
