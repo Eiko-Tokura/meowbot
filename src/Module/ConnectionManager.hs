@@ -27,7 +27,7 @@ instance MeowModule r AllData ConnectionManagerModule where
   getInitDataL _ = (Just ConnectionManagerInitDataL, empty)
 
   initModule _ _ = do
-    let customTimeout = 70 * 1000000 -- 70 seconds in microseconds
+    let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
     let customManagerSettings =
           (mkManagerSettings
             ( case def of  -- | Turn off forcing EMS since bilibili doesn't support it, weird.
