@@ -152,7 +152,7 @@ string = mapM just
 infixr 5 <:>
 {-# INLINE (<:>) #-}
 
--- | Alternative options packed into Either, 
+-- | Alternative options packed into Either,
 (|+|) :: Alternative m => m a -> m b -> m (Either a b)
 (|+|) p q = fmap Left p <|> fmap Right q
 infixr 3 |+|
@@ -218,7 +218,7 @@ insideBracketsWith (l, r) item = just l *> manyTill (just r) item <* just r
 {-# INLINE insideBracketsWith #-}
 
 -- | A type constraint on m that looks like a parser, with reasonable constraints
--- reasonably assumes MonadZero, Alternative, MonadTry, MonadItem, Eq 
+-- reasonably assumes MonadZero, Alternative, MonadTry, MonadItem, Eq
 type MonadIZT i m = (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i)
 -- | A type constraint on m that looks like a parser, with reasonable constraints
 -- reasonably assumes MonadZero, Alternative, MonadItem, Eq

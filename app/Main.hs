@@ -61,7 +61,7 @@ parseArgs = many (do
 --
 --  you can run a debuger on port 2077
 --  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
-main :: IO () --runLoggingConcurrent (myLogger "meowbot.log") 
+main :: IO () --runLoggingConcurrent (myLogger "meowbot.log")
 main = do
   args <- getArgs
   runLoggingConcurrent (myLogger [DebugCQMessage | "--debug-cqmsg" `elem` args] ["meowbot.log"]) $ do

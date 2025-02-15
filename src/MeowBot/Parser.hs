@@ -129,7 +129,7 @@ cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . collectRightCharsTex
 {-# INLINE cqcodeFixP #-}
 
 collectRightCharsText :: [Either a Char] -> [Either a Text]
-collectRightCharsText 
+collectRightCharsText
   = concat
   . fmap (\case
       l@(Left _:_)  -> [ Left x | Left x <- l ]

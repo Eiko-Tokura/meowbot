@@ -275,7 +275,7 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   -- ^ we haven't implemented tool role for openai model yet, so we use user role instead
 
-deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message) 
+deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message)
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (SiliconFlow b) Message)
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where

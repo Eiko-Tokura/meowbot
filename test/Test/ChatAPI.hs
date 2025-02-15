@@ -88,7 +88,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
-        res <- runStdoutLoggingT . runExceptT $ messageChat params 
+        res <- runStdoutLoggingT . runExceptT $ messageChat params
           [ UserMessage "What is the time now?"
           , AssistantMessage "{\"tool\": \"time\", \"args\": {\"timezone\": 8}}" Nothing Nothing
           , UserMessage "{\"tool_output\": \"2025-02-09 13:05:55.689695563 UTC\"}"

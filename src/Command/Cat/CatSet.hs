@@ -366,7 +366,7 @@ catSet (View (PerChatWithChatId cid) item) = do
       return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
 
 catSet Clear = do
-  let newChatState = SM.empty ::SM.Map ChatId ChatState 
+  let newChatState = SM.empty ::SM.Map ChatId ChatState
 
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
 

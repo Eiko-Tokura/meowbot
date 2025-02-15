@@ -137,8 +137,8 @@ getNoteListing bn cid = do
 data ActionTool
 
 instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r mods) ActionTool where
-  type ToolInput ActionTool = ParamToData 
-    (ObjectP0 
+  type ToolInput ActionTool = ParamToData
+    (ObjectP0
       [ StringP "action" "action can be 'like' or 'poke'"
       , IntP "user_id" "user_id of the target user"
       ]

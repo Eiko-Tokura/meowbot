@@ -146,5 +146,5 @@ handleRequestEvent conn str cqmsg = do
       uid <- MaybeT $ return $ userId cqmsg
       $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
       $(logInfo) $ " -> Approving the request."
-      lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing 
+      lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing
     _ -> return ()

@@ -54,33 +54,33 @@ search api number query = do
 --     runPy $ do
 --       [pymain|
 --       from googleapiclient.discovery import build
--- 
+--
 --       def google_search(query, api_key, cse_id, num_results=5):
 --           """
 --           Query Google Custom Search API and return a list of search results.
---           
+--
 --           Parameters:
 --             query (str): The search query.
 --             api_key (str): Your Google API key.
 --             cse_id (str): Your Custom Search Engine ID.
 --             num_results (int): Number of results to return.
---           
+--
 --           Returns:
 --             list: A list of dictionaries containing search result data.
 --           """
 --           service = build("customsearch", "v1", developerKey=api_key)
 --           res = service.cse().list(q=query, cx=cse_id, num=num_results).execute()
 --           return res.get('items', [])
--- 
+--
 --       if __name__ == "__main__":
 --         # Replace these with your actual API key and Custom Search Engine ID
 --         API_KEY = str(api_key_hs)
 --         CSE_ID = str(cse_id_hs)
--- 
+--
 --         print(f"API key: {API_KEY}")
---         
+--
 --         results = google_search(str(query_str_hs), API_KEY, CSE_ID)
---         
+--
 --         print(f"Search results for: {query}\n")
 --         for item in results:
 --             print("Title:", item.get("title"))

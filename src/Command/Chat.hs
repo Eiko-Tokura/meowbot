@@ -41,7 +41,7 @@ import Data.Additional.Default
 
 import Probability.Foundation
 
-type MeowTools = 
+type MeowTools =
   [ TimeTool
   , SkipTool
   , ActionTool
@@ -286,7 +286,7 @@ determineIfReply :: Bool -> Double -> ChatId -> Text -> BotName -> ChatSetting -
 determineIfReply atReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
-  replied <- if atReply 
+  replied <- if atReply
     then lift $ boolMaybe <$> beingReplied
     else return Nothing
   ated    <- lift $ boolMaybe <$> beingAt

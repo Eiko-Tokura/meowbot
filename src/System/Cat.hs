@@ -227,7 +227,7 @@ loadSavedDataFile botName = do
 loadSavedDataDB :: (LogDatabase `In` mods) => BotId -> AllModuleGlobalStates mods -> ExceptT Text (LoggingT IO) SavedData
 loadSavedDataDB botid glob = do
   let pool = databasePool (getF @LogDatabase glob)
-  _                    <- fmap entityVal . effectE    $ runSqlPool (selectList [BotSettingBotId ==. botid] [LimitTo 1]) pool
+  _                    <- fmap  entityVal  .  effectE $ runSqlPool (selectList [BotSettingBotId ==. botid] [LimitTo 1]) pool
   botSettingsPerChat   <- fmap (map entityVal) . lift $ runSqlPool (selectList [BotSettingPerChatBotId ==. botid] []) pool
   inUserGroups         <- fmap (map entityVal) . lift $ runSqlPool (selectList [InUserGroupBotId ==. botid] []) pool
   inGroupGroups        <- fmap (map entityVal) . lift $ runSqlPool (selectList [InGroupGroupBotId ==. botid] []) pool
@@ -247,7 +247,7 @@ loadSavedDataDB botid glob = do
             , botSettingPerChatSystemAPIKeySiliconFlow c
             ) of
               (Nothing, Nothing, Nothing, Nothing) -> Nothing
-              (a, b, c, d)             -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c, apiKeySiliconFlow = d }
+              (a, b, c, d) -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c, apiKeySiliconFlow = d }
           }) | c <- botSettingsPerChat]
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
@@ -270,72 +270,31 @@ loadSavedDataDB botid glob = do
     , savedAdditional = savedAdditionalData
     }
 
--- updateSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
--- updateSavedDataDB botconfig glob sd = do
---   let pool = databasePool (getF @LogDatabase glob)
---       botname = nameOfBot (botModules botconfig)
---   runSqlPool (do
---     -- deleteWhere [BotSettingBotName          ==. maybeBotName botname]
---     -- deleteWhere [BotSettingPerChatBotName   ==. maybeBotName botname]
---     -- deleteWhere [InUserGroupBotName         ==. maybeBotName botname]
---     -- deleteWhere [InGroupGroupBotName        ==. maybeBotName botname]
---     -- deleteWhere [CommandRuleDBBotName       ==. maybeBotName botname]
---     -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
---     -- deleteWhere ([] :: [Filter BookDB])
---     insertMany_ [ SavedAdditionalData
---       { savedAdditionalDataBotName  = maybeBotName botname
---       , savedAdditionalDataAdditionalData = PersistUseShow savedAdditional
---       } | savedAdditional <- savedAdditional sd]
---     insertMany_ [ BookDB
---       { bookDBBookName    = book_name book
---       , bookDBBookPdfPath = book_pdfPath book
---       , bookDBBookPages   = book_pages book
---       , bookDBBookInfo    = book_info book
---       } | book <- books sd]
---     ) pool
-
 newSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
 newSavedDataDB botconfig glob sd = do
   let pool = databasePool (getF @LogDatabase glob)
       botname = nameOfBot (botModules botconfig)
       botid = botId $ botModules botconfig
   runSqlPool (do
-    insert_ $ BotSetting
+    insert_ $ def
       { botSettingBotName                 = maybeBotName botname
       , botSettingBotId                   = botId $ botModules botconfig
       , botSettingDefaultModel            = coerce $ Just (DeepSeek DeepSeekChat)
       , botSettingDefaultModelS           = coerce $ Just (DeepSeek DeepSeekReasoner)
-      , botSettingDisplayThinking         = Nothing
       , botSettingSystemMessage           = globalSysMsg $ botModules botconfig
-      , botSettingSystemTemp              = Nothing
-      , botSettingSystemMaxToolDepth      = Just 5
-      , botSettingSystemAPIKeyOpenAI      = Nothing
-      , botSettingSystemAPIKeyDeepSeek    = Nothing
-      , botSettingSystemAPIKeyOpenRouter  = Nothing
-      , botSettingSystemAPIKeySiliconFlow = Nothing
       , botSettingActiveChat              = Just False
-      , botSettingAtReply                 = Nothing
-      , botSettingActiveProbability       = Nothing
-      , botSettingMaxMessageInState       = Nothing
       }
-    insertMany_ [ BotSettingPerChat
-      { botSettingPerChatBotName          = maybeBotName botname
-      , botSettingPerChatBotId            = botId $ botModules botconfig
-      , botSettingPerChatChatId           = chatId
-      , botSettingPerChatDefaultModel     = Nothing
-      , botSettingPerChatDefaultModelS    = Nothing
-      , botSettingPerChatDisplayThinking  = Nothing
-      , botSettingPerChatSystemMessage    = content <$> systemMessage chatSetting
-      , botSettingPerChatSystemTemp       = systemTemp chatSetting
+    insertMany_ [ def
+      { botSettingPerChatBotName                 = maybeBotName botname
+      , botSettingPerChatBotId                   = botId $ botModules botconfig
+      , botSettingPerChatChatId                  = chatId
+      , botSettingPerChatSystemMessage           = content <$> systemMessage chatSetting
+      , botSettingPerChatSystemTemp              = systemTemp chatSetting
       , botSettingPerChatSystemMaxToolDepth      = systemMaxToolDepth chatSetting
-      , botSettingPerChatSystemAPIKeyOpenAI      = apiKeyOpenAI =<< systemApiKeys chatSetting
-      , botSettingPerChatSystemAPIKeyDeepSeek    = apiKeyDeepSeek =<< systemApiKeys chatSetting
-      , botSettingPerChatSystemAPIKeyOpenRouter  = apiKeyOpenRouter =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyOpenAI      = apiKeyOpenAI      =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyDeepSeek    = apiKeyDeepSeek    =<< systemApiKeys chatSetting
+      , botSettingPerChatSystemAPIKeyOpenRouter  = apiKeyOpenRouter  =<< systemApiKeys chatSetting
       , botSettingPerChatSystemAPIKeySiliconFlow = apiKeySiliconFlow =<< systemApiKeys chatSetting
-      , botSettingPerChatActiveChat        = Nothing
-      , botSettingPerChatAtReply           = Nothing
-      , botSettingPerChatActiveProbability = Nothing
-      , botSettingPerChatMaxMessageInState = Nothing
       } | (chatId, chatSetting) <- chatSettings sd]
     insertMany_ [ InUserGroup
       { inUserGroupBotName          = maybeBotName botname
@@ -366,3 +325,28 @@ newSavedDataDB botconfig glob sd = do
       , bookDBBookInfo    = book_info book
       } | book <- books sd]
     ) pool
+
+-- updateSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
+-- updateSavedDataDB botconfig glob sd = do
+--   let pool = databasePool (getF @LogDatabase glob)
+--       botname = nameOfBot (botModules botconfig)
+--   runSqlPool (do
+--     -- deleteWhere [BotSettingBotName          ==. maybeBotName botname]
+--     -- deleteWhere [BotSettingPerChatBotName   ==. maybeBotName botname]
+--     -- deleteWhere [InUserGroupBotName         ==. maybeBotName botname]
+--     -- deleteWhere [InGroupGroupBotName        ==. maybeBotName botname]
+--     -- deleteWhere [CommandRuleDBBotName       ==. maybeBotName botname]
+--     -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
+--     -- deleteWhere ([] :: [Filter BookDB])
+--     insertMany_ [ SavedAdditionalData
+--       { savedAdditionalDataBotName  = maybeBotName botname
+--       , savedAdditionalDataAdditionalData = PersistUseShow savedAdditional
+--       } | savedAdditional <- savedAdditional sd]
+--     insertMany_ [ BookDB
+--       { bookDBBookName    = book_name book
+--       , bookDBBookPdfPath = book_pdfPath book
+--       , bookDBBookPages   = book_pages book
+--       , bookDBBookInfo    = book_info book
+--       } | book <- books sd]
+--     ) pool
+
