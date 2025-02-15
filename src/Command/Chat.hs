@@ -249,27 +249,41 @@ commandChat = BotCommand Chat $ botT $ do
     async $ do
       (eNewMsg, newStatus) <- ioeResponse
       case eNewMsg of
-        Left err -> do
+        Left err -> do -- responded with error message
           flip runLoggingT logger $ $(logError) $ "Error: " <> err
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
-            pure []
-        Right newMsgs' -> do
+            pure [] -- ^ do nothing
+        Right newMsgs' -> do -- responded with new messages
           let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix cqFilter)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus maxMessageInState cid newMsgs newStatus
-            meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)]
-              (T.intercalate "\n---\n" . map content $ filter (\case
-                  AssistantMessage { pureToolCall = Just True } -> False
-                  ToolMessage {} -> False
-                  _ -> True
-              ) newMsgs)
+            let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
+                  (\case
+                    AssistantMessage
+                      { pureToolCall = Just True
+                      , content      = c
+                      , thinking     = mt
+                      } -> [t | displayThinking, Just t <- [mt]] <> [c | displayToolMessage]
+                    AssistantMessage
+                      { content  = c
+                      , thinking = mt
+                      } -> [t | displayThinking, Just t <- [mt]] <> [c]
+                    ToolMessage
+                      { content = c
+                      } -> [c | displayToolMessage]
+                    m   -> [content m]
+                  ) newMsgs
+            meowAsyncSplitSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 2000 splitedMessageToSend
 
   -- update busy status
   lift $ markMeow cid MeowBusy
 
-  return [BAAsync asyncAction]
+  return [BAAsync asyncAction] -- Async (Meow [BotAction])
+  -- if you need to send multiple messages, you can use
+  -- Async (Meow [send_msg_1, BAAsync (Async (Meow [send_msg_2]))])
+  -- m a -> Async (m
 
 markMeow :: ChatId -> MeowStatus -> Meow ()
 markMeow cid meowStat = do

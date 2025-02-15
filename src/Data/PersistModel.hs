@@ -30,6 +30,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   defaultModel     (PersistUseShow ChatModel)  Maybe
   defaultModelS    (PersistUseShow ChatModel)  Maybe
   displayThinking         Bool                 Maybe
+  displayToolMessage      Bool                 Maybe
   systemMessage           Text                 Maybe
   systemTemp              Double               Maybe
   systemMaxToolDepth      Int                  Maybe
@@ -52,6 +53,7 @@ BotSettingPerChat -- Overlapping BotSetting
   defaultModel     (PersistUseShow ChatModel)  Maybe
   defaultModelS    (PersistUseShow ChatModel)  Maybe
   displayThinking         Bool                 Maybe
+  displayToolMessage      Bool                 Maybe
   systemMessage           Text                 Maybe
   systemTemp              Double               Maybe
   systemMaxToolDepth      Int                  Maybe

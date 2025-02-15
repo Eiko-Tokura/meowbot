@@ -8,6 +8,7 @@ import System.General
 import Module
 import Control.Concurrent.Async (Async, async)
 import Control.Concurrent.STM
+import Control.Concurrent
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 
@@ -59,6 +60,22 @@ meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- [mid] ] ++ items)
   insertMyResponseHistory cid meta
   return [ baSendToChatId cid str ]
+
+meowAsyncSplitSendToChatIdFull
+  :: ChatId            -- ^ chat id to send to
+  -> Maybe MessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> [AdditionalData]  -- ^ additional data to attach to the message
+  -> [MetaMessageItem] -- ^ meta items to attach to the message
+  -> Int               -- ^ split delay
+  -> [Text]            -- ^ message content
+  -> Meow [BotAction]
+meowAsyncSplitSendToChatIdFull _ _ _ _ _ [] = return []
+meowAsyncSplitSendToChatIdFull cid mid adt items delay (txt:rest) = do
+  act1 <- meowSendToChatIdFull cid mid adt items txt
+  act2 <- fmap (pure . BAAsync) . liftIO $ do
+    threadDelay delay
+    async $ return $ meowAsyncSplitSendToChatIdFull cid mid adt items delay rest
+  return $ act1 <> act2
 
 -- | Turnning an meow action that returns an action that asynchronously returns a Meow [BotAction] into a Meow [BotAction]
 asyncMeow :: Meow (IO (Meow [BotAction])) -> Meow [BotAction]
