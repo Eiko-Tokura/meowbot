@@ -7,7 +7,10 @@ import Control.Applicative
 import Module
 import MeowBot.BotStructure
 import Network.HTTP.Client (Manager, newManager, managerResponseTimeout, responseTimeoutMicro)
-import Network.HTTP.Client.TLS (tlsManagerSettings)
+import Network.HTTP.Client.TLS
+import Network.Connection
+import Network.TLS
+import Data.Default
 
 data ConnectionManagerModule
 
@@ -25,7 +28,15 @@ instance MeowModule r AllData ConnectionManagerModule where
 
   initModule _ _ = do
     let customTimeout = 70 * 1000000 -- 70 seconds in microseconds
-    let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
+    let customManagerSettings =
+          (mkManagerSettings
+            ( case def of  -- | Turn off forcing EMS since bilibili doesn't support it, weird.
+                           -- The library author says tls is insecure without EMS, but we don't have a choice.
+                t@TLSSettingsSimple{} -> t { settingClientSupported = def { supportedExtendedMainSecret = AllowEMS } }
+                t -> t
+            )
+            Nothing
+          ){ managerResponseTimeout = responseTimeoutMicro customTimeout }
     manager <- liftIO $ newManager customManagerSettings
     $(logInfo) "Connection Manager Initialized"
     return $ ConnectionManagerModuleG manager customTimeout

@@ -194,6 +194,7 @@ library meowbot-lib
                  , base64-bytestring
                  , bytestring
                  , containers
+                 , crypton-connection
                  , data-default
                  , deepseq
                  , directory
@@ -221,6 +222,7 @@ library meowbot-lib
                  , template-haskell
                  , text
                  , time
+                 , tls
                  , transformers
                  , unliftio-core
                  , vector
