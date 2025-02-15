@@ -188,6 +188,11 @@ commandChat = BotCommand Chat $ botT $ do
         <> selectedContent rest
       selectedContent (Left _:rest) = selectedContent rest
 
+      cqFilter :: CQCode -> Maybe CQCode
+      cqFilter (CQImage _)         = Nothing
+      cqFilter (CQOther "image" _) = Nothing
+      cqFilter c@_                 = Just c
+
       updateChatState :: AllChatState -> AllChatState
       updateChatState s =
         let mstate = SM.lookup cid s in
@@ -241,7 +246,7 @@ commandChat = BotCommand Chat $ botT $ do
             markMeow cid MeowIdle -- ^ update status to idle
             pure []
         Right newMsgs' -> do
-          let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix)) newMsgs'
+          let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix cqFilter)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
             mergeChatStatus maxMessageInState cid newMsgs newStatus

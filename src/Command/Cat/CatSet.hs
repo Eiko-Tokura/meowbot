@@ -43,8 +43,17 @@ modelsInUse :: CFList ChatAPI Proxy
   , OpenRouter  OR_DeepSeekR1_Free
   , OpenRouter  OR_DeepSeekV3_Free
   , SiliconFlow SF_DeepSeekV3
+  , SiliconFlow SF_DeepSeekR1
   ]
 modelsInUse = def
+
+adminRestrictedModels :: [ChatModel]
+adminRestrictedModels =
+  [ DeepSeek DeepSeekReasoner
+  , OpenAI O3Mini
+  , OpenAI GPT4o
+  , SiliconFlow SF_DeepSeekR1
+  ]
 
 modelsInUseText :: [T.Text]
 modelsInUseText = cfListMap modelsInUse $ \(Proxy :: Proxy a) -> tshow (chatModel @a)
@@ -220,6 +229,9 @@ catSet (Set (PerChatWithChatId cid) item) = do
       lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayThinking =. mdt]
       return [ baSendToChatId cid' $ "DisplayThinking set to " <> tshow mdt ]
     DefaultModel         mdt -> do
+      _ <- MaybeT $ if mdt `elem` fmap Just adminRestrictedModels -- requre Admin to set restricted models
+          then fmap void $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+          else return $ Just ()
       lift $ runDB $ updateWhere selector [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
       return [ baSendToChatId cid' $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do

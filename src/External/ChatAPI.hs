@@ -19,6 +19,7 @@ import Control.Monad.Except
 import Control.Monad.ExceptionReturn
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
+import Control.Concurrent
 import Network.HTTP.Client hiding (Proxy)
 import Data.Aeson as A
 import Data.Bifunctor
@@ -30,7 +31,7 @@ import Data.Proxy (Proxy(..))
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, isJust)
 import qualified Data.ByteString.Lazy as BL
 import GHC.Generics (Generic)
 import Control.DeepSeq
@@ -50,7 +51,7 @@ data OpenAIModel     = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
 data OpenRouterModel = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
-data SiliconFlowModel = SF_DeepSeekV3 deriving (Show, Read, Eq)
+data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
@@ -73,6 +74,7 @@ instance ToJSON ChatModel where
   toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
   toJSON (SiliconFlow SF_DeepSeekV3)  = "deepseek-ai/DeepSeek-V3"
+  toJSON (SiliconFlow SF_DeepSeekR1)  = "deepseek-ai/DeepSeek-R1"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -164,6 +166,10 @@ instance ChatAPI (SiliconFlow SF_DeepSeekV3) where
   chatModel  = SiliconFlow SF_DeepSeekV3
   type ChatCompletionResponse (SiliconFlow SF_DeepSeekV3) = ChatCompletionResponseOpenAI
 
+instance ChatAPI (SiliconFlow SF_DeepSeekR1) where
+  chatModel  = SiliconFlow SF_DeepSeekR1
+  type ChatCompletionResponse (SiliconFlow SF_DeepSeekR1) = ChatCompletionResponseOpenAI
+
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
   , object     :: Text
@@ -175,7 +181,7 @@ data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
 data Choice = Choice
   { index         :: Int
   , message       :: Message
-  , finish_reason :: Text
+  , finish_reason :: Maybe Text
   } deriving (Show, Generic)
 
 data ChatCompletionResponseOllama = ChatCompletionResponseOllama
@@ -523,8 +529,26 @@ agent = do
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
       --liftIO $ putStrLn "Fetching chat completion response..."
-      response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
-      amsg' <- liftE . pureE $ getMessage response
+      let getAmsg = do
+            response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
+            amsg <- liftE . pureE $ getMessage response
+            if T.null (content amsg)
+            then return $ Nothing
+            else return $ Just amsg
+
+      let getAmsgTwice = do
+            mamsg <- getAmsg
+            case mamsg of
+              Nothing -> do
+                $(logInfo) "Empty response, retrying..."
+                liftIO $ threadDelay 1000000 -- 1 second
+                mamsg2 <- getAmsg
+                case mamsg2 of
+                  Nothing -> liftE $ throwE "Empty response twice"
+                  Just amsg2 -> return amsg2
+              Just amsg -> return amsg
+
+      amsg' <- getAmsgTwice
       $(logInfo) $ showMessage amsg'
       case parseToolCall (content amsg') of
         Nothing -> return $ [amsg']

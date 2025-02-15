@@ -32,7 +32,7 @@ import MeowBot.MetaMessage
 import External.ChatAPI (ChatSetting(..))
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
-import Data.Maybe (listToMaybe, fromMaybe)
+import Data.Maybe (listToMaybe, fromMaybe, catMaybes)
 import Data.Either(lefts, fromRight)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -124,8 +124,9 @@ cqcodeLenient = do
 {-# INLINE cqcodeLenient #-}
 
 -- | This function is used to fix inaccurate output of Meowmeow
-cqcodeFixP :: (Chars sb) => Parser sb Char Text
-cqcodeFixP = fmap (T.concat . map (either embedCQCode id) . collectRightCharsText) $ many $ cqcodeLenient |+| getItem @Char
+-- optionally include a filter to filter out certain CQCodes
+cqcodeFixP :: (Chars sb) => (CQCode -> Maybe CQCode) -> Parser sb Char Text
+cqcodeFixP tran = fmap (T.concat . map (either embedCQCode id) . catMaybes . map (either (fmap Left . tran) (Just . Right)) . collectRightCharsText) $ many $ cqcodeLenient |+| getItem @Char
 {-# INLINE cqcodeFixP #-}
 
 collectRightCharsText :: [Either a Char] -> [Either a Text]
@@ -145,8 +146,8 @@ collectRightCharsText
 {-# INLINE collectRightCharsText #-}
 
 -- | This function is used to fix inaccurate output of Meowmeow
-cqcodeFix :: Text -> Text
-cqcodeFix x = fromMaybe x $ runParser cqcodeFixP x
+cqcodeFix :: (CQCode -> Maybe CQCode) -> Text -> Text
+cqcodeFix t x = fromMaybe x $ runParser (cqcodeFixP t) x
 {-# INLINE cqcodeFix #-}
 
 filterOutputTags :: [Text] -> Text -> Text
