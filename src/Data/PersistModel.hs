@@ -67,6 +67,25 @@ BotSettingPerChat -- Overlapping BotSetting
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
 
+BotStatistics
+  botId                       BotId
+  UniqueBotStatisticsBotId    botId
+  totalMessageRecv            Int
+  totalMessageSent            Int
+  totalApiCall                Int
+  totalApiCallError           Int
+  totalApiCallSkip            Int
+
+BotStatisticsPerChat
+  botId                       BotId
+  chatId                      ChatId
+  UniqueBotStatisticsPerChat  botId chatId
+  totalMessageRecv            Int
+  totalMessageSent            Int
+  totalApiCall                Int
+  totalApiCallError           Int
+  totalApiCallSkip            Int
+
 AssistantNote
   botName        String      Maybe
   chatId         ChatId
@@ -183,11 +202,32 @@ instance Default BotSettingPerChat where
     , botSettingPerChatMaxMessageInState       = Nothing
     }
 
+instance Default BotStatistics where
+  def = BotStatistics
+    { botStatisticsBotId             = BotId 0
+    , botStatisticsTotalMessageRecv  = 0
+    , botStatisticsTotalMessageSent  = 0
+    , botStatisticsTotalApiCall      = 0
+    , botStatisticsTotalApiCallError = 0
+    , botStatisticsTotalApiCallSkip  = 0
+    }
+
+instance Default BotStatisticsPerChat where
+  def = BotStatisticsPerChat
+    { botStatisticsPerChatBotId             = BotId 0
+    , botStatisticsPerChatChatId            = PrivateChat 0
+    , botStatisticsPerChatTotalMessageRecv  = 0
+    , botStatisticsPerChatTotalMessageSent  = 0
+    , botStatisticsPerChatTotalApiCall      = 0
+    , botStatisticsPerChatTotalApiCallError = 0
+    , botStatisticsPerChatTotalApiCallSkip  = 0
+    }
+
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
 botSettingPerChatSystemAPIKey bspc = case
-  ( botSettingPerChatSystemAPIKeyOpenAI bspc
-  , botSettingPerChatSystemAPIKeyDeepSeek bspc
-  , botSettingPerChatSystemAPIKeyOpenRouter bspc
+  ( botSettingPerChatSystemAPIKeyOpenAI      bspc
+  , botSettingPerChatSystemAPIKeyDeepSeek    bspc
+  , botSettingPerChatSystemAPIKeyOpenRouter  bspc
   , botSettingPerChatSystemAPIKeySiliconFlow bspc
   ) of
   (Nothing, Nothing, Nothing, Nothing) -> Nothing
@@ -195,9 +235,9 @@ botSettingPerChatSystemAPIKey bspc = case
 
 botSettingSystemAPIKey :: BotSetting -> Maybe APIKey
 botSettingSystemAPIKey bs = case
-  ( botSettingSystemAPIKeyOpenAI bs
-  , botSettingSystemAPIKeyDeepSeek bs
-  , botSettingSystemAPIKeyOpenRouter bs
+  ( botSettingSystemAPIKeyOpenAI      bs
+  , botSettingSystemAPIKeyDeepSeek    bs
+  , botSettingSystemAPIKeyOpenRouter  bs
   , botSettingSystemAPIKeySiliconFlow bs
   ) of
   (Nothing, Nothing, Nothing, Nothing) -> Nothing
@@ -227,23 +267,23 @@ cqMessageToChatMessage botid botname cqm = do
 
 hangmanStateToRecord :: UserId -> HangmanState -> HangmanRecord
 hangmanStateToRecord uid hs = HangmanRecord
-  { hangmanRecordUserId   = uid
-  , hangmanRecordWord     = hangmanWord hs
-  , hangmanRecordGuessed  = hangmanGuessed hs
-  , hangmanRecordMods     = S.toList $ hangmanMods hs
-  , hangmanRecordHp       = hangmanHP hs
+  { hangmanRecordUserId    = uid
+  , hangmanRecordWord      = hangmanWord hs
+  , hangmanRecordGuessed   = hangmanGuessed hs
+  , hangmanRecordMods      = S.toList $ hangmanMods hs
+  , hangmanRecordHp        = hangmanHP hs
   , hangmanRecordStartTime = hangmanStartTime hs
-  , hangmanRecordEnded    = hangmanEnded hs
-  , hangmanRecordScore    = hangmanScore hs
+  , hangmanRecordEnded     = hangmanEnded hs
+  , hangmanRecordScore     = hangmanScore hs
   }
 
 hangmanRecordToState :: HangmanRecord -> HangmanState
 hangmanRecordToState hr = HangmanState
-  { hangmanWord     = hangmanRecordWord hr
-  , hangmanGuessed  = hangmanRecordGuessed hr
-  , hangmanMods     = S.fromList $ hangmanRecordMods hr
-  , hangmanHP       = hangmanRecordHp hr
+  { hangmanWord      = hangmanRecordWord hr
+  , hangmanGuessed   = hangmanRecordGuessed hr
+  , hangmanMods      = S.fromList $ hangmanRecordMods hr
+  , hangmanHP        = hangmanRecordHp hr
   , hangmanStartTime = hangmanRecordStartTime hr
-  , hangmanEnded    = hangmanRecordEnded hr
-  , hangmanScore    = hangmanRecordScore hr
+  , hangmanEnded     = hangmanRecordEnded hr
+  , hangmanScore     = hangmanRecordScore hr
   }
