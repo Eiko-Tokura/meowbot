@@ -36,6 +36,7 @@ import Control.DeepSeq (NFData)
 import Data.Aeson -- (FromJSON(..), withObject, withText, ToJSON(..))
 import Data.Aeson.Types (Parser)
 import Data.Additional
+import Data.Default
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser (cqmsg)
 import Data.Maybe
@@ -50,7 +51,10 @@ data ChatId = GroupChat GroupId | PrivateChat UserId
   deriving (Show, Eq, Ord, Read, Generic, NFData)
 
 newtype BotId = BotId { unBotId :: Int } deriving (Show, Eq, Ord, Read, Generic)
-  deriving newtype (PersistField, PersistFieldSql, NFData, Num)
+  deriving newtype (PersistField, PersistFieldSql, NFData, Num, Default)
+
+instance Default ChatId where
+  def = GroupChat 0
 
 -- | Structured and Unstructured Chat
 -- recent messages top, older messages bottom

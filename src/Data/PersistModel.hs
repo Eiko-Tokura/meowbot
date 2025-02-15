@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, GADTs, TypeFamilies, DerivingStrategies, UndecidableInstances, OverloadedStrings, DataKinds, TemplateHaskell, QuasiQuotes #-}
+{-# LANGUAGE FlexibleContexts, DeriveAnyClass, GADTs, TypeFamilies, DerivingStrategies, UndecidableInstances, OverloadedStrings, DataKinds, TemplateHaskell, QuasiQuotes #-}
 module Data.PersistModel where
 
 import Database.Persist.Sqlite
@@ -17,43 +17,18 @@ import Control.Applicative
 import Command.Hangman.Model
 import External.ChatAPI
 import Data.Additional.Saved
+import GHC.Generics
 
 import qualified Data.Set as S
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
--- Insert data types that are used in the project
--- For example:
--- User
---  name String
---  age Int
---  deriving Show
 
 BotSetting -- Overlappable by BotSettingPerChat
-  botName          String                     Maybe
+  botName          String                      Maybe
   botId            BotId
   UniqueBotId      botId
-  defaultModel     (PersistUseShow ChatModel) Maybe
-  defaultModelS    (PersistUseShow ChatModel) Maybe
-  displayThinking         Bool                 Maybe
-  systemMessage           Text                 Maybe
-  systemTemp              Double               Maybe
-  systemMaxToolDepth      Int                  Maybe
-  systemAPIKeyOpenAI      Text                 Maybe
-  systemAPIKeyDeepSeek    Text                 Maybe
-  systemAPIKeyOpenRouter  Text                 Maybe
-  systemAPIKeySiliconFlow Text                Maybe
-  activeChat              Bool                 Maybe
-  atReply                 Bool                 Maybe
-  activeProbability       Double               Maybe
-  maxMessageInState       Int                  Maybe
-
-BotSettingPerChat -- Overlapping BotSetting
-  botName          String                     Maybe
-  botId            BotId
-  chatId           ChatId
-  UniqueBotIdChatId botId chatId
-  defaultModel     (PersistUseShow ChatModel) Maybe
-  defaultModelS    (PersistUseShow ChatModel) Maybe
+  defaultModel     (PersistUseShow ChatModel)  Maybe
+  defaultModelS    (PersistUseShow ChatModel)  Maybe
   displayThinking         Bool                 Maybe
   systemMessage           Text                 Maybe
   systemTemp              Double               Maybe
@@ -66,6 +41,30 @@ BotSettingPerChat -- Overlapping BotSetting
   atReply                 Bool                 Maybe
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
+  deriving Generic
+  deriving Default
+
+BotSettingPerChat -- Overlapping BotSetting
+  botName          String                      Maybe
+  botId            BotId
+  chatId           ChatId
+  UniqueBotIdChatId botId chatId
+  defaultModel     (PersistUseShow ChatModel)  Maybe
+  defaultModelS    (PersistUseShow ChatModel)  Maybe
+  displayThinking         Bool                 Maybe
+  systemMessage           Text                 Maybe
+  systemTemp              Double               Maybe
+  systemMaxToolDepth      Int                  Maybe
+  systemAPIKeyOpenAI      Text                 Maybe
+  systemAPIKeyDeepSeek    Text                 Maybe
+  systemAPIKeyOpenRouter  Text                 Maybe
+  systemAPIKeySiliconFlow Text                 Maybe
+  activeChat              Bool                 Maybe
+  atReply                 Bool                 Maybe
+  activeProbability       Double               Maybe
+  maxMessageInState       Int                  Maybe
+  deriving Generic
+  deriving Default
 
 BotStatistics
   botId                       BotId
@@ -75,6 +74,8 @@ BotStatistics
   totalApiCall                Int
   totalApiCallError           Int
   totalApiCallSkip            Int
+  deriving Generic
+  deriving Default
 
 BotStatisticsPerChat
   botId                       BotId
@@ -85,6 +86,8 @@ BotStatisticsPerChat
   totalApiCall                Int
   totalApiCallError           Int
   totalApiCallSkip            Int
+  deriving Generic
+  deriving Default
 
 AssistantNote
   botName        String      Maybe
@@ -160,68 +163,6 @@ HangmanRanking
   playcount      Int
   deriving Show
 |]
-
-instance Default BotSetting where
-  def = BotSetting
-    { botSettingBotName                 = Nothing
-    , botSettingBotId                   = BotId 0
-    , botSettingDefaultModel            = Nothing
-    , botSettingDefaultModelS           = Nothing
-    , botSettingDisplayThinking         = Nothing
-    , botSettingSystemMessage           = Nothing
-    , botSettingSystemTemp              = Nothing
-    , botSettingSystemMaxToolDepth      = Nothing
-    , botSettingSystemAPIKeyOpenAI      = Nothing
-    , botSettingSystemAPIKeyDeepSeek    = Nothing
-    , botSettingSystemAPIKeyOpenRouter  = Nothing
-    , botSettingSystemAPIKeySiliconFlow = Nothing
-    , botSettingActiveChat              = Nothing
-    , botSettingAtReply                 = Nothing
-    , botSettingActiveProbability       = Nothing
-    , botSettingMaxMessageInState       = Nothing
-    }
-
-instance Default BotSettingPerChat where
-  def = BotSettingPerChat
-    { botSettingPerChatBotName                 = Nothing
-    , botSettingPerChatBotId                   = BotId 0
-    , botSettingPerChatChatId                  = PrivateChat 0
-    , botSettingPerChatDefaultModel            = Nothing
-    , botSettingPerChatDefaultModelS           = Nothing
-    , botSettingPerChatDisplayThinking         = Nothing
-    , botSettingPerChatSystemMessage           = Nothing
-    , botSettingPerChatSystemTemp              = Nothing
-    , botSettingPerChatSystemMaxToolDepth      = Nothing
-    , botSettingPerChatSystemAPIKeyOpenAI      = Nothing
-    , botSettingPerChatSystemAPIKeyDeepSeek    = Nothing
-    , botSettingPerChatSystemAPIKeyOpenRouter  = Nothing
-    , botSettingPerChatSystemAPIKeySiliconFlow = Nothing
-    , botSettingPerChatActiveChat              = Nothing
-    , botSettingPerChatAtReply                 = Nothing
-    , botSettingPerChatActiveProbability       = Nothing
-    , botSettingPerChatMaxMessageInState       = Nothing
-    }
-
-instance Default BotStatistics where
-  def = BotStatistics
-    { botStatisticsBotId             = BotId 0
-    , botStatisticsTotalMessageRecv  = 0
-    , botStatisticsTotalMessageSent  = 0
-    , botStatisticsTotalApiCall      = 0
-    , botStatisticsTotalApiCallError = 0
-    , botStatisticsTotalApiCallSkip  = 0
-    }
-
-instance Default BotStatisticsPerChat where
-  def = BotStatisticsPerChat
-    { botStatisticsPerChatBotId             = BotId 0
-    , botStatisticsPerChatChatId            = PrivateChat 0
-    , botStatisticsPerChatTotalMessageRecv  = 0
-    , botStatisticsPerChatTotalMessageSent  = 0
-    , botStatisticsPerChatTotalApiCall      = 0
-    , botStatisticsPerChatTotalApiCallError = 0
-    , botStatisticsPerChatTotalApiCallSkip  = 0
-    }
 
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
 botSettingPerChatSystemAPIKey bspc = case

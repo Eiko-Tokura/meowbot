@@ -49,7 +49,7 @@ data ChatModel
 data OpenAIModel     = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
-data OpenRouterModel = OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
+data OpenRouterModel = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
@@ -70,6 +70,7 @@ instance ToJSON ChatModel where
   toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
   toJSON (Local Command_R_Latest)     = "command-r:latest"
   toJSON (OpenRouter OR_DeepSeekR1)   = "deepseek/deepseek-r1"
+  toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
   toJSON (SiliconFlow SF_DeepSeekV3)  = "deepseek-ai/DeepSeek-V3"
 
@@ -154,6 +155,10 @@ instance ChatAPI (Local Command_R_Latest) where
 instance ChatAPI (OpenRouter OR_DeepSeekR1_Free) where
   chatModel  = OpenRouter OR_DeepSeekR1_Free
   type ChatCompletionResponse (OpenRouter OR_DeepSeekR1_Free) = ChatCompletionResponseOpenAI
+
+instance ChatAPI (OpenRouter OR_DeepSeekV3_Free) where
+  chatModel  = OpenRouter OR_DeepSeekV3_Free
+  type ChatCompletionResponse (OpenRouter OR_DeepSeekV3_Free) = ChatCompletionResponseOpenAI
 
 instance ChatAPI (SiliconFlow SF_DeepSeekV3) where
   chatModel  = SiliconFlow SF_DeepSeekV3
@@ -329,7 +334,6 @@ instance ToJSON (ModelDependent (OpenRouter a) ChatRequest) where
       [ "sort" .= ("price" :: Text)
       ]
     , "logprobs" .= False
-    , "include_reasoning" .= True
     ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 

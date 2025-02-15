@@ -41,6 +41,7 @@ modelsInUse :: CFList ChatAPI Proxy
   , OpenAI      GPT4oMini
   , OpenAI      GPT4o
   , OpenRouter  OR_DeepSeekR1_Free
+  , OpenRouter  OR_DeepSeekV3_Free
   , SiliconFlow SF_DeepSeekV3
   ]
 modelsInUse = def
