@@ -36,6 +36,7 @@ modelsInUse :: CFList ChatAPI Proxy
   , Local       DeepSeekR1_32B
   , Local       Qwen2_5_32B
   , Local       Command_R_Latest
+  , Local       DummyTestModel
   , DeepSeek    DeepSeekChat
   , DeepSeek    DeepSeekReasoner
   , OpenAI      GPT4oMini
@@ -68,20 +69,20 @@ data CatSetCommand
 data DefaultOrPerChat = Default | PerChat | PerChatWithChatId ChatId deriving (Show)
 
 data BotSettingItem
-  = DisplayThinking      (Maybe Bool)
-  | DisplayToolMessage   (Maybe Bool)
-  | DefaultModel         (Maybe ChatModel)
-  | DefaultModelSuper    (Maybe ChatModel)
-  | SystemMessage        (Maybe Text)
-  | SystemTemp           (Maybe Double)
-  | SystemMaxToolDepth   (Maybe Int)
-  | SystemAPIKeyOpenAI   (Maybe Text)
-  | SystemAPIKeyDeepSeek (Maybe Text)
-  | SystemAPIKeyOpenRouter (Maybe Text)
+  = DisplayThinking         (Maybe Bool)
+  | DisplayToolMessage      (Maybe Bool)
+  | DefaultModel            (Maybe ChatModel)
+  | DefaultModelSuper       (Maybe ChatModel)
+  | SystemMessage           (Maybe Text)
+  | SystemTemp              (Maybe Double)
+  | SystemMaxToolDepth      (Maybe Int)
+  | SystemAPIKeyOpenAI      (Maybe Text)
+  | SystemAPIKeyDeepSeek    (Maybe Text)
+  | SystemAPIKeyOpenRouter  (Maybe Text)
   | SystemAPIKeySiliconFlow (Maybe Text)
-  | ActiveChat           (Maybe Bool)
-  | AtReply              (Maybe Bool)
-  | ActiveProbability    (Maybe Double)
+  | ActiveChat              (Maybe Bool)
+  | AtReply                 (Maybe Bool)
+  | ActiveProbability       (Maybe Double)
   deriving (Show)
 
 catSetParser :: Parser T.Text Char CatSetCommand

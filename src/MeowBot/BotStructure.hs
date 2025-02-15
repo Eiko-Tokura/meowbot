@@ -108,7 +108,7 @@ instance HasAdditionalData OtherData where
 
 rseqWholeChat :: Strategy AllData
 rseqWholeChat (AllData wc m od) = do
-  wc' <- evalList (evalTuple2 r0 rseq) wc
+  wc' <- evalList (evalTuple2 r0 (evalTuple2 rseq rseq)) wc
   od' <- rseq od
   return $ AllData wc' m od'
 

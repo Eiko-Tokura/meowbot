@@ -49,13 +49,14 @@ data ChatModel
 
 data OpenAIModel     = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest deriving (Show, Read, Eq)
+data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
 data OpenRouterModel = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
 modelEndpoint DeepSeek {}    = "https://api.deepseek.com/chat/completions"
+modelEndpoint  (Local DummyTestModel) = "http://localhost:8000/v1/chat/completions"
 modelEndpoint Local {}       = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
 modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
 modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
@@ -66,6 +67,7 @@ instance ToJSON ChatModel where
   toJSON (OpenAI O3Mini)              = "o3-mini"
   toJSON (DeepSeek DeepSeekChat)      = "deepseek-chat"
   toJSON (DeepSeek DeepSeekReasoner)  = "deepseek-reasoner"
+  toJSON (Local DummyTestModel)       = "dummy-test-model"
   toJSON (Local DeepSeekR1_14B)       = "deepseek-r1:14b"
   toJSON (Local DeepSeekR1_32B)       = "deepseek-r1:32b"
   toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
@@ -137,6 +139,10 @@ instance ChatAPI (DeepSeek DeepSeekChat) where
 instance ChatAPI (DeepSeek DeepSeekReasoner) where
   chatModel  = DeepSeek DeepSeekReasoner
   type ChatCompletionResponse (DeepSeek DeepSeekReasoner) = ChatCompletionResponseOpenAI
+
+instance ChatAPI (Local DummyTestModel) where
+  chatModel  = Local DummyTestModel
+  type ChatCompletionResponse (Local DummyTestModel) = ChatCompletionResponseOpenAI
 
 instance ChatAPI (Local DeepSeekR1_14B) where
   chatModel  = Local DeepSeekR1_14B
