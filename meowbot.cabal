@@ -177,6 +177,7 @@ library meowbot-lib
                    , System.Meow
                    , Utils.Base64
                    , Utils.ByteString
+                   , Utils.List
                    , Utils.Logging
                    , Utils.Maybe
                    , Utils.Persist
