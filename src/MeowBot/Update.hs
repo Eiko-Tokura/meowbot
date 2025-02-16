@@ -15,6 +15,7 @@ import Control.Parallel.Strategies
 import Data.Bifunctor
 import Data.Coerce
 import Data.Additional
+import Data.Time.Clock
 import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
 import qualified MeowBot.Parser as MP
@@ -74,7 +75,7 @@ updateSavedAdditionalData = change $ \ad ->
   let od = otherdata ad
       sd = savedData od
       rd = runningData od
-      sd' = sd { savedAdditional = coerce filterSavedAdditional rd }
+      sd' = sd { savedAdditional = coerce filterSavedAdditional rd } `using` rseqSavedData
   in ad { otherdata = od { savedData = sd' } }
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
@@ -192,9 +193,9 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , groupId     = Just gid
             , metaMessage = Just meta
             , echoR       = Just $ pack $ show aid
-            }
+            } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ \_ -> other' { sent_messages = my:sent_messages other_data }
+  change $ \_ -> other' { sent_messages = my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq }
   tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
@@ -207,8 +208,14 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             , userId      = Just $ coerce uid
             , metaMessage = Just meta
             , echoR       = Just $ pack $ show aid
-            }
+            } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ \_ -> other' { sent_messages = my:sent_messages other_data }
+  change $ \_ -> other' { sent_messages = my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq }
   tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
+
+-- | Filter out the messages that are not within 60 seconds of the current time.
+withInDate :: UTCTime -> CQMessage -> Bool
+withInDate utc cqmsg = case utcTime cqmsg of
+  Just utc' -> diffUTCTime utc utc' < 60
+  Nothing -> False

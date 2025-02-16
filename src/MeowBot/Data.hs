@@ -118,19 +118,21 @@ data NoticeType
   | NoticeGroupRecall
   | NoticeFriendRecall
   | NoticeNotify NoticeSubType
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 data NoticeSubType = NoticeSubTypePoke | NoticeSubTypeLuckyKing | NoticeSubTypeHonor
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 data GroupDecreaseSubType = GroupDecreaseLeave | GroupDecreaseKick | GroupDecreaseKickMe
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 data GroupIncreaseSubType = GroupIncreaseApprove | GroupIncreaseInvite
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 newtype Flag = Flag { unFlag :: Text }
   deriving (Show, Eq, Read, FromJSON, ToJSON) via Text
+  deriving Generic
+  deriving newtype NFData
 
 data RequestType
   = RequestFriend
@@ -142,10 +144,10 @@ data RequestType
     , requestComment :: Maybe Text
     , requestFlag    :: Maybe Flag
     }
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 data RequestGroupSubType = RequestGroupAdd | RequestGroupInvite
-  deriving (Show, Eq, Read)
+  deriving (Show, Eq, Read, Generic, NFData)
 
 -------------------------------------------------------------------------------------------
 -- Action API
@@ -324,7 +326,7 @@ data CQMessage = CQMessage
   , metaMessage  :: Maybe MetaMessage
   , noticeType   :: Maybe NoticeType
   , requestType  :: Maybe RequestType
-  } deriving (Show, Eq, Generic)
+  } deriving (Show, Eq, Generic, NFData)
 
 newtype SentCQMessage = SentCQMessage CQMessage
 newtype ReceCQMessage = ReceCQMessage CQMessage

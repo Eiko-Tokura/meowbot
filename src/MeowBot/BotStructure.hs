@@ -29,7 +29,7 @@ module MeowBot.BotStructure
   , getFirstTree, getNewMsg, getNewMsgN, getNewMsgChatIdN
   , getTimeLine, getTimeLineCid
 
-  , rseqWholeChat
+  , rseqWholeChat, rseqSavedData
 
   --, makeHeader
   , AdditionalData(..)
@@ -63,7 +63,7 @@ data BotConfig = BotConfig
 data AllData = AllData
   { wholechat  :: WholeChat
   , botConfig  :: BotConfig
-  , otherdata  :: OtherData
+  , otherdata  :: !OtherData
   } deriving Show
 
 data SelfInfo = SelfInfo
@@ -98,6 +98,16 @@ data SavedData = SavedData
   , books           :: [Book]
   , savedAdditional :: [Saved AdditionalData]
   } deriving (Show, Eq, Read)
+
+rseqSavedData :: Strategy SavedData
+rseqSavedData (SavedData cs ug gg cr b sa) = do
+  cs' <- rseq cs
+  ug' <- rseq ug
+  gg' <- rseq gg
+  cr' <- rseq cr
+  b'  <- rseq b
+  sa' <- evalList rseq sa
+  return $ SavedData cs' ug' gg' cr' b' sa'
 
 -- data ReaderStateT r s m a = ReaderStateT {runReaderStateT :: r -> s -> m (a, s)}
 -- CommandValue is a monadic value of the monad (Meow)
