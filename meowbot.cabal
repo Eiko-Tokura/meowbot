@@ -58,7 +58,7 @@ library item
                    , Parser.Text
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -finfo-table-map -fdistinct-constructor-tables -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
 
     build-depends: base  >=4.7 && <5
                  , mtl
@@ -79,7 +79,7 @@ library search-scrape-text
                    , Scrape
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -finfo-table-map -fdistinct-constructor-tables -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
 
     build-depends: base  >=4.7 && <5
                  , data-default
@@ -103,7 +103,7 @@ library meowbot-lib
     -- .hs or .lhs file containing the Main module.
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O1 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -finfo-table-map -fdistinct-constructor-tables -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O1 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -j8
     -- -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=512 -finfo-table-map -fdistinct-constructor-tables -j8
 
     -- Modules included in this executable, other than Main.
@@ -241,7 +241,7 @@ executable meowbot
     main-is:          Main.hs
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -finfo-table-map -fdistinct-constructor-tables  -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m
+    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m
 
     hs-source-dirs:   app
 
