@@ -122,7 +122,7 @@ instance (MeowDataClass p, InitMeowDataClass (CList MeowDataClass ps)) => InitMe
 --   function f g (x :* xs) = CCons <$> _ <*> _
 
 -- | The modules loaded into the bot
-type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS, ConnectionManagerModule]
+type Mods   = '[AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
 -- | The monads the commands run in
 type Meow a = MeowT MeowData Mods IO a
