@@ -13,31 +13,35 @@ module External.ChatAPI
   , printMessage
   ) where
 
-import Control.Exception (try, SomeException)
+
 import Control.Applicative
+import Control.Concurrent
+import Control.DeepSeq
+import Control.Exception (try, SomeException)
 import Control.Monad.Except
 import Control.Monad.ExceptionReturn
-import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
-import Control.Concurrent
-import Network.HTTP.Client hiding (Proxy)
+import Control.Monad.Trans.ReaderState
 import Data.Aeson as A
 import Data.Bifunctor
 import Data.Default
 import Data.Either
-import Data.Text (Text, pack)
 import Data.HList
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Proxy (Proxy(..))
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import Data.Maybe (fromMaybe, listToMaybe, isJust)
-import qualified Data.ByteString.Lazy as BL
-import GHC.Generics (Generic)
-import Control.DeepSeq
 import External.ChatAPI.Tool
+import GHC.Generics (Generic)
+import Network.HTTP.Client hiding (Proxy)
 
 import Parser.Run
+
+import Data.Text (Text, pack)
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
+import qualified Data.Text.Lazy as TL
+import qualified Data.Text.Lazy.Encoding as TLE
 
 data ChatModel
   = OpenAI OpenAIModel
@@ -429,9 +433,6 @@ getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow api
 
 fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse manager _ apiKey model msg = do
-  -- let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
-  -- let customManagerSettings = tlsManagerSettings { managerResponseTimeout = responseTimeoutMicro customTimeout }
-  -- manager <- liftIO $ newManager customManagerSettings
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
   let requestBody = generateRequestBody @md @ts @m model msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
@@ -439,8 +440,6 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
     , "------------------- Message Start -------------------" ]
     <> map showMessage msg <>
     [ "------------------- Message End ---------------------" ]
-  -- liftIO $ putStrLn "------------------- Request Body -------------------"
-  -- liftIO $ putStrLn $ "Request body = " <> show requestBody
   case getApiKeyByModel (chatModel @md) apiKey of
     APIKeyRequired Nothing       -> return . Left $ "No API key found for the model " <> T.pack (show $ chatModel @md)
     APIKeyRequired (Just apikey) -> do
@@ -452,14 +451,12 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
                 , ("Authorization", "Bearer " <> encodeUtf8 apikey)
                 ]
             }
-      --liftIO $ putStrLn $ "Request = " <> show request'
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
-        -- putStrLn $ "Response = " <> show mres
         case mres of
           Right res -> return $ Right res
           Left e -> return $ Left $ toText e
-      return $ bimap id responseBody result >>= first T.pack . eitherDecode
+      handleReturnRawResult result
     NoAPIKeyRequired -> do
       let request' = request
             { method = "POST"
@@ -468,14 +465,18 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
                 [ ("Content-Type", "application/json")
                 ]
             }
-      --liftIO $ putStrLn $ "Request = " <> show request'
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
-        -- putStrLn $ "Response = " <> show mres
         case mres of
           Right res -> return $ Right res
           Left e -> return $ Left $ toText e
-      return $ bimap id responseBody result >>= first T.pack . eitherDecode
+      handleReturnRawResult result
+    where handleReturnRawResult res = do
+            let response = second responseBody res >>= \resBody ->
+                  case eitherDecode resBody of
+                    Right parsedJson -> Right parsedJson
+                    Left  jsonError -> Left $ T.pack jsonError <> "\nResponse body: " <> TL.toStrict (TLE.decodeUtf8 resBody)
+            return response
 
 instance GetMessage (ChatCompletionResponseOpenAI) where
   getMessage = fmap message . maybe (Left "No choices in response") Right . listToMaybe . choices
