@@ -13,37 +13,43 @@ import Control.Monad.IO.Class
 import qualified Data.ByteString as B
 
 import MeowBot.Data
+import Data.Time.Clock
 
 -- | Log information, determined by the location, source, level and message.
 -- it will both print to the console and write to a file.
-myLogger :: [DebugFlag] -> [FilePath] -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
-myLogger [] fps (Loc fn pkg mod locS locE) src LevelDebug msg = return ()
-myLogger _  fps (Loc fn pkg mod locS locE) src LevelDebug msg = do
-  let log = fromLogStr $ "[DEBUG] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+myLogger :: Bool -> [DebugFlag] -> [FilePath] -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+myLogger _ [] fps (Loc fn pkg mod locS locE) src LevelDebug msg = return ()
+myLogger time _  fps (Loc fn pkg mod locS locE) src LevelDebug msg = do
+  timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
+  let log = fromLogStr $ "[DEBUG] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
-myLogger _ fps (Loc fn pkg mod locS locE) src LevelInfo msg = do
-  let log = fromLogStr $ "[INFO] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+myLogger time _ fps (Loc fn pkg mod locS locE) src LevelInfo msg = do
+  timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
+  let log = fromLogStr $ "[INFO] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
-myLogger _ fps (Loc fn pkg mod locS locE) src LevelWarn msg = do
-  let log = fromLogStr $ "[WARN] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+myLogger time _ fps (Loc fn pkg mod locS locE) src LevelWarn msg = do
+  timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
+  let log = fromLogStr $ "[WARN] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
-myLogger _ fps (Loc fn pkg mod locS locE) src LevelError msg = do
-  let log = fromLogStr $ "[ERROR] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+myLogger time _ fps (Loc fn pkg mod locS locE) src LevelError msg = do
+  timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
+  let log = fromLogStr $ "[ERROR] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
-myLogger [] fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = return ()
-myLogger _ fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = do
-  let log = fromLogStr $ "[OTHER] " <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+myLogger time [] fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = return ()
+myLogger time _ fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = do
+  timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
+  let log = fromLogStr $ "[OTHER] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
 {-# INLINE myLogger #-}
 
-runMyLogging :: BotInstance -> LoggingT IO a -> IO a
-runMyLogging botin mlog =
-  runLoggingConcurrent (myLogger (botDebugFlags botin) [fp | LogFlag fp <- botLogFlags botin]) mlog
+runMyLogging :: Bool -> BotInstance -> LoggingT IO a -> IO a
+runMyLogging useTime botin mlog =
+  runLoggingConcurrent (myLogger useTime (botDebugFlags botin) [fp | LogFlag fp <- botLogFlags botin]) mlog
 {-# INLINE runMyLogging #-}
 
 -- | Run a logging action with a queue for logging.

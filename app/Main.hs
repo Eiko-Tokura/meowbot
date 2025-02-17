@@ -64,7 +64,7 @@ parseArgs = many (do
 main :: IO () --runLoggingConcurrent (myLogger "meowbot.log")
 main = do
   args <- getArgs
-  runLoggingConcurrent (myLogger [DebugCQMessage | "--debug-cqmsg" `elem` args] ["meowbot.log"]) $ do
+  runLoggingConcurrent (myLogger True [DebugCQMessage | "--debug-cqmsg" `elem` args] ["meowbot.log"]) $ do
     $(logDebug) $ pack $ "Arguments: " ++ show args
     case runParserE argumentHelp parseArgs args of
       Left errMsg -> $(logError) (pack errMsg)
