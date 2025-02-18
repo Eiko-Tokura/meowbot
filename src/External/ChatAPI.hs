@@ -51,10 +51,10 @@ data ChatModel
   | SiliconFlow SiliconFlowModel
   deriving (Show, Read, Eq)
 
-data OpenAIModel     = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
-data DeepSeekModel   = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel      = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
-data OpenRouterModel = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
+data OpenAIModel      = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
+data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
+data LocalModel       = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
+data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
@@ -66,21 +66,21 @@ modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
 modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
 
 instance ToJSON ChatModel where
-  toJSON (OpenAI GPT4oMini)           = "gpt-4o-mini"
-  toJSON (OpenAI GPT4o)               = "gpt-4o"
-  toJSON (OpenAI O3Mini)              = "o3-mini"
-  toJSON (DeepSeek DeepSeekChat)      = "deepseek-chat"
-  toJSON (DeepSeek DeepSeekReasoner)  = "deepseek-reasoner"
-  toJSON (Local DummyTestModel)       = "dummy-test-model"
-  toJSON (Local DeepSeekR1_14B)       = "deepseek-r1:14b"
-  toJSON (Local DeepSeekR1_32B)       = "deepseek-r1:32b"
-  toJSON (Local Qwen2_5_32B)          = "qwen2.5:32b"
-  toJSON (Local Command_R_Latest)     = "command-r:latest"
-  toJSON (OpenRouter OR_DeepSeekR1)   = "deepseek/deepseek-r1"
+  toJSON (OpenAI GPT4oMini)              = "gpt-4o-mini"
+  toJSON (OpenAI GPT4o)                  = "gpt-4o"
+  toJSON (OpenAI O3Mini)                 = "o3-mini"
+  toJSON (DeepSeek DeepSeekChat)         = "deepseek-chat"
+  toJSON (DeepSeek DeepSeekReasoner)     = "deepseek-reasoner"
+  toJSON (Local DummyTestModel)          = "dummy-test-model"
+  toJSON (Local DeepSeekR1_14B)          = "deepseek-r1:14b"
+  toJSON (Local DeepSeekR1_32B)          = "deepseek-r1:32b"
+  toJSON (Local Qwen2_5_32B)             = "qwen2.5:32b"
+  toJSON (Local Command_R_Latest)        = "command-r:latest"
+  toJSON (OpenRouter OR_DeepSeekR1)      = "deepseek/deepseek-r1"
   toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
-  toJSON (SiliconFlow SF_DeepSeekV3)  = "deepseek-ai/DeepSeek-V3"
-  toJSON (SiliconFlow SF_DeepSeekR1)  = "deepseek-ai/DeepSeek-R1"
+  toJSON (SiliconFlow SF_DeepSeekV3)     = "deepseek-ai/DeepSeek-V3"
+  toJSON (SiliconFlow SF_DeepSeekR1)     = "deepseek-ai/DeepSeek-R1"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -455,7 +455,7 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of
           Right res -> return $ Right res
-          Left e -> return $ Left $ toText e
+          Left e -> return $ Left $ "Exception In Getting Response: " <> toText e
       handleReturnRawResult result
     NoAPIKeyRequired -> do
       let request' = request
@@ -469,13 +469,13 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of
           Right res -> return $ Right res
-          Left e -> return $ Left $ toText e
+          Left e -> return $ Left $ "Exception In Getting Response: " <> toText e
       handleReturnRawResult result
     where handleReturnRawResult res = do
             let response = second responseBody res >>= \resBody ->
                   case eitherDecode resBody of
                     Right parsedJson -> Right parsedJson
-                    Left  jsonError -> Left $ T.pack jsonError <> "\nResponse body: " <> TL.toStrict (TLE.decodeUtf8 resBody)
+                    Left  jsonError -> Left $ "Exception when parsing: " <> T.pack jsonError <> "\nResponse body: " <> TL.toStrict (TLE.decodeUtf8 resBody)
             return response
 
 instance GetMessage (ChatCompletionResponseOpenAI) where
@@ -530,65 +530,51 @@ agent = do
   toolDepth <- gets chatStatusToolDepth
   mapiKeys  <- asks (systemApiKeys . chatSetting)
   apiKeys   <- liftE $ pureEMsg "No API key found!" mapiKeys
-  let man = chatManager params
+  let man     = chatManager params
       timeOut = chatTimeout params
   if fromMaybe defaultSystemMaxToolDepth (systemMaxToolDepth (chatSetting params)) <= toolDepth
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
-      --liftIO $ putStrLn "Fetching chat completion response..."
-      let getAmsg = do
-            response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
-            amsg <- liftE . pureE $ getMessage response
-            if T.null (content amsg)
-            then return $ Nothing
-            else return $ Just amsg
+    let getAmsg = do
+          response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
+          amsg <- liftE . pureE $ getMessage response
+          if T.null (content amsg)
+          then return $ Nothing
+          else return $ Just amsg
 
-      let getAmsgTwice = do
-            mamsg <- getAmsg
-            case mamsg of
-              Nothing -> do
-                $(logInfo) "Empty response, retrying..."
-                liftIO $ threadDelay 1000000 -- 1 second
-                mamsg2 <- getAmsg
-                case mamsg2 of
-                  Nothing -> liftE $ throwE "Empty response twice"
-                  Just amsg2 -> return amsg2
-              Just amsg -> return amsg
+    let getAmsgTwice = do
+          mamsg <- getAmsg
+          case mamsg of
+            Nothing -> do
+              $(logInfo) "Empty response, retrying..."
+              liftIO $ threadDelay 1000000 -- 1 second
+              mamsg2 <- getAmsg
+              case mamsg2 of
+                Nothing -> liftE $ throwE "Empty response twice"
+                Just amsg2 -> return amsg2
+            Just amsg -> return amsg
 
-      amsg' <- getAmsgTwice
-      $(logInfo) $ showMessage amsg'
-      case parseToolCall (content amsg') of
-        Nothing -> return $ [amsg']
-        Just (Nothing, ToolCallPair toolCallName args) -> do
-          let amsg = case amsg' of
-                AssistantMessage {} -> amsg' { pureToolCall = Just True } -- this assistant message is a pure tool call
-                _ -> amsg'
-          skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
-          case skip_toolmsg of
-            Left Skipped -> liftE $ throwE "Skipped"
-            Right toolmsg -> do
-              $(logInfo) $ showMessage toolmsg
-              modify $ \st -> st
-                { chatStatusToolDepth      = chatStatusToolDepth st + 1
-                , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
-                , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
-                }
-              ([amsg, toolmsg] <>) <$> agent
-        Just (Just _, ToolCallPair toolCallName args) -> do
-          let amsg = case amsg' of
-                AssistantMessage {} -> amsg' { pureToolCall = Just False } -- this assistant message is a mix of response and tool call
-                _ -> amsg'
-          skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
-          case skip_toolmsg of
-            Left Skipped -> liftE $ throwE "Skipped"
-            Right toolmsg -> do
-              $(logInfo) $ showMessage toolmsg
-              modify $ \st -> st
-                { chatStatusToolDepth      = chatStatusToolDepth st + 1
-                , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
-                , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
-                }
-              ([amsg, toolmsg] <>) <$> agent
+    amsg' <- getAmsgTwice
+    $(logInfo) $ showMessage amsg'
+    case parseToolCall (content amsg') of
+      Nothing -> return $ [amsg']
+      Just (Nothing, ToolCallPair toolCallName args) -> continueAgent True amsg' toolCallName args
+      Just (Just _, ToolCallPair toolCallName args)  -> continueAgent False amsg' toolCallName args
+      where continueAgent isPureToolCall amsg' toolCallName args = do
+              let amsg = case amsg' of
+                    AssistantMessage {} -> amsg' { pureToolCall = Just isPureToolCall } -- this assistant message is a pure tool call
+                    _ -> amsg'
+              skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
+              case skip_toolmsg of
+                Left Skipped -> liftE $ throwE "Skipped"
+                Right toolmsg -> do
+                  $(logInfo) $ showMessage toolmsg
+                  modify $ \st -> st
+                    { chatStatusToolDepth      = chatStatusToolDepth st + 1
+                    , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
+                    , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
+                    }
+                  ([amsg, toolmsg] <>) <$> agent
 
 printMessage :: Message -> IO ()
 printMessage = TIO.putStrLn . showMessage
