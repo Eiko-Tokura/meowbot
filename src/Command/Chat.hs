@@ -78,7 +78,8 @@ commandChat = BotCommand Chat $ botT $ do
   hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
   let ignoredPatterns = MP.runParser hangmanParser'
   _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
-  cqmsg <- queries getNewMsg
+  cqmsg  <- queries getNewMsg
+  cqmsg3 <- queries $ getNewMsgN 3
   other_data <- query
   -- whole_chat :: WholeChat <- query
   botmodules <- query
@@ -233,7 +234,7 @@ commandChat = BotCommand Chat $ botT $ do
   chatState <- pureMaybe $ SM.lookup cid allChatState
 
   $(logDebug) "Determining if reply"
-  determineIfReply atReply activeProbability cid msg botname msys chatState
+  determineIfReply atReply activeProbability cid cqmsg3 msg botname msys chatState
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
@@ -310,19 +311,29 @@ mergeChatStatus maxMessageInState cid newMsgs newStatus = do
           }
         allChatState
 
-determineIfReply :: Bool -> Double -> ChatId -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply atReply prob GroupChat{} msg bn cs ChatState {meowStatus = MeowIdle} = do
+notAllImages :: [CQMessage] -> Bool
+notAllImages = not . all (
+    (\case -- this case examines if a [Either CQCode Text] is just an image
+      [Left (CQImage _)] -> True
+      _                  -> False
+    ) . fromMaybe [] . fmap mixedMessage . metaMessage
+  )
+
+determineIfReply :: Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
   replied <- if atReply
     then lift $ boolMaybe <$> beingReplied
     else return Nothing
   ated    <- lift $ boolMaybe <$> beingAt
-  let chanceReply = boolMaybe $ chance <= prob
+  let chanceReply = do -- chance reply only happens when recent messages are not all images
+        boolMaybe $ chance <= prob
+        boolMaybe $ notAllImages cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed <|> replied <|> ated
-determineIfReply _ _ PrivateChat{} msg _ _ ChatState {meowStatus = MeowIdle} = do
+determineIfReply _ _ PrivateChat{} _ msg _ _ ChatState {meowStatus = MeowIdle} = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
-determineIfReply _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ _ = empty
