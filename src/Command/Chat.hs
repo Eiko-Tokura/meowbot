@@ -312,13 +312,12 @@ mergeChatStatus maxMessageInState cid newMsgs newStatus = do
           }
         allChatState
 
-notAllImages :: [CQMessage] -> Bool
-notAllImages = not . all (
-    (\case -- this case examines if a [Either CQCode Text] is just an image
-      [Left (CQImage _)] -> True
-      _                  -> False
-    ) . fromMaybe [] . fmap mixedMessage . metaMessage
-  )
+notAllNoText :: [CQMessage] -> Bool
+notAllNoText = not . all (all
+  (\case -- this case determines if a term Either CQCode Text contains no text
+    Left _  -> True
+    Right t -> T.null $ T.strip t
+  ) . fromMaybe [] . fmap mixedMessage . metaMessage)
 
 determineIfReply :: Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
 determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
@@ -328,9 +327,9 @@ determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus
     then lift $ boolMaybe <$> beingReplied
     else return Nothing
   ated    <- lift $ boolMaybe <$> beingAt
-  let chanceReply = do -- chance reply only happens when recent messages are not all images
+  let chanceReply = do -- chance reply only happens when recent messages contains some text
         boolMaybe $ chance <= prob
-        boolMaybe $ notAllImages cqmsgs
+        boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed <|> replied <|> ated
 determineIfReply _ _ PrivateChat{} _ msg _ _ ChatState {meowStatus = MeowIdle} = do
