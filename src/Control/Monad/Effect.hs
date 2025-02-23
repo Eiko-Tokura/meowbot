@@ -160,7 +160,7 @@ instance System '[] where
   {-# INLINE afterSystem #-}
 
 -- | Inductive instance for system
-instance (Module mod, System mods, Loadable mod mods) => System (mod ': mods) where
+instance (SubList mods (mod:mods), Module mod, System mods, Loadable mod mods) => System (mod ': mods) where
   initAllModules (x :** xs) = do
     initAllModules xs >>= \case
       Right (rs, ss) -> do
