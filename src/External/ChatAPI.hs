@@ -7,7 +7,7 @@ module External.ChatAPI
   ( simpleChat, Message(..), mapMessage, statusChat, messageChat, messagesChat, statusChatReadAPIKey
   , ChatModel(..)
   , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
-  , OpenRouterModel(..), SiliconFlowModel(..)
+  , OpenRouterModel(..), SiliconFlowModel(..), AnthropicModel(..), XcApiModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   , ChatAPI(..), APIKey(..)
   , printMessage
@@ -49,13 +49,17 @@ data ChatModel
   | Local LocalModel
   | OpenRouter OpenRouterModel
   | SiliconFlow SiliconFlowModel
+  | Anthropic AnthropicModel
+  | XcApi XcApiModel
   deriving (Show, Read, Eq)
 
-data OpenAIModel      = GPT4oMini | GPT4o | O3Mini deriving (Show, Read, Eq)
+data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
 data LocalModel       = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
 data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
+data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq)
+data XcApiModel       = XC_Claude_3_7 | XC_Claude_3_5 deriving (Show, Read, Eq)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
@@ -64,10 +68,13 @@ modelEndpoint  (Local DummyTestModel) = "http://localhost:8000/v1/chat/completio
 modelEndpoint Local {}       = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
 modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
 modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
+modelEndpoint Anthropic {}   = "https://api.anthropic.com/v1/messages"
+modelEndpoint XcApi {}       = "http://xcapi.top/v1/chat/completions"
 
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)              = "gpt-4o-mini"
   toJSON (OpenAI GPT4o)                  = "gpt-4o"
+  toJSON (OpenAI O1Mini)                 = "o1-mini"
   toJSON (OpenAI O3Mini)                 = "o3-mini"
   toJSON (DeepSeek DeepSeekChat)         = "deepseek-chat"
   toJSON (DeepSeek DeepSeekReasoner)     = "deepseek-reasoner"
@@ -81,6 +88,9 @@ instance ToJSON ChatModel where
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
   toJSON (SiliconFlow SF_DeepSeekV3)     = "deepseek-ai/DeepSeek-V3"
   toJSON (SiliconFlow SF_DeepSeekR1)     = "deepseek-ai/DeepSeek-R1"
+  toJSON (Anthropic Claude_3_7)          = "claude-3.7-sonnet"
+  toJSON (XcApi XC_Claude_3_7)           = "[W2+]claude-3.7-sonnet"
+  toJSON (XcApi XC_Claude_3_5)           = "[W]claude-3.5-sonnet"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -136,6 +146,10 @@ instance ChatAPI (OpenAI GPT4o) where
   chatModel  = OpenAI GPT4o
   type ChatCompletionResponse (OpenAI GPT4o) = ChatCompletionResponseOpenAI
 
+instance ChatAPI (OpenAI O1Mini) where
+  chatModel  = OpenAI O1Mini
+  type ChatCompletionResponse (OpenAI O1Mini) = ChatCompletionResponseOpenAI
+
 instance ChatAPI (DeepSeek DeepSeekChat) where
   chatModel  = DeepSeek DeepSeekChat
   type ChatCompletionResponse (DeepSeek DeepSeekChat) = ChatCompletionResponseOpenAI
@@ -180,12 +194,20 @@ instance ChatAPI (SiliconFlow SF_DeepSeekR1) where
   chatModel  = SiliconFlow SF_DeepSeekR1
   type ChatCompletionResponse (SiliconFlow SF_DeepSeekR1) = ChatCompletionResponseOpenAI
 
+instance ChatAPI (XcApi XC_Claude_3_5) where
+  chatModel  = XcApi XC_Claude_3_5
+  type ChatCompletionResponse (XcApi XC_Claude_3_5) = ChatCompletionResponseOpenAI
+
+instance ChatAPI (XcApi XC_Claude_3_7) where
+  chatModel  = XcApi XC_Claude_3_7
+  type ChatCompletionResponse (XcApi XC_Claude_3_7) = ChatCompletionResponseOpenAI
+
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
   , object     :: Text
   , created    :: Int
   , choices    :: [Choice]
-  , usage      :: Object
+  , usage      :: Maybe Object
   } deriving (Show)
 
 data Choice = Choice
@@ -231,11 +253,11 @@ deriving instance Show Message
 
 instance FromJSON ChatCompletionResponseOpenAI where
   parseJSON = withObject "ChatCompletionResponse" $ \v -> ChatCompletionResponseOpenAI
-    <$> v .: "id"       -- due to the name 'id' is a keyword in Haskell, we use 'responseId' instead
-    <*> v .: "object"
-    <*> v .: "created"
-    <*> v .: "choices"
-    <*> v .: "usage"
+    <$> v .:  "id"       -- due to the name 'id' is a keyword in Haskell, we use 'responseId' instead
+    <*> v .:  "object"
+    <*> v .:  "created"
+    <*> v .:  "choices"
+    <*> v .:? "usage"
 
 instance FromJSON Choice
 
@@ -293,6 +315,7 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
 
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message)
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (SiliconFlow b) Message)
+deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (XcApi b) Message)
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
@@ -331,6 +354,7 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (SiliconFlow b) ChatRequest)
+deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (XcApi b) ChatRequest)
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
@@ -392,6 +416,8 @@ generateRequestBody param mes = encode $ ModelDependent @md $
         Local _       -> Just False
         OpenRouter _  -> Just False
         SiliconFlow _ -> Just False
+        Anthropic _   -> Just False
+        XcApi _       -> Just False
     -- , tools       = Nothing
     }
   where sysMessage = generateSystemPrompt @md @ts @m param
@@ -418,6 +444,8 @@ data APIKey = APIKey
   , apiKeyDeepSeek    :: Maybe Text
   , apiKeyOpenRouter  :: Maybe Text
   , apiKeySiliconFlow :: Maybe Text
+  , apiKeyAnthropic   :: Maybe Text
+  , apiKeyXcApi       :: Maybe Text
   } deriving (Show, Read, Eq, Generic, NFData)
 
 data GetAPIKey
@@ -430,6 +458,8 @@ getApiKeyByModel (DeepSeek _)   apiKey  = APIKeyRequired $ apiKeyDeepSeek apiKey
 getApiKeyByModel (Local _)    _         = NoAPIKeyRequired
 getApiKeyByModel (OpenRouter _) apiKey  = APIKeyRequired $ apiKeyOpenRouter apiKey
 getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow apiKey
+getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKey
+getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
 fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
 fetchChatCompletionResponse manager _ apiKey model msg = do
@@ -437,6 +467,7 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
   let requestBody = generateRequestBody @md @ts @m model msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
     [ ""
+    , "model: " <> T.pack (show $ chatModel @md) <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md)
     , "------------------- Message Start -------------------" ]
     <> map showMessage msg <>
     [ "------------------- Message End ---------------------" ]

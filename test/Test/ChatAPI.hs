@@ -28,6 +28,19 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r  -> return $ unpack r
     ]
+  , testGroup "XcAPI Claude"
+    [ testCaseInfo "Say hi" $ do
+        let params = ChatParams
+              { chatMarkDown = False
+              , chatSetting = def
+              , chatManager = man
+              , chatTimeout = timeoutHttp
+              } :: ChatParams (XcApi XC_Claude_3_7) '[]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
+        case content <$> res of
+          Left err -> assertFailure $ "messageChat failed: " ++ show err
+          Right r -> return $ unpack r
+    ]
   , testGroup "Local Model DeepSeekR1_14B"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams

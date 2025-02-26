@@ -240,14 +240,15 @@ loadSavedDataDB botid glob = do
           { systemMessage      = SystemMessage <$> botSettingPerChatSystemMessage c
           , systemTemp         = botSettingPerChatSystemTemp c
           , systemMaxToolDepth = botSettingPerChatSystemMaxToolDepth c
-          , systemApiKeys      = case
-            ( botSettingPerChatSystemAPIKeyOpenAI c
-            , botSettingPerChatSystemAPIKeyDeepSeek c
-            , botSettingPerChatSystemAPIKeyOpenRouter c
-            , botSettingPerChatSystemAPIKeySiliconFlow c
-            ) of
-              (Nothing, Nothing, Nothing, Nothing) -> Nothing
-              (a, b, c, d) -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c, apiKeySiliconFlow = d }
+          , systemApiKeys      = botSettingPerChatSystemAPIKey c
+              -- case
+              -- ( botSettingPerChatSystemAPIKeyOpenAI c
+              -- , botSettingPerChatSystemAPIKeyDeepSeek c
+              -- , botSettingPerChatSystemAPIKeyOpenRouter c
+              -- , botSettingPerChatSystemAPIKeySiliconFlow c
+              -- ) of
+              --   (Nothing, Nothing, Nothing, Nothing) -> Nothing
+              --   (a, b, c, d) -> Just $ APIKey { apiKeyOpenAI = a, apiKeyDeepSeek = b , apiKeyOpenRouter = c, apiKeySiliconFlow = d }
           }) | c <- botSettingsPerChat]
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]

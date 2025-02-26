@@ -41,10 +41,13 @@ modelsInUse :: CFList ChatAPI Proxy
   , DeepSeek    DeepSeekReasoner
   , OpenAI      GPT4oMini
   , OpenAI      GPT4o
+  , OpenAI      O1Mini
   , OpenRouter  OR_DeepSeekR1_Free
   , OpenRouter  OR_DeepSeekV3_Free
   , SiliconFlow SF_DeepSeekV3
   , SiliconFlow SF_DeepSeekR1
+  , XcApi       XC_Claude_3_5
+  , XcApi       XC_Claude_3_7
   ]
 modelsInUse = def
 
@@ -52,6 +55,7 @@ adminRestrictedModels :: [ChatModel]
 adminRestrictedModels =
   [ DeepSeek DeepSeekReasoner
   , OpenAI O3Mini
+  , OpenAI O1Mini
   , OpenAI GPT4o
   , SiliconFlow SF_DeepSeekR1
   ]

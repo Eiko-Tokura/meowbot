@@ -38,6 +38,8 @@ BotSetting -- Overlappable by BotSettingPerChat
   systemAPIKeyDeepSeek    Text                 Maybe
   systemAPIKeyOpenRouter  Text                 Maybe
   systemAPIKeySiliconFlow Text                 Maybe
+  systemAPIKeyAnthropic   Text                 Maybe
+  systemAPIKeyXcApi       Text                 Maybe
   activeChat              Bool                 Maybe
   atReply                 Bool                 Maybe
   activeProbability       Double               Maybe
@@ -61,6 +63,8 @@ BotSettingPerChat -- Overlapping BotSetting
   systemAPIKeyDeepSeek    Text                 Maybe
   systemAPIKeyOpenRouter  Text                 Maybe
   systemAPIKeySiliconFlow Text                 Maybe
+  systemAPIKeyAnthropic   Text                 Maybe
+  systemAPIKeyXcApi       Text                 Maybe
   activeChat              Bool                 Maybe
   atReply                 Bool                 Maybe
   activeProbability       Double               Maybe
@@ -172,9 +176,11 @@ botSettingPerChatSystemAPIKey bspc = case
   , botSettingPerChatSystemAPIKeyDeepSeek    bspc
   , botSettingPerChatSystemAPIKeyOpenRouter  bspc
   , botSettingPerChatSystemAPIKeySiliconFlow bspc
+  , botSettingPerChatSystemAPIKeyAnthropic   bspc
+  , botSettingPerChatSystemAPIKeyXcApi       bspc
   ) of
-  (Nothing, Nothing, Nothing, Nothing) -> Nothing
-  (a, b, c, d) -> Just $ APIKey a b c d
+  (Nothing, Nothing, Nothing, Nothing, Nothing, Nothing) -> Nothing
+  (a, b, c, d, e, f) -> Just $ APIKey a b c d e f
 
 botSettingSystemAPIKey :: BotSetting -> Maybe APIKey
 botSettingSystemAPIKey bs = case
@@ -182,9 +188,11 @@ botSettingSystemAPIKey bs = case
   , botSettingSystemAPIKeyDeepSeek    bs
   , botSettingSystemAPIKeyOpenRouter  bs
   , botSettingSystemAPIKeySiliconFlow bs
+  , botSettingSystemAPIKeyAnthropic   bs
+  , botSettingSystemAPIKeyXcApi       bs
   ) of
-  (Nothing, Nothing, Nothing, Nothing) -> Nothing
-  (a, b, c, d) -> Just $ APIKey a b c d
+  (Nothing, Nothing, Nothing, Nothing, Nothing, Nothing) -> Nothing
+  (a, b, c, d, e, f) -> Just $ APIKey a b c d e f
 
 cqMessageToChatMessage :: BotId -> BotName -> CQMessage -> Maybe ChatMessage
 cqMessageToChatMessage botid botname cqm = do
