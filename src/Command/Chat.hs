@@ -323,10 +323,10 @@ determineIfReply :: Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -
 determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
-  replied <- if atReply
-    then lift $ boolMaybe <$> beingReplied
+  replied <- lift $ boolMaybe <$> beingReplied
+  ated    <- if atReply
+    then lift $ boolMaybe <$> beingAt
     else return Nothing
-  ated    <- lift $ boolMaybe <$> beingAt
   let chanceReply = do -- chance reply only happens when recent messages contains some text
         boolMaybe $ chance <= prob
         boolMaybe $ notAllNoText cqmsgs
