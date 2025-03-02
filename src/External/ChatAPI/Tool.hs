@@ -28,6 +28,7 @@ import Data.HList
 import Data.Proxy
 import Data.String (IsString, fromString)
 import Data.Time.Clock
+import Data.Time
 import GHC.TypeLits
 import Data.Aeson as A
 import qualified Data.Aeson.KeyMap as AK
@@ -526,7 +527,7 @@ instance MonadIO m => ToolClass m TimeTool where
   toolDescription _ _ = "Get current time"
   toolHandler _ _ ((IntT tz) :%* ObjT0Nil) = do
     t <- liftIO getCurrentTime
-    return $ StringT $ toText $ addUTCTime (fromIntegral $ tz * 3600) t
+    return $ StringT $ pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S:%Q" $ addUTCTime (fromIntegral $ tz * 3600) t
 
 sanityCheckTimeTool :: IO ()
 sanityCheckTimeTool = do
