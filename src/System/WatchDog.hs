@@ -39,7 +39,7 @@ checkStatus wd = do
   case (statusCount, currentGood) of
     (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
     (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
-    (CountBad n, False) | n >= 5  -> do
+    (CountBad n, False) | n == 3  -> do
         atomically $ writeTVar (wdCheckCount wd) (CountBad 0)
         wdAction wd
     (CountBad n, False)           -> atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
