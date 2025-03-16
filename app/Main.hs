@@ -33,8 +33,8 @@ parseArgs = many (do
     [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
     ]
-  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| unrecognizedFlag)
-  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags)
+  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| watchDogParser |+| unrecognizedFlag)
+  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights $ rights restFlags)
   ) <* liftR end
     where
       identityParser = asum
@@ -50,6 +50,7 @@ parseArgs = many (do
         liftR1 just "--proxy"
         ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
       logParser = LogFlag <$> liftR1 just "--log" >> withE "--log needs a file path argument" (LogFlag <$> nonFlag)
+      watchDogParser = liftR1 just "--watchdog" >> WatchDogFlag <$> readE "--watchdog <interval> <action>" nonFlag <*> withE "--watchdog <interval> <action>" nonFlag
       unrecognizedFlag = do
         flag <- liftR $ require ((&&) <$> ("--" `isPrefixOf`) <*> (`notElem` ["--run-client", "--run-server"])) getItem
         lift $ throwE $ "Unrecognized flag " ++ flag
@@ -68,7 +69,7 @@ main = do
     $(logDebug) $ pack $ "Arguments: " ++ show args
     case runParserE argumentHelp parseArgs args of
       Left errMsg -> $(logError) (pack errMsg)
-      Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] []] >> halt
+      Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] [] []] >> halt
       Right bots  -> runBots allInitDataG bots >> halt
   where halt = lift (threadDelay maxBound) >> halt
         argumentHelp = unlines

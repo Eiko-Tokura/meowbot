@@ -20,7 +20,7 @@ module MeowBot.Data
   , BotName(..)
   , BotModules(..)
   , BotInstance(..)
-  , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..)
+  , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..), WatchDogFlag(..)
   --, CommandValue
   , EssentialContent
 
@@ -69,6 +69,10 @@ data RunningFlag     = RunClient String Int | RunServer String Int deriving (Eq,
 data IdentityFlag    = UseName String | UseId BotId | UseSysMsg String deriving (Eq, Show)
 data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
 data LogFlag         = LogFlag FilePath deriving (Eq, Show)
+data WatchDogFlag    = WatchDogFlag
+    Int -- ^ interval in seconds
+    String -- ^ action command
+  deriving (Eq, Show)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
 data BotInstance = BotInstance
@@ -78,6 +82,7 @@ data BotInstance = BotInstance
   , botDebugFlags    :: [DebugFlag]
   , botProxyFlags    :: [ProxyFlag]
   , botLogFlags      :: [LogFlag]
+  , botWatchDogFlags :: [WatchDogFlag]
   } deriving (Eq, Show)
 
 data BotModules = BotModules

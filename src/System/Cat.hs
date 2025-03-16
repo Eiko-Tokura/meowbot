@@ -8,6 +8,8 @@ import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Exception
 import System
+import System.Process (system)
+import System.WatchDog
 import Utils.Logging
 import Data.HList
 import Data.Default
@@ -103,28 +105,45 @@ runBotServer ip port bot initglobs glob el = do
   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
-  alldata  <- initAllData botconfig glob
-  void $ (logThroughCont (runServer ip port) $ \pendingconn -> do
-    conn <- lift $ acceptRequest pendingconn
-    logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
-      $(logInfo) $ "Connected to client"
-      meowData <- liftIO $ initMeowData conn
-      $(logDebug) $ "initMeowData finished"
-      local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
-      $(logDebug) $ "initAllModulesL finished, entering bot loop"
-      void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
-    ) `logForkFinally` (rerunBot initglobs glob el bot)
+      watchDog = listToMaybe $ botWatchDogFlags bot
+  alldata     <- initAllData botconfig glob
+  onlineTVar  <- liftIO $ newTVarIO False
+  mWatchDogId <- case watchDog of
+    Just (WatchDogFlag interval action) -> do
+      $(logInfo) $ "Starting watch dog with interval " <> tshow interval
+      wd <- liftIO $ initWatchDog onlineTVar interval (atomically . readTVar) (void $ system action)
+      liftIO $ Just <$> startWatchDog wd
+    Nothing -> return Nothing
+  void $ 
+    (logThroughCont (runServer ip port) $ \pendingconn -> do
+      conn <- lift $ acceptRequest pendingconn
+      liftIO . atomically $ writeTVar onlineTVar True
+      logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
+        $(logInfo) $ "Connected to client"
+        meowData <- liftIO $ initMeowData conn
+        $(logDebug) $ "initMeowData finished"
+        local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
+        $(logDebug) $ "initAllModulesL finished, entering bot loop"
+        void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
+      $(logInfo) $ "Disconnected from client"
+      liftIO . atomically $ writeTVar onlineTVar False
+    ) `logForkFinally` 
+        ( \e -> do
+          maybe (pure ()) (liftIO . killThread) mWatchDogId
+          rerunBot initglobs glob el bot e
+        )
 
 runBotClient ip port bot initglobs glob el = do
   $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
   alldata  <- initAllData botconfig glob
-  void $ (logThroughCont (runClient ip port "") $ \conn -> do
-    $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
-    meowData <- liftIO $ initMeowData conn
-    local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
-    runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
+  void $ 
+    (logThroughCont (runClient ip port "") $ \conn -> do
+      $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
+      meowData <- liftIO $ initMeowData conn
+      local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
+      runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
     ) `logForkFinally` rerunBot initglobs glob el bot
 
 initMeowData :: Connection -> IO MeowData
@@ -144,7 +163,7 @@ rerunBot _ _ _ _ (Right _) = do
   $(logInfo) $ "Bot instance finished successfully."
 
 botInstanceToModule :: BotInstance -> LoggingT IO BotModules
-botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags) = do
+botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags) = do
     $(logInfo) $ "\n### Starting bot instance: " <> tshow bot
     $(logInfo) $ "Running mode: "   <> tshow mode
     $(logInfo) $ "Running flags: "  <> tshow runFlag
@@ -152,6 +171,7 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
     $(logInfo) $ "Command flags: "  <> tshow commandFlags
     $(logInfo) $ "Proxy flags: "    <> tshow proxyFlags
     $(logInfo) $ "Log flags: "      <> tshow logFlags
+    $(logInfo) $ "WatchDog flags: " <> tshow watchDogFlags
     -- proxyData <- lift $ sequence $ [ createProxyData addr port | ProxyFlag addr port <- proxyFlags ]
     let mGlobalSysMsg = listToMaybe [ pack sysMsg | UseSysMsg sysMsg <- identityFlags ]
         withDefault def [] = def

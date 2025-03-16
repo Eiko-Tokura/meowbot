@@ -46,6 +46,9 @@ extra-source-files: CHANGELOG.md
 
 tested-with: GHC == 9.2.8, GHC == 9.10.1
 
+flag deploy
+    ghc-options: -O2 -threaded -rtsopts -with-rtsopts=-N -with-rtsopts=-Fd2 -with-rtsopts=-Iw60 -with-rtsopts=-A10m -with-rtsopts=-xn
+
 library item
 
     exposed-modules: Control.Monad.Item
@@ -175,6 +178,7 @@ library meowbot-lib
                    , System.General
                    , System.Logging
                    , System.Meow
+                   , System.WatchDog
                    , Utils.Base64
                    , Utils.ByteString
                    , Utils.List
