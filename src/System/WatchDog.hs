@@ -11,7 +11,7 @@ import Control.Monad (forever)
 --
 -- * If the status is good, do nothing
 --
--- * If the status is bad for 3 continuous checks, do something (use a handle)
+-- * If the status is bad for 5 continuous checks, do something (use a handle)
 --
 -- * after doing something, do nothing until the status is good again where the counter is reset
 
@@ -39,8 +39,8 @@ checkStatus wd = do
   case (statusCount, currentGood) of
     (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
     (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
-    (CountBad n, False) | n == 3  -> do
-        atomically $ writeTVar (wdCheckCount wd) (CountBad 0)
+    (CountBad n, False) | n == 5  -> do
+        atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
         wdAction wd
     (CountBad n, False)           -> atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
     (CountBad _, True)            -> atomically $ writeTVar (wdCheckCount wd) (CountGood 1)
