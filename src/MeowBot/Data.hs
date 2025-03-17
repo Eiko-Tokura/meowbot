@@ -155,6 +155,44 @@ data RequestGroupSubType = RequestGroupAdd | RequestGroupInvite
   deriving (Show, Eq, Read, Generic, NFData)
 
 -------------------------------------------------------------------------------------------
+-- Query API
+data QueryType
+  = QueryGetStatus
+  -- | QueryGetMessage
+  -- | QueryGetForwardMessage
+
+newtype ForwardMessageId = ForwardMessageId { unForwardMessageId :: Int }
+  deriving (Show, Eq, Read, Generic)
+  deriving newtype (NFData)
+
+data QueryAPI (q :: QueryType) where
+  GetStatus         :: QueryAPI 'QueryGetStatus
+  -- GetMessage        :: MessageId -> QueryAPI 'QueryGetMessage
+  -- GetForwardMessage :: ForwardMessageId -> QueryAPI 'QueryGetForwardMessage
+
+data QueryAPIResponse (q :: QueryType) where
+  GetStatusResponse ::
+    { getStatusOnline :: Bool, getStatusGood :: Bool } -> QueryAPIResponse 'QueryGetStatus
+  -- GetMessageResponse ::
+  --   { getMessageTime    :: UTCTime
+  --   , getMessageType    :: CQEventType
+  --   , getMessageId      :: MessageId
+  --   , getMessageSender  :: Sender
+  --   , getMessageMessage :: CQMessage
+  --   }
+  --   -> QueryAPIResponse 'QueryGetMessage
+  -- GetForwardMessageResponse :: [CQMessage] -> QueryAPIResponse 'QueryGetForwardMessage
+
+instance ToJSON (QueryAPI q) where
+  toJSON GetStatus = object ["action" .= ("get_status" :: Text)]
+
+instance FromJSON (QueryAPIResponse 'QueryGetStatus) where
+  parseJSON = withObject "QueryAPIResponse" $ \o -> do
+    online <- o .: "online"
+    good   <- o .: "good"
+    return GetStatusResponse { getStatusOnline = online, getStatusGood = good }
+
+-------------------------------------------------------------------------------------------
 -- Action API
 data ActionAPI
   = SendPrivateMessage
