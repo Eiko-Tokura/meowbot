@@ -125,10 +125,12 @@ runBotServer ip port bot initglobs glob el = do
         local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
         $(logDebug) $ "initAllModulesL finished, entering bot loop"
         void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
-        ) `logCatch` (\e -> do
-            $(logInfo) $ "ERROR : Disconnected from client : " <> tshow e
-            liftIO . atomically $ writeTVar onlineTVar False
+      ) `logCatch`
+          (\e -> do
+            $(logError) $ "ERROR In connection with client : " <> tshow e
           )
+      $(logInfo) $ "Disconnected from client"
+      liftIO . atomically $ writeTVar onlineTVar False
     ) `logForkFinally` 
         ( \e -> do
           maybe (pure ()) (liftIO . killThread) mWatchDogId
