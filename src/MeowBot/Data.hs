@@ -16,6 +16,7 @@ module MeowBot.Data
   , RequestType(..), RequestGroupSubType(..)
 
   , ActionAPI(..), ActionForm(..)
+  , QueryAPI(..), QueryAPIResponse(..), QueryType(..), WithEcho(..)
 
   , BotName(..)
   , BotModules(..)
@@ -161,6 +162,11 @@ data QueryType
   -- | QueryGetMessage
   -- | QueryGetForwardMessage
 
+data WithEcho a = WithEcho
+  { maybeEcho :: Maybe Text
+  , params    :: a
+  } deriving (Show, Eq, Read, Generic)
+
 newtype ForwardMessageId = ForwardMessageId { unForwardMessageId :: Int }
   deriving (Show, Eq, Read, Generic)
   deriving newtype (NFData)
@@ -183,14 +189,26 @@ data QueryAPIResponse (q :: QueryType) where
   --   -> QueryAPIResponse 'QueryGetMessage
   -- GetForwardMessageResponse :: [CQMessage] -> QueryAPIResponse 'QueryGetForwardMessage
 
-instance ToJSON (QueryAPI q) where
-  toJSON GetStatus = object ["action" .= ("get_status" :: Text)]
+-- instance ToJSON (QueryAPI q) where
+--   toJSON GetStatus = object ["action" .= ("get_status" :: Text)]
 
-instance FromJSON (QueryAPIResponse 'QueryGetStatus) where
+deriving instance Show (QueryAPI q)
+deriving instance Show (QueryAPIResponse q)
+
+instance ToJSON (ActionForm (QueryAPI q)) where
+  toJSON (ActionForm GetStatus mecho) = object
+    [ "action" .= ("get_status" :: Text)
+    , "echo"   .= mecho
+    ]
+
+-- {"status":"ok","retcode":0,"data":{"online":true,"good":true,"stat":{"message_received":1081,"message_sent":88,"last_message_time":1742683958,"startup_time":1742667809}},"message":"","wording":"","echo":"echo-6049836937965548964"}
+instance FromJSON (WithEcho (QueryAPIResponse 'QueryGetStatus)) where
   parseJSON = withObject "QueryAPIResponse" $ \o -> do
-    online <- o .: "online"
-    good   <- o .: "good"
-    return GetStatusResponse { getStatusOnline = online, getStatusGood = good }
+    dataObj <- o .: "data"
+    online  <- dataObj .: "online"
+    good    <- dataObj .: "good"
+    mecho  <- o .:? "echo"
+    return $ WithEcho mecho $ GetStatusResponse { getStatusOnline = online, getStatusGood = good }
 
 -------------------------------------------------------------------------------------------
 -- Action API
@@ -338,12 +356,12 @@ actionString SetFriendAddRequest{}  = "set_friend_add_request"
 actionString SetGroupAddRequest{}   = "set_group_add_request"
 actionString SendPoke{}             = "send_poke"
 
-data ActionForm = ActionForm
-  { action :: ActionAPI
+data ActionForm a = ActionForm
+  { action :: a
   , echo   :: Maybe Text
   } deriving (Show, Eq, Read, Generic)
 
-instance ToJSON ActionForm where
+instance ToJSON (ActionForm ActionAPI) where
   toJSON (ActionForm act mecho) = object
     [ "action" .= actionString act
     , "params" .= act

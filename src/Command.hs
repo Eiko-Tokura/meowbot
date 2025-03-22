@@ -2,6 +2,7 @@
 module Command
   ( BotCommand(..), CommandId(..)
   , actionAPI
+  , queryAPI
   , doBotCommands
   , doBotAction
   , botCommandsToMeow
@@ -11,23 +12,26 @@ module Command
   ) where
 
 import MeowBot.CommandRule
-import Data.Aeson (encode)
+import Data.Aeson (encode, decode, FromJSON)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Network.WebSockets (Connection, sendTextData)
 
-import Module.Async
-import Module.AsyncInstance
-import System.Meow
-import System.General
-import Control.Monad.State
 import Control.Monad.Logger
+import Control.Monad.State
 import Control.Monad.Trans.Maybe
+import Data.HList
 import Data.Maybe (fromMaybe)
-import qualified MeowBot.Parser as MP
 import MeowBot.BotStructure
 import MeowBot.Update
-import Data.HList
+import MeowBot.API
+import Module.Async
+import Module.AsyncInstance
+import System.General
+import System.Meow
+import System.Random
+import Utils.ByteString
+import qualified MeowBot.Parser as MP
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
@@ -75,12 +79,6 @@ deleteMsg :: Connection -> MessageId -> LoggingT IO ()
 deleteMsg conn mid = do
   lift . sendTextData conn $ encode (ActionForm (DeleteMessage mid) Nothing)
   $(logInfo) $ "=> Delete message: " <> tshow mid
-
--- | Low-level functions to send any action
-actionAPI :: Connection -> ActionForm -> LoggingT IO ()
-actionAPI conn af = do
-  lift . sendTextData conn $ encode af
-  $(logInfo) $ "=> Action: " <> tshow af
 
 -- | Check if the command is allowed, and execute it if it is
 permissionCheck :: BotCommand -> Meow [BotAction]

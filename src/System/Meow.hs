@@ -15,6 +15,7 @@ import Module.Command
 import Module.Async
 import Module.ProxyWS
 import Module.ConnectionManager
+import Module.StatusMonitor
 
 import Data.HList
 import Data.Kind
@@ -122,7 +123,7 @@ instance (MeowDataClass p, InitMeowDataClass (CList MeowDataClass ps)) => InitMe
 --   function f g (x :* xs) = CCons <$> _ <*> _
 
 -- | The modules loaded into the bot
-type Mods   = '[AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
+type Mods   = '[StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
 -- | The monads the commands run in
 type Meow a = MeowT MeowData Mods IO a

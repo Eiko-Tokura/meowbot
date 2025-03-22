@@ -21,7 +21,7 @@ data WatchDog a = WatchDog
   { wdExtraState    :: TVar a
   , wdCheckInterval :: Int -- in seconds
   , wdCheckCount    :: TVar WatchDogStatus
-  , wdCheckHandle   :: TVar a -> IO Bool
+  , wdCheckHandle   :: IO Bool
   , wdAction        :: IO ()
   }
 
@@ -35,7 +35,7 @@ startWatchDog wd = forkIO $ forever $ do
 checkStatus :: WatchDog a -> IO ()
 checkStatus wd = do
   statusCount <- atomically $ readTVar (wdCheckCount wd)
-  currentGood <- wdCheckHandle wd (wdExtraState wd)
+  currentGood <- wdCheckHandle wd
   case (statusCount, currentGood) of
     (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
     (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
@@ -46,13 +46,18 @@ checkStatus wd = do
     (CountBad _, True)            -> atomically $ writeTVar (wdCheckCount wd) (CountGood 1)
 
 -- Function to initialize the watchdog
-initWatchDog :: TVar a -> Int -> (TVar a -> IO Bool) -> IO () -> IO (WatchDog a)
+initWatchDog
+  :: TVar a
+  -> Int
+  -> (TVar a -> IO Bool) -- ^ Check handle, using the extra state, and possibly reads other things, determine good or bad
+  -> IO ()
+  -> IO (WatchDog a)
 initWatchDog extraState interval checkHandle action = do
   checkCount   <- atomically $ newTVar (CountGood 0)
   return $ WatchDog
             { wdExtraState    = extraState
             , wdCheckInterval = interval
             , wdCheckCount    = checkCount
-            , wdCheckHandle   = checkHandle
+            , wdCheckHandle   = checkHandle extraState
             , wdAction        = action
             }

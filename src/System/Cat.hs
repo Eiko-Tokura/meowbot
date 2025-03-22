@@ -23,6 +23,7 @@ import Module.AsyncInstance
 import Module.LogDatabase
 import Module.ProxyWS
 import Module.ConnectionManager
+import Module.StatusMonitor
 
 import System.Directory
 import Data.Coerce
@@ -75,11 +76,14 @@ type R = MeowData -- ^ the r parameter
 -- then initialize AllData, and run the botLoop
 
 allInitDataG :: AllModuleInitDataG Mods
-allInitDataG  = AsyncInitDataG :** CommandInitDataG   :**  LogDatabaseInitDataG "meowbot.db"
+allInitDataG  = StatusMonitorInitDataG
+              :** AsyncInitDataG :** CommandInitDataG
+              :** LogDatabaseInitDataG "meowbot.db"
               :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
 
-allInitDataL :: [ProxyFlag] -> AllModuleInitDataL Mods
-allInitDataL pf =   AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
+allInitDataL :: TVar MeowStatus -> [ProxyFlag] -> AllModuleInitDataL Mods
+allInitDataL tvar pf = StatusMonitorInitDataL tvar
+                :** AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
                 :** ConnectionManagerInitDataL :** FNil
 
@@ -95,10 +99,12 @@ runBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> BotInstance -
 runBot initglobs glob bot = do
   case botRunFlag bot of
     RunClient ip port -> do
-      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL $ botProxyFlags bot)
+      tvarMeowStat  <- liftIO $ initTVarMeowStatus
+      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
       runBotClient ip port bot initglobs glob earlyLocal
     RunServer ip port -> do
-      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL $ botProxyFlags bot)
+      tvarMeowStat  <- liftIO $ initTVarMeowStatus
+      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
       runBotServer ip port bot initglobs glob earlyLocal
 
 runBotServer ip port bot initglobs glob el = do
@@ -106,23 +112,29 @@ runBotServer ip port bot initglobs glob el = do
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
       watchDog = listToMaybe $ botWatchDogFlags bot
-  alldata     <- initAllData botconfig glob
-  onlineTVar  <- liftIO $ newTVarIO False
-  mWatchDogId <- case watchDog of
+  alldata       <- initAllData botconfig glob
+  connectedTVar <- liftIO $ newTVarIO False
+  let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
+  let checkHandle tvarExtra =
+        liftIO $ atomically $ do
+          meowStat <- readTVar tvarMeowStat
+          extra    <- readTVar tvarExtra
+          return $ foldl' (&&) True [meowStat == MeowOnline, extra]
+  mWatchDogId   <- case watchDog of
     Just (WatchDogFlag interval action) -> do
       $(logInfo) $ "Starting watch dog with interval " <> tshow interval
-      wd <- liftIO $ initWatchDog onlineTVar interval (atomically . readTVar) (void $ system action)
+      wd <- liftIO $ initWatchDog connectedTVar interval checkHandle (void $ system action)
       liftIO $ Just <$> startWatchDog wd
     Nothing -> return Nothing
   void $ 
     (logThroughCont (runServer ip port) $ \pendingconn -> do
       conn <- lift $ acceptRequest pendingconn
-      liftIO . atomically $ writeTVar onlineTVar True
+      liftIO . atomically $ writeTVar connectedTVar True
       (logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
         $(logInfo) $ "Connected to client"
         meowData <- liftIO $ initMeowData conn
         $(logDebug) $ "initMeowData finished"
-        local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
+        local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
         $(logDebug) $ "initAllModulesL finished, entering bot loop"
         void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
         ) `logCatch`
@@ -130,7 +142,7 @@ runBotServer ip port bot initglobs glob el = do
             $(logError) $ "ERROR In connection with client : " <> tshow e
           )
       $(logInfo) $ "Disconnected from client"
-      liftIO . atomically $ writeTVar onlineTVar False
+      liftIO . atomically $ writeTVar connectedTVar False
     ) `logForkFinally` 
         ( \e -> do
           maybe (pure ()) (liftIO . killThread) mWatchDogId
@@ -141,12 +153,13 @@ runBotClient ip port bot initglobs glob el = do
   $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot)
+  let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
   alldata  <- initAllData botconfig glob
   void $ 
     (logThroughCont (runClient ip port "") $ \conn -> do
       $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
       meowData <- liftIO $ initMeowData conn
-      local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
+      local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
       runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
     ) `logForkFinally` rerunBot initglobs glob el bot
 

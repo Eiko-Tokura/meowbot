@@ -85,6 +85,7 @@ instance
     return $ CommandEvent <$> waitSTM asyncMessage
 
   moduleEventHandler _ (CommandEvent msg) = do
+    -- | When received any raw message, put into the tvar so other modules can be notified of the message
     askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . (`writeTVar` (Just msg))
     botMods <- gets (botModules . botConfig . snd)
     --mode <- gets (botConfig . snd)
