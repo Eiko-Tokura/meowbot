@@ -118,15 +118,17 @@ runBotServer ip port bot initglobs glob el = do
     (logThroughCont (runServer ip port) $ \pendingconn -> do
       conn <- lift $ acceptRequest pendingconn
       liftIO . atomically $ writeTVar onlineTVar True
-      logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
+      (logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
         $(logInfo) $ "Connected to client"
         meowData <- liftIO $ initMeowData conn
         $(logDebug) $ "initMeowData finished"
         local    <- initAllModulesL @R meowData initglobs (allInitDataL $ botProxyFlags bot) el
         $(logDebug) $ "initAllModulesL finished, entering bot loop"
         void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
-      $(logInfo) $ "Disconnected from client"
-      liftIO . atomically $ writeTVar onlineTVar False
+        ) `logCatch` (\e -> do
+            $(logInfo) $ "ERROR : Disconnected from client : " <> tshow e
+            liftIO . atomically $ writeTVar onlineTVar False
+          )
     ) `logForkFinally` 
         ( \e -> do
           maybe (pure ()) (liftIO . killThread) mWatchDogId
