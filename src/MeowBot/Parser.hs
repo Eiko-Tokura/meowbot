@@ -14,6 +14,7 @@ module MeowBot.Parser
   , htmlCodes
   , item
   , commandSeparator, commandSeparator2
+  , stringMsgToArrayMsg, stringMsgToArrayMsgFunction
   , headCommand
   , canBeEmpty
   , parseByRead
@@ -97,13 +98,33 @@ cqother str = CQOther str <$> intercalateBy ($(itemInQ ",;"))
   )
 {-# INLINE cqother #-}
 
+cqCode :: (Chars sb) => Parser sb Char CQCode
+cqCode = do
+  $(stringQ "[CQ:")
+  cqtype :: Text <- some' $ itemNot ','
+  just ','
+  case cqtype of
+    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int <*> optMaybe ($(stringQ_ ",name=") >> T.pack <$> htmlDecode)
+    "reply" -> $(stringQ_ "id=") >> CQReply <$> int
+    str     -> cqother str
+  <* just ']'
+{-# INLINE cqCode #-}
+
+stringMsgToArrayMsg :: (Chars sb) => Parser sb Char [Either CQCode Text]
+stringMsgToArrayMsg = collectRightCharsText <$> many (cqCode |+| (htmlCodes <|> getItem))
+{-# INLINE stringMsgToArrayMsg #-}
+
+stringMsgToArrayMsgFunction :: (Chars sb) => sb -> [Either CQCode Text]
+stringMsgToArrayMsgFunction = fromMaybe [] . runParser stringMsgToArrayMsg
+{-# INLINE stringMsgToArrayMsgFunction #-}
+
 cqcodeExceptFace :: (Chars sb) => Parser sb Char CQCode
 cqcodeExceptFace = do
   $(stringQ "[CQ:")
   cqtype :: Text <- some' $ itemNot ','
   just ','
   case cqtype of
-    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int <*> optMaybe ($(stringQ_ ",name=") >> T.pack <$> many item)
+    "at"    -> $(stringQ_ "qq=") >> CQAt <$> int <*> optMaybe ($(stringQ_ ",name=") >> T.pack <$> htmlDecode)
     "reply" -> $(stringQ_ "id=") >> CQReply <$> int
     "face"  -> zero
     str     -> cqother str

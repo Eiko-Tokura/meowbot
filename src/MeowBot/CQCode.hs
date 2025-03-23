@@ -14,6 +14,8 @@ import qualified Data.Text as T
 import Utils.ByteString
 import Utils.Base64
 import Utils.Persist
+import Data.Aeson
+import Data.String
 
 data CQCode
   = CQAt Int (Maybe Text)
@@ -39,3 +41,43 @@ embedCQCode (CQOther str list)
   <> if null list then "" else ","
   <> T.intercalate "," [ key <> "=" <> val | (key, val) <- list]
   <> "]"
+
+instance ToJSON CQCode where
+  toJSON (CQAt qq mName) = object
+    [ "type" .= ("at" :: Text)
+    , "data" .= object
+        ( [ "qq" .= qq
+          ]
+        <> maybe [] (\name -> ["name" .= name]) mName
+        )
+    ]
+  toJSON (CQReply id) = object
+    [ "type" .= ("reply" :: Text)
+    , "data" .= object
+        [ "id" .= id
+        ]
+    ]
+  toJSON (CQRecord file) = object
+    [ "type" .= ("record" :: Text)
+    , "data" .= object
+        [ "file" .= ("file://" <> file)
+        ]
+    ]
+  toJSON (CQImage file) = object
+    [ "type" .= ("image" :: Text)
+    , "data" .= object
+        [ "file" .= ("file://" <> file)
+        ]
+    ]
+  toJSON (CQImage64 file) = object
+    [ "type" .= ("image" :: Text)
+    , "data" .= object
+        [ "file" .= ("base64://" <> bsToText (runBase64 file))
+        ]
+    ]
+  toJSON (CQOther str list) = object
+    [ "type" .= str
+    , "data" .= object
+        [ fromString (T.unpack key) .= val | (key, val) <- list
+        ]
+    ]

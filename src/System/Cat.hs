@@ -87,6 +87,11 @@ allInitDataL tvar pf = StatusMonitorInitDataL tvar
                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
                 :** ConnectionManagerInitDataL :** FNil
 
+pingpongOptions = defaultPingPongOptions
+  -- { pingInterval = 30
+  -- , pongTimeout  = 30
+  -- }
+
 runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()
 runBots initglobs bots = do
   $(logInfo) "Initializing all global states"
@@ -130,7 +135,7 @@ runBotServer ip port bot initglobs glob el = do
     (logThroughCont (runServer ip port) $ \pendingconn -> do
       conn <- lift $ acceptRequest pendingconn
       liftIO . atomically $ writeTVar connectedTVar True
-      (logThroughCont (withPingPong defaultPingPongOptions conn) $ \conn -> do
+      (logThroughCont (withPingPong pingpongOptions conn) $ \conn -> do
         $(logInfo) $ "Connected to client"
         meowData <- liftIO $ initMeowData conn
         $(logDebug) $ "initMeowData finished"

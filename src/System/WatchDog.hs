@@ -2,7 +2,7 @@ module System.WatchDog where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Monad (forever)
+import Control.Monad (forever, unless)
 
 -- watch dog has its own thread
 -- it reads something (provide a handle to it) periodically to check the status
@@ -16,6 +16,7 @@ import Control.Monad (forever)
 -- * after doing something, do nothing until the status is good again where the counter is reset
 
 data WatchDogStatus = CountGood Int | CountBad Int
+  deriving Show
 
 data WatchDog a = WatchDog
   { wdExtraState    :: TVar a
@@ -36,13 +37,19 @@ checkStatus :: WatchDog a -> IO ()
 checkStatus wd = do
   statusCount <- atomically $ readTVar (wdCheckCount wd)
   currentGood <- wdCheckHandle wd
+  unless currentGood $ do
+    putStrLn "WatchDog: Bad Status Detected"
+    putStrLn $ "Current Status Count: " ++ show statusCount
   case (statusCount, currentGood) of
-    (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
-    (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
     (CountBad n, False) | n == 5  -> do
         atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
+        putStrLn $ "WatchDog: Bad Status Detected for " <> show n <> " times, taking action"
         wdAction wd
+
+    (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
     (CountBad n, False)           -> atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
+
+    (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
     (CountBad _, True)            -> atomically $ writeTVar (wdCheckCount wd) (CountGood 1)
 
 -- Function to initialize the watchdog
