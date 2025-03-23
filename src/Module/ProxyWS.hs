@@ -4,6 +4,7 @@ module Module.ProxyWS where
 import Module
 import MeowBot.BotStructure
 import MeowBot.Update
+import MeowBot.CQMessage.Convert
 import External.ProxyWS
 import Network.WebSockets
 import qualified Data.ByteString.Lazy as BL
@@ -15,6 +16,7 @@ import Parser.Run
 import Parser.Except
 import Data.Maybe
 import Data.Coerce
+import Data.Aeson
 import Control.Concurrent.STM
 
 data ProxyWS
@@ -65,8 +67,15 @@ instance
         if eventType cqmsg `elem` [LifeCycle] ||
            eventType cqmsg `elem` [PrivateMessage, GroupMessage] && filterMsg cqmsg
           then do
-            when (eventType cqmsg `elem` [PrivateMessage, GroupMessage]) $ $(logInfo) $ pack $ fromMaybe "喵喵" (maybeBotName name) <> " -> Proxy : " <> take 512 (bsToString bs)
-            liftIO $ mapM_ (`sendToProxy` bs) proxyDatas
+            let cqmsgTyped = decode bs :: Maybe CQMessageObject
+                convertedToArrayStyle = fmap stringToArray cqmsgTyped
+                mbs' = encode <$> convertedToArrayStyle
+            when (eventType cqmsg `elem` [PrivateMessage, GroupMessage]) $ do
+              $(logInfo) $ pack $ fromMaybe "喵喵" (maybeBotName name) <> " -> Proxy : " <> take 512 (bsToString bs)
+              case mbs' of
+                Nothing -> $(logWarn) $ "Failed to convert CQMessageObject to array style: " <> pack (show cqmsgTyped)
+                Just bs' -> do
+                  liftIO $ mapM_ (`sendToProxy` bs') proxyDatas
             makeHeader >>= \case
               Nothing -> return ()
               Just headers -> do
