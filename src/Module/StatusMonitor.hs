@@ -100,10 +100,10 @@ instance
         result <- MaybeT . pure $ waiter rawBS
         $(logDebug) $ "Received Meow status: " <> toText result
         case result of
-          GetStatusResponse True _ -> lift $ do
+          GetStatusResponse True True -> lift $ do
             liftIO $ atomically $ writeTVar (monitorWatchDog localState) MeowOnline
             modifyModuleState (Proxy @StatusMonitorModule) $ \s -> s { monitorStatus = Nothing }
-          GetStatusResponse False _ -> lift $ do
+          GetStatusResponse _ _ -> lift $ do
             liftIO $ atomically $ writeTVar (monitorWatchDog localState) MeowOffline
             modifyModuleState (Proxy @StatusMonitorModule) $ \s -> s { monitorStatus = Nothing }
             $(logInfo) $ "Received Non-Good Meow status: " <> toText result
