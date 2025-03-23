@@ -76,22 +76,20 @@ instance
       Nothing -> do
         $(logDebug) "Querying Meow status"
         wait <- lift $ queryAPI conn $ GetStatus
-        asyncNewTick <- liftIO $ async newTick
         $(logDebug) "Querying Meow status sent, new tick started"
-        modifyModuleState (Proxy @StatusMonitorModule) $ \s -> s
-          { monitorRefresh = asyncNewTick
-          , monitorStatus  = Just $ MonitorQuerying wait
-          }
+        continue wait
       Just _ -> do
         $(logInfo) "Last query has no response, querying meow status AGAIN"
         liftIO $ atomically $ writeTVar (monitorWatchDog localState) MeowNotResponding
         wait <- lift $ queryAPI conn $ GetStatus
-        asyncNewTick <- liftIO $ async newTick
         $(logDebug) "Querying Meow status sent, new tick started"
-        modifyModuleState (Proxy @StatusMonitorModule) $ \s -> s
-          { monitorRefresh = asyncNewTick
-          , monitorStatus  = Just $ MonitorQuerying wait
-          }
+        continue wait
+    where continue wait = do
+            asyncNewTick <- liftIO $ async newTick
+            modifyModuleState (Proxy @StatusMonitorModule) $ \s -> s
+              { monitorRefresh = asyncNewTick
+              , monitorStatus  = Just $ MonitorQuerying wait
+              }
 
   -- | In this function, we need to read the raw message and handle it.
   afterMeow _ = do

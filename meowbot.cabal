@@ -51,6 +51,13 @@ flag deploy
     manual: False
     default: False
 
+common extensions
+    default-extensions:
+      OverloadedStrings
+      TypeFamilies
+      UndecidableInstances
+      TemplateHaskell
+
 library item
 
     exposed-modules: Control.Monad.Item
@@ -106,6 +113,7 @@ library search-scrape-text
 
 library meowbot-lib
     -- .hs or .lhs file containing the Main module.
+    import: extensions
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
     if flag(deploy)
@@ -159,6 +167,7 @@ library meowbot-lib
                    , External.ProxyWS
                    , MeowBot
                    , MeowBot.Action
+                   , MeowBot.API
                    , MeowBot.Async
                    , MeowBot.BotStructure
                    , MeowBot.CQCode
@@ -176,6 +185,7 @@ library meowbot-lib
                    , Module.CommandInstance
                    , Module.ConnectionManager
                    , Module.LogDatabase
+                   , Module.StatusMonitor
                    , Module.ProxyWS
                    , Probability.Foundation
                    , System
