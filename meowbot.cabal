@@ -23,7 +23,7 @@ synopsis:           demo
 -- description:
 
 -- URL for the project homepage or repository.
-homepage:
+homepage:           https://github.com/Eiko-Tokura/meowbot
 
 -- A URL where users can report bugs.
 -- bug-reports:
@@ -171,6 +171,7 @@ library meowbot-lib
                    , MeowBot.Async
                    , MeowBot.BotStructure
                    , MeowBot.CQCode
+                   , MeowBot.CQMessage.Convert
                    , MeowBot.CommandRule
                    , MeowBot.Data
                    , MeowBot.Data.Book

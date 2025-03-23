@@ -53,7 +53,7 @@ type MeowTools =
   , SearchTool
   ]
 
-type ModelChat = Local DeepSeekR1_14B
+type ModelChat = Local QwQ
 
 -- | A new command that enables the bot to chat with users
 -- should be more powerful than the previous legacy command Cat

@@ -55,7 +55,7 @@ data ChatModel
 
 data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq)
 data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel       = DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
+data LocalModel       = QwQ | DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
 data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
 data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq)
@@ -83,6 +83,7 @@ instance ToJSON ChatModel where
   toJSON (Local DeepSeekR1_32B)          = "deepseek-r1:32b"
   toJSON (Local Qwen2_5_32B)             = "qwen2.5:32b"
   toJSON (Local Command_R_Latest)        = "command-r:latest"
+  toJSON (Local QwQ)                     = "qwq:latest"
   toJSON (OpenRouter OR_DeepSeekR1)      = "deepseek/deepseek-r1"
   toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
@@ -177,6 +178,10 @@ instance ChatAPI (Local Qwen2_5_32B) where
 instance ChatAPI (Local Command_R_Latest) where
   chatModel  = Local Command_R_Latest
   type ChatCompletionResponse (Local Command_R_Latest) = ChatCompletionResponseOllama
+
+instance ChatAPI (Local QwQ) where
+  chatModel  = Local QwQ
+  type ChatCompletionResponse (Local QwQ) = ChatCompletionResponseOllama
 
 instance ChatAPI (OpenRouter OR_DeepSeekR1_Free) where
   chatModel  = OpenRouter OR_DeepSeekR1_Free
