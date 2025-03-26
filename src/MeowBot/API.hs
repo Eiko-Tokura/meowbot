@@ -15,6 +15,8 @@ actionAPI conn af = do
   lift . sendTextData conn $ encode af
   $(logInfo) $ "=> Action: " <> tshow af
 
+-- | This keeps the send logic and the receive logic together
+-- with continuation style passing functions around, we can enforce a lot of coupled relationships
 queryAPI
   :: ( MonadLogger m
      , MonadIO m
@@ -24,7 +26,7 @@ queryAPI
   -> QueryAPI queryType
   -> m ( LazyByteString
        -> Maybe (QueryAPIResponse queryType)
-       )
+       ) -- ^ the echo is captured in the returned function, force a tightly coupled relationship between the query and the response
 queryAPI conn query = do
   echo <- generateUniqueEcho
   liftIO $ sendTextData conn $ encode (ActionForm query $ Just echo)
