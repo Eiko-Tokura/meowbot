@@ -2,21 +2,19 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.CommandInstance where
 
-import Control.Monad.Trans.ReaderState
-import Control.Monad
-import Control.Monad.Logger
-import Control.Monad.Trans.Maybe
+import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Applicative
+import Control.Monad.Logger
+import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
-import System.Meow
+import Data.Aeson
+import Data.Maybe
+import MeowBot.Action
 import MeowBot.BotStructure
 import MeowBot.Update
-import MeowBot.Action
-import Data.Maybe
-import Data.Aeson
 import Network.WebSockets hiding (Response)
+import System.Meow
 import qualified Data.ByteString.Lazy as BL
 
 import Command
@@ -125,7 +123,6 @@ instance
           RequestEvent -> do
             tmeow <- readSystem <$> asks snd
             liftIO $ atomically $ modifyTVar tmeow $ (<> [botHandleRequestEvent cqmsg nameBot])
-            -- handleRequestEvent conn nameBot cqmsg
           _ -> return ()
         where
           updateStates name cqm = do
@@ -136,20 +133,3 @@ instance
     -- | creating a new async to receive the next message
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
-
--- handleRequestEvent :: Connection -> String -> CQMessage -> ModuleT r s CommandModule IO ()
--- handleRequestEvent conn str cqmsg = do
---   $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
---   case requestType cqmsg of
---     Just (RequestFriend mcomment (Just flag)) -> void $ runMaybeT $ do
---       uid <- MaybeT $ return $ userId cqmsg
---       $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
---       $(logInfo) $ " -> Approving the request."
---       lift . lift $ actionAPI conn $ ActionForm (SetFriendAddRequest uid flag "") Nothing
---     Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> void $ runMaybeT $ do
---       gid <- MaybeT $ return $ groupId cqmsg
---       uid <- MaybeT $ return $ userId cqmsg
---       $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
---       $(logInfo) $ " -> Approving the request."
---       lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing
---     _ -> return ()

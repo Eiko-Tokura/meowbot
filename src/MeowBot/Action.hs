@@ -99,15 +99,17 @@ botHandleRequestEvent cqmsg str = do
   botId      <- query
   case requestType cqmsg of
     Just (RequestFriend mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      botReqSetting <- MaybeT $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
-      guard (botRequestSettingApproveFriendRequest (entityVal botReqSetting) == Just True)
+      mBotReqSetting <- lift $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
+      guard ((botRequestSettingApproveFriendRequest =<< fmap entityVal mBotReqSetting) /= Just False)
+      -- ^ by default, accept request
       uid <- MaybeT $ return $ userId cqmsg
       $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
       $(logInfo) $ " -> Approving the request."
       return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag "" 
     Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      botReqSetting <- MaybeT $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
-      guard (botRequestSettingApproveGroupRequest (entityVal botReqSetting) == Just True)
+      mBotReqSetting <- lift $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
+      guard ((botRequestSettingApproveGroupRequest =<< fmap entityVal mBotReqSetting) /= Just False)
+      -- ^ by default, accept request
       gid <- MaybeT $ return $ groupId cqmsg
       uid <- MaybeT $ return $ userId cqmsg
       $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
