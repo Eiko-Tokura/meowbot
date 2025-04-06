@@ -72,6 +72,15 @@ BotSettingPerChat -- Overlapping BotSetting
   deriving Generic
   deriving Default
 
+BotRequestSetting -- how to handle requests received by bot
+  botName          String                    Maybe
+  botId            BotId
+  UniqueBotRequestSettingBotId botId
+  approveFriendRequest  Bool                 Maybe
+  approveGroupRequest   Bool                 Maybe
+  deriving Generic
+  deriving Default
+
 BotStatistics
   botId                       BotId
   UniqueBotStatisticsBotId    botId

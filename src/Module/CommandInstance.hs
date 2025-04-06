@@ -13,6 +13,7 @@ import Control.Parallel.Strategies
 import System.Meow
 import MeowBot.BotStructure
 import MeowBot.Update
+import MeowBot.Action
 import Data.Maybe
 import Data.Aeson
 import Network.WebSockets hiding (Response)
@@ -45,8 +46,8 @@ allGroupCommands   = [commandCat, commandChat, commandMd, commandHelp, commandSe
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions
-  , HasSystemRead (TVar (Maybe ReceCQMessage)) r     -- ^ other modules can use
-  , HasSystemRead (TVar (Maybe SentCQMessage)) r     -- ^ other modules can use
+  , HasSystemRead (TVar (Maybe ReceCQMessage)) r -- ^ other modules can use
+  , HasSystemRead (TVar (Maybe SentCQMessage)) r -- ^ other modules can use
   , HasSystemRead (TVar (Maybe BL.ByteString)) r -- ^ other modules can use
   , HasSystemRead Connection r                   -- ^ the connection to the server
   )
@@ -121,7 +122,10 @@ instance
             updateStates nameBot cqmsg
             tmeow <- readSystem <$> asks snd
             liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow gcmds)
-          RequestEvent -> handleRequestEvent conn nameBot cqmsg
+          RequestEvent -> do
+            tmeow <- readSystem <$> asks snd
+            liftIO $ atomically $ modifyTVar tmeow $ (<> [botHandleRequestEvent cqmsg nameBot])
+            -- handleRequestEvent conn nameBot cqmsg
           _ -> return ()
         where
           updateStates name cqm = do
@@ -133,19 +137,19 @@ instance
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
 
-handleRequestEvent :: Connection -> String -> CQMessage -> ModuleT r s CommandModule IO ()
-handleRequestEvent conn str cqmsg = do
-  $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
-  case requestType cqmsg of
-    Just (RequestFriend mcomment (Just flag)) -> void $ runMaybeT $ do
-      uid <- MaybeT $ return $ userId cqmsg
-      $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
-      $(logInfo) $ " -> Approving the request."
-      lift . lift $ actionAPI conn $ ActionForm (SetFriendAddRequest uid flag "") Nothing
-    Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> void $ runMaybeT $ do
-      gid <- MaybeT $ return $ groupId cqmsg
-      uid <- MaybeT $ return $ userId cqmsg
-      $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
-      $(logInfo) $ " -> Approving the request."
-      lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing
-    _ -> return ()
+-- handleRequestEvent :: Connection -> String -> CQMessage -> ModuleT r s CommandModule IO ()
+-- handleRequestEvent conn str cqmsg = do
+--   $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
+--   case requestType cqmsg of
+--     Just (RequestFriend mcomment (Just flag)) -> void $ runMaybeT $ do
+--       uid <- MaybeT $ return $ userId cqmsg
+--       $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
+--       $(logInfo) $ " -> Approving the request."
+--       lift . lift $ actionAPI conn $ ActionForm (SetFriendAddRequest uid flag "") Nothing
+--     Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> void $ runMaybeT $ do
+--       gid <- MaybeT $ return $ groupId cqmsg
+--       uid <- MaybeT $ return $ userId cqmsg
+--       $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
+--       $(logInfo) $ " -> Approving the request."
+--       lift . lift $ actionAPI conn $ ActionForm (SetGroupAddRequest flag RequestGroupInvite True Nothing) Nothing
+--     _ -> return ()

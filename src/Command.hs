@@ -12,11 +12,11 @@ module Command
   ) where
 
 import MeowBot.CommandRule
-import Data.Aeson (encode, decode, FromJSON)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Network.WebSockets (Connection, sendTextData)
 
+import Data.Aeson
 import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -29,8 +29,6 @@ import Module.Async
 import Module.AsyncInstance
 import System.General
 import System.Meow
-import System.Random
-import Utils.ByteString
 import qualified MeowBot.Parser as MP
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)

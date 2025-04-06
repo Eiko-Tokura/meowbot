@@ -6,11 +6,17 @@ import MeowBot.Update
 import System.Meow
 import System.General
 import Module
+import Utils.RunDB
 import Control.Concurrent.Async (Async, async)
 import Control.Concurrent.STM
 import Control.Concurrent
+import Control.Monad.Logger
+import Control.Monad
+import Control.Monad.Trans.Maybe
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
+import Data.Maybe
+import Data.PersistModel
 
 -- | Abstract representation of sending a message to a chat id.
 -- will NOT insert the message into the history.
@@ -87,3 +93,24 @@ asyncMeow masync = do
   asyncWrapped <- liftIO $ async asyncAction -- async
   return $ [BAAsync asyncWrapped]
 
+botHandleRequestEvent :: CQMessage -> String -> Meow [BotAction]
+botHandleRequestEvent cqmsg str = do
+  $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
+  botId      <- query
+  case requestType cqmsg of
+    Just (RequestFriend mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
+      botReqSetting <- MaybeT $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
+      guard (botRequestSettingApproveFriendRequest (entityVal botReqSetting) == Just True)
+      uid <- MaybeT $ return $ userId cqmsg
+      $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
+      $(logInfo) $ " -> Approving the request."
+      return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag "" 
+    Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
+      botReqSetting <- MaybeT $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
+      guard (botRequestSettingApproveGroupRequest (entityVal botReqSetting) == Just True)
+      gid <- MaybeT $ return $ groupId cqmsg
+      uid <- MaybeT $ return $ userId cqmsg
+      $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
+      $(logInfo) $ " -> Approving the request."
+      return . pure . pure $ BAActionAPI $ SetGroupAddRequest flag RequestGroupInvite True Nothing
+    _ -> return []
