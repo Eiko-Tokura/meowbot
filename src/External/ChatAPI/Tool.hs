@@ -515,7 +515,11 @@ appendToolPrompts clist sep
     ( T.unlines
       [ sep
       , "## Available Tools"
-      , "If you need to use tool, format output as JSON with 'tool' and 'args' fields, no other text. Tool calls should not be mixed with other text. If you really want to mix, use code block (```json ... ```), or put the tool call at the end of the message."
+      , "If you need to use tool, you should:"
+      , "* format output as JSON with 'tool' and 'args' fields, with no other text in the output."
+      , "* Tool call output should not be mixed with other text. If you really want to mix, use code block (```json ... ```) to wrap it, or put the tool call at the end of the message."
+      , "* At most one tool call per message!"
+      , ""
       , "Example output: {\"tool\": \"time\", \"args\": {\"timezone\": 8}}"
       , sep
       , "### Tools List"

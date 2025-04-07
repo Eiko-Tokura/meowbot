@@ -73,6 +73,9 @@ import Network.WebSockets
 --
 -- * launches two TChan for reading and writing
 
+tbQueueBound :: Integral a => a
+tbQueueBound = 16
+
 type AddressString = String
 type PortInt = Int
 
@@ -104,8 +107,8 @@ receiveFromProxy (ProxyData _ _ (_, chanOut) _) = readTBQueue chanOut
 -- | Create a new 'ProxyData' with the provided address and port, and empty TBQueues.
 createProxyData :: AddressString -> PortInt -> IO ProxyData
 createProxyData addr port = do
-  chanIn  <- newTBQueueIO 10
-  chanOut <- newTBQueueIO 10
+  chanIn  <- newTBQueueIO tbQueueBound
+  chanOut <- newTBQueueIO tbQueueBound
   running <- newTVarIO False
   return $ ProxyData addr port (chanIn, chanOut) running
 
@@ -121,13 +124,17 @@ runProxyWS (ProxyData addr port chans running) headers = do
 -- | Create a proxy client for a WebSocket connection, using the provided headers and TBQueues.
 proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> LoggingT IO (TBQueue a, TBQueue a)
 proxyClientForWS ioChans headers address port = do
-  chanIn  <- maybe (liftIO $ newTBQueueIO 10) (return . fst) ioChans
-  chanOut <- maybe (liftIO $ newTBQueueIO 10) (return . snd) ioChans
+  chanIn  <- maybe (liftIO $ newTBQueueIO tbQueueBound) (return . fst) ioChans
+  chanOut <- maybe (liftIO $ newTBQueueIO tbQueueBound) (return . snd) ioChans
   proxyClient Nothing chanIn chanOut `logForkFinally` \case
     Left e  -> do
       $(logWarn) $ "Connection to " <> T.pack address <> ":" <> T.pack (show port) <> " broken: " <> T.pack (show e)
       $(logWarn) "Restarting in 30 seconds owo"
-      liftIO $ threadDelay 30_000_000
+      asyncDelay <- liftIO $ async $ threadDelay 30_000_000
+      let discardWhileWaiting wait = do
+            delayEnded <- atomically $ pure True <* waitSTM wait <|> pure False <* flushTBQueue chanIn
+            unless delayEnded $ discardWhileWaiting wait
+      liftIO $ discardWhileWaiting asyncDelay
       void $ proxyClientForWS (Just (chanIn, chanOut)) headers address port
     Right _ -> return ()
   return (chanIn, chanOut)
