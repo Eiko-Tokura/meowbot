@@ -11,6 +11,7 @@ import Control.Concurrent.STM
 import External.ChatAPI.MeowToolEnv
 import External.ChatAPI.Tool
 import MeowBot.BotStructure
+import MeowBot.Action
 import Module
 import Module.LogDatabase
 import System.Meow
@@ -140,20 +141,23 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
   type ToolInput ActionTool = ParamToData
     (ObjectP0
       [ StringP "action" "action can be 'like' or 'poke'"
-      , IntP "user_id" "user_id of the target user"
+      , ArrayPInt "user_list" "list of user_id of target user(s)"
       ]
     )
   type ToolOutput ActionTool = ParamToData (ObjectP0 '[StringP "result" "the result of the action"])
   data ToolError ActionTool = ActionError Text deriving Show
   toolName _ _ = "action"
-  toolDescription _ _ =  "Send a like (点赞) or a poke (戳一戳) to a user. Example Output : "
-                      <> "{\"tool\": \"action\", \"args\": {\"action\": \"like\", \"user_id\": <user_id>}}"
-  toolHandler _ _ ((StringT act) :%* (IntT user_id) :%* ObjT0Nil) = do
+  toolDescription _ _ =  "Send a like (点赞) or a poke (戳一戳) to one or multiple user. Example Output : "
+                      <> "{\"tool\": \"action\", \"args\": {\"action\": \"like\", \"user_list\": [<user_id>]}}"
+  toolHandler _ _ ((StringT act) :%* (ArrayT user_ids) :%* ObjT0Nil) = do
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
     cid <- effectEWith' (const $ ActionError "no ChatId found") $ getCid
     action <- case act of
-      "like" -> return . pure $ BAActionAPI (SendLike (UserId user_id) 10)
-      "poke" -> return . pure $ BAActionAPI (SendPoke (UserId user_id) cid)
+      "like" -> liftIO $ baSequenceDelayFullAsync intercalateDelay 
+        [ BAActionAPI (SendLike (UserId user_id) 10)   | user_id <- user_ids ]
+      "poke" -> liftIO $ baSequenceDelayFullAsync intercalateDelay
+        [ BAActionAPI (SendPoke (UserId user_id) cid) | user_id <- user_ids ]
       _ -> throwError $ ActionError "action can only be 'like' or 'poke'"
     liftIO $ atomically $ modifyTVar tvarBotAction $ (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
+    where intercalateDelay = 2_000_000 -- 2 second

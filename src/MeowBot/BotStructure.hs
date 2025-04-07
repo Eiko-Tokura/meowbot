@@ -127,12 +127,8 @@ getNewMsg [] = emptyCQMessage
 getNewMsg wholechat = snd $ largestInTree (fromMaybe 0 . absoluteId) (getFirstTree wholechat)
 
 getFirstTree :: WholeChat -> Tree CQMessage
-getFirstTree wc =
-  case wc of
-    []    -> Node emptyCQMessage []
-    (p:_) -> case p of
-      (_, ([], _))   -> Node emptyCQMessage []
-      (_, (t0:_, _)) -> t0
+getFirstTree ((_cid, (tree0:_, _cqmsgs)):_) = tree0
+getFirstTree _                              = Node emptyCQMessage []
 
 -- | Get n most recent chat messages as a list of CQMessage
 getNewMsgN :: Int -> WholeChat -> [CQMessage]
@@ -151,8 +147,8 @@ getEssentialContent wchat = cqmsgToEssentialContent (getNewMsg wchat)
 getEssentialContentAtN :: Int -> WholeChat -> Maybe EssentialContent
 getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat !? (n-1))
   where (!?) :: [a] -> Int -> Maybe a
-        (!?) [] _ = Nothing
-        (!?) (x:_) 0 = Just x
+        (!?) [] _     = Nothing
+        (!?) (x:_) 0  = Just x
         (!?) (_:xs) n = xs !? (n-1)
 
 -- | get the timeline of the most recent chat, i.e. sort the chat room of the most recent message by time.

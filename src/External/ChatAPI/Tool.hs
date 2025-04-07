@@ -36,6 +36,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.Text.Lazy as TL
+import qualified Data.Vector as V
 import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
 import Control.Monad.Trans.Except
@@ -54,7 +55,9 @@ data Parameter name description
   | FloatP  name description
   | ObjectP name description [Parameter Symbol Symbol]
   | MaybeP  name description (Parameter Symbol Symbol)
-  | ArrayP  name description (Parameter Symbol Symbol)
+  | ArrayPInt name description
+  | ArrayPString name description
+  | ArrayPObject name description (Parameter Symbol Symbol) -- ^ put ObjectP0 inside
   | ObjectP0 [Parameter Symbol Symbol] -- ^ outermost object type, no name
 
 newtype StringT n e = StringT Text
@@ -116,6 +119,14 @@ instance (KnownSymbol t, KnownSymbol e) => FromJSON (FloatT t e) where
 
 instance (KnownSymbol t, KnownSymbol e) => ToJSON (FloatT t e) where
   toJSON (FloatT f) = Number $ realToFrac f
+  {-# INLINE toJSON #-}
+
+instance (KnownSymbol t, KnownSymbol e, FromJSON a) => FromJSON (ArrayT t e a) where
+  parseJSON = fmap ArrayT . parseJSON
+  {-# INLINE parseJSON #-}
+
+instance (KnownSymbol t, KnownSymbol e, ToJSON a) => ToJSON (ArrayT t e a) where
+  toJSON (ArrayT xs) = Array $ V.fromList $ map toJSON xs
   {-# INLINE toJSON #-}
 
 instance FromJSON (UnitT t e) where
@@ -194,6 +205,12 @@ instance KnownSymbol t => HasName (ObjectP t d ps) where
   getName = symbolVal (Proxy @t)
   {-# INLINE getName #-}
 instance KnownSymbol t => HasName (MaybeP t d p)   where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (ArrayPInt t d)    where
+  getName = symbolVal (Proxy @t)
+  {-# INLINE getName #-}
+instance KnownSymbol t => HasName (ArrayPString t d) where
   getName = symbolVal (Proxy @t)
   {-# INLINE getName #-}
 
@@ -297,6 +314,38 @@ instance (KnownSymbol n, KnownSymbol d) => ParamExplained (FloatT n d) where
     ]
   {-# INLINE printParamExplanation #-}
 
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (ArrayPInt n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n)
+    , ": (type : array of integers) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
+instance (KnownSymbol n, KnownSymbol d) => ParamExplained (ArrayPString n d) where
+  printParamExplanation = prints $ mconcat
+    [ toText $ symbolVal (Proxy @n)
+    , ": (type : array of strings) "
+    , toText $ symbolVal (Proxy @d)
+    ]
+  {-# INLINE printParamExplanation #-}
+
+-- | This instance needs testing
+instance (KnownSymbol n, KnownSymbol d, ParamExplained ps) => ParamExplained (ArrayPObject n d ps) where
+  printParamExplanation = do
+    prints $ mconcat
+      [ toText $ symbolVal (Proxy @n)
+      , ": (type : array of objects) "
+      , toText $ symbolVal (Proxy @d)
+      ]
+    indentInc
+    prints "Each object in this array contains the following parameters:"
+    indentInc
+    printParamExplanation @ps
+    indentDec
+    indentDec
+  {-# INLINE printParamExplanation #-}
+
 instance (KnownSymbol n, KnownSymbol d, ParamExplained ps) => ParamExplained (ObjectP n d ps) where
   printParamExplanation = do
     prints $ mconcat
@@ -342,13 +391,15 @@ instance (ParamExplained p, ParamExplained ps) => ParamExplained (p ': ps) where
 
 -- | Convert parameter type to data type
 type family ParamToData p :: Type where
-  ParamToData (StringP n e)   = StringT n e
-  ParamToData (IntP n e)      = IntT n e
-  ParamToData (BoolP n e)     = BoolT n e
-  ParamToData (FloatP n e)    = FloatT n e
-  ParamToData (ObjectP n e l) = ObjectT n e l
-  ParamToData (ObjectP0 l)    = ObjectT0 l
-
+  ParamToData (StringP n e)      = StringT n e
+  ParamToData (IntP n e)         = IntT n e
+  ParamToData (BoolP n e)        = BoolT n e
+  ParamToData (FloatP n e)       = FloatT n e
+  ParamToData (ObjectP n e l)    = ObjectT n e l
+  ParamToData (ObjectP0 l)       = ObjectT0 l
+  ParamToData (ArrayPInt n e)    = ArrayT n e Int
+  ParamToData (ArrayPString n e) = ArrayT n e String
+  ParamToData (ArrayPObject n e (ObjectP0 l)) = ArrayT n e (ObjectT0 l)
 
 toolErrorHint :: Text
 toolErrorHint = "Tool Returned Error: "

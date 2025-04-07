@@ -116,3 +116,15 @@ botHandleRequestEvent cqmsg str = do
       $(logInfo) $ " -> Approving the request."
       return . pure . pure $ BAActionAPI $ SetGroupAddRequest flag RequestGroupInvite True Nothing
     _ -> return []
+
+baSequenceDelayFullAsync
+  :: Int -- ^ delay in microseconds
+  -> [BotAction]
+  -> IO [BotAction]
+baSequenceDelayFullAsync _     []       = return []
+baSequenceDelayFullAsync _     [ba]     = return [ba]
+baSequenceDelayFullAsync delay (ba:bas) = do
+  asyncAction <- async $ do
+    threadDelay delay
+    return $ liftIO $ baSequenceDelayFullAsync delay bas
+  return $ ba : [BAAsync asyncAction]
