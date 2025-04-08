@@ -132,7 +132,7 @@ proxyClientForWS ioChans headers address port = do
       $(logWarn) "Restarting in 30 seconds owo"
       asyncDelay <- liftIO $ async $ threadDelay 30_000_000
       let discardWhileWaiting wait = do
-            delayEnded <- atomically $ pure True <* waitSTM wait <|> pure False <* flushTBQueue chanIn
+            delayEnded <- atomically $ pure True <* waitSTM wait <|> pure False <* readTBQueue chanIn
             unless delayEnded $ discardWhileWaiting wait
       liftIO $ discardWhileWaiting asyncDelay
       void $ proxyClientForWS (Just (chanIn, chanOut)) headers address port
