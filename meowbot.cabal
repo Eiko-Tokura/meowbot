@@ -212,6 +212,7 @@ library meowbot-lib
                    , Module.Async
                    , Module.AsyncInstance
                    , Module.CronTabTick
+                   , Module.CronTabTickInstance
                    , Module.Command
                    , Module.CommandInstance
                    , Module.ConnectionManager
