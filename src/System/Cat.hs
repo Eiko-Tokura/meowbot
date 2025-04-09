@@ -18,6 +18,7 @@ import MeowBot.CommandRule
 import Network.WebSockets
 import Command
 import Command.Aokana
+import Module.CronTabTickInstance
 import Module.CommandInstance
 import Module.AsyncInstance
 import Module.LogDatabase
@@ -76,13 +77,13 @@ type R = MeowData -- ^ the r parameter
 -- then initialize AllData, and run the botLoop
 
 allInitDataG :: AllModuleInitDataG Mods
-allInitDataG  = StatusMonitorInitDataG
+allInitDataG  = CronTabTickInitDataG :** StatusMonitorInitDataG
               :** AsyncInitDataG :** CommandInitDataG
               :** LogDatabaseInitDataG "meowbot.db"
               :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
 
 allInitDataL :: TVar MeowStatus -> [ProxyFlag] -> AllModuleInitDataL Mods
-allInitDataL tvar pf = StatusMonitorInitDataL tvar
+allInitDataL tvar pf = CronTabTickInitDataL :** StatusMonitorInitDataL tvar
                 :** AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
                 :** ConnectionManagerInitDataL :** FNil

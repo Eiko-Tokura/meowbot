@@ -1,6 +1,6 @@
 -- | This module generates cron tab ticks
 -- it is then passed to specific Meow handler to handle the ticks and cron jobs
-module Module.CronTabTick where
+module Module.CronTabTickInstance where
 
 import Control.Applicative
 import Control.Concurrent
@@ -14,8 +14,6 @@ import MeowBot.CronTab
 import Module
 import Module.CronTabTick
 import System.Meow
-
-data CronTabTickModule
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r
