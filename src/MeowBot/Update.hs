@@ -22,6 +22,7 @@ import qualified MeowBot.Parser as MP
 import Debug.Trace
 import System.General
 import Module
+import Utils.List
 
 forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
 
@@ -118,19 +119,6 @@ updateAllDataByResponse (rdata, mecho) alldata =
         _ -> alldata
 
 type End a = a -> a
-
--- | Strict take n elements from a list, whenever it gets evaluated
--- will evaluate the entire list, dropping unused elements.
--- This is helpful for avoiding lazy stateful thunk leak when the rest of the list is not needed.
-strictTake :: Int -> [a] -> [a]
-strictTake n = (`using` evalList rseq) . take n
-{-# INLINE strictTake #-}
-
--- | Strict take n elements from the tail of a list, whenever it gets evaluated
-strictTakeTail :: Int -> [a] -> [a]
-strictTakeTail n = (`using` evalList rseq) . reverse . take n . reverse
-{-# INLINE strictTakeTail #-}
-
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
 -- and also put at the top of the list.
 updateListByFuncKeyElement :: (Ord k)

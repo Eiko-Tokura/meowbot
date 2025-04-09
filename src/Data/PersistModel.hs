@@ -6,6 +6,7 @@ import Database.Persist.TH
 import MeowBot.CommandRule
 import MeowBot.CQCode
 import MeowBot.Data
+import MeowBot.CronTab.CronMeowAction
 import MeowBot.Data.Book
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
@@ -13,6 +14,7 @@ import Utils.Persist
 import Data.Maybe
 import Data.Coerce
 import Data.Default
+import Cron.Parser
 import Control.Applicative
 import Command.Hangman.Model
 import External.ChatAPI
@@ -22,6 +24,13 @@ import GHC.Generics
 import qualified Data.Set as S
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+
+BotCronJob
+  botName        String         Maybe
+  botId          BotId
+  cronSchedule   CronText
+  cronRepeatFinite Int          Maybe  -- nothing means always repeat
+  cronMeowAction CronMeowAction
 
 BotSetting -- Overlappable by BotSettingPerChat
   botName          String                      Maybe

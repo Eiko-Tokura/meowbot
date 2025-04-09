@@ -1,5 +1,4 @@
-{-# LANGUAGE TemplateHaskell #-}
-module Command.Chat where
+{-# LANGUAGE TemplateHaskell #-}module Command.Chat where
 
 import Command
 import Command.Cat (catParser)
@@ -29,6 +28,8 @@ import Command.Cat.CatSet
 import Command.Hangman
 
 import Module.ConnectionManager
+import Data.Time
+import Data.Default
 import Data.PersistModel
 import Data.Proxy
 import Data.HList
@@ -51,6 +52,7 @@ type MeowTools =
   , NoteToolDelete
   , ScrapeTool
   , SearchTool
+  , CronTabTool
   ]
 
 type ModelChat = Local QwQ
@@ -85,6 +87,7 @@ commandChat = BotCommand Chat $ botT $ do
   botmodules <- query
   botname    <- query
   botid      <- query
+  utcTime    <- liftIO getCurrentTime
   ConnectionManagerModuleG man timeout <- query
   noteListing <- lift $ getNoteListing botname cid
   botSetting        <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotId botid)
@@ -97,6 +100,7 @@ commandChat = BotCommand Chat $ botT $ do
       appendCQHelp t = t <> "\n\n---\n\n" <> T.intercalate "\n"
         [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person who is replied to will be notified."
         , "You can include '[CQ:at,qq=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
+        , "Current utc time is " <> toText utcTime
         ]
       msys = ChatSetting
         ( fmap (API.SystemMessage . appendNoteListing . appendCQHelp) $ asum
@@ -204,19 +208,30 @@ commandChat = BotCommand Chat $ botT $ do
       cqFilter (CQOther "image" _) = Nothing
       cqFilter c@_                 = Just c
 
-      updateChatState :: AllChatState -> AllChatState
+      updateChatState :: AllChatState -> (Bool, AllChatState)
       updateChatState s =
         let mstate = SM.lookup cid s in
         case mstate of
-          Just cs -> SM.insert cid
-            cs
-              { chatStatus = (chatStatus cs)
-                { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
-                , chatStatusToolDepth = 0 -- ^ reset tool depth
+          Just cs -> case (activeTriggerOneOff cs) of
+            True -> (True,) $ SM.insert cid
+              cs
+                { chatStatus = (chatStatus cs)
+                  { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) -- active trigger, not append
+                  , chatStatusToolDepth = 0 -- ^ reset tool depth
+                  }
+                , activeTriggerOneOff = False
                 }
-              }
-            s
-          Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 [toUserMessage cqmsg]) MeowIdle) s
+              s
+            False -> (False,) $ SM.insert cid
+              cs
+                { chatStatus = (chatStatus cs)
+                  { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
+                  , chatStatusToolDepth = 0 -- ^ reset tool depth
+                  }
+                , activeTriggerOneOff = False
+                }
+              s
+          Nothing -> (False, SM.insert cid def { chatStatus =  (ChatStatus 0 0 [toUserMessage cqmsg]) } s)
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
@@ -226,7 +241,7 @@ commandChat = BotCommand Chat $ botT $ do
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
-  allChatState <- lift $ updateChatState <$> getTypeWithDef newChatState
+  (oneOffActive, allChatState) <- lift $ updateChatState <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
   lift $ putType $ allChatState
@@ -235,7 +250,7 @@ commandChat = BotCommand Chat $ botT $ do
   chatState <- pureMaybe $ SM.lookup cid allChatState
 
   $(logDebug) "Determining if reply"
-  determineIfReply atReply activeProbability cid cqmsg3 msg botname msys chatState
+  determineIfReply oneOffActive atReply activeProbability cid cqmsg3 msg botname msys chatState
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
@@ -319,8 +334,8 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . fromMaybe [] . fmap mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
+determineIfReply :: Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply oneOff atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
   replied <- lift $ boolMaybe <$> beingReplied
@@ -331,9 +346,9 @@ determineIfReply atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus
         boolMaybe $ chance <= prob
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chanceReply <|> parsed <|> replied <|> ated
-determineIfReply _ _ PrivateChat{} _ msg _ _ ChatState {meowStatus = MeowIdle} = do
+  pureMaybe $ chanceReply <|> parsed <|> replied <|> ated <|> boolMaybe oneOff
+determineIfReply _ _ _ PrivateChat{} _ msg _ _ ChatState {meowStatus = MeowIdle} = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
-determineIfReply _ _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ _ _ = empty

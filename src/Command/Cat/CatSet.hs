@@ -24,9 +24,21 @@ import External.ChatAPI hiding (SystemMessage)
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
   , meowStatus :: !MeowStatus -- ^ avoids crafting too many messages simultaneously
+  , activeTriggerOneOff :: Bool
+    -- ^ if set, this will override the active probability for this chat
+    -- used to actively trigger a chat
+    -- will be reset to Nothing after one chat run
   } deriving (Show, Eq, Typeable)
 
 data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
+
+instance Default MeowStatus where def = MeowIdle
+instance Default ChatState where
+  def = ChatState
+    { chatStatus = ChatStatus 0 0 []
+    , meowStatus = def
+    , activeTriggerOneOff = False
+    }
 
 type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state, use strict map
 instance IsAdditionalData AllChatState      -- use getTypeWithDef
@@ -408,10 +420,10 @@ catSet Clear = do
         let state = SM.lookup cid s in
         case state of
           Just cs -> SM.insert cid (f cs) s
-          Nothing -> SM.insert cid (ChatState (ChatStatus 0 0 []) MeowIdle) s
+          Nothing -> SM.insert cid def s
 
       clear :: ChatState -> ChatState
-      clear _ = ChatState (ChatStatus 0 0 []) MeowIdle
+      clear _ = def
 
   allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
   -- ^ get the chat state and clear it

@@ -39,6 +39,10 @@ getBotName :: MeowToolEnv r mods (Maybe String)
 getBotName = asks (maybeBotName . nameOfBot . botModules . snd . fst . fst)
 {-# INLINE getBotName #-}
 
+getBotId :: MeowToolEnv r mods BotId
+getBotId = asks (botId . botModules . snd . fst . fst)
+{-# INLINE getBotId #-}
+
 getCid :: MeowToolEnv r mods (Maybe ChatId)
 getCid = asks (cqmsgToCid . getNewMsg . fst . fst . fst)
 {-# INLINE getCid #-}

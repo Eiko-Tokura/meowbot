@@ -16,7 +16,9 @@ import Module
 import Module.LogDatabase
 import System.Meow
 import Utils.RunDB hiding (In)
+import MeowBot.CronTab.CronMeowAction
 import qualified Data.Text as T
+import Cron.Parser (validateCronText)
 
 data NoteToolRead
 data NoteToolAdd
@@ -123,12 +125,13 @@ getNoteListing bn cid = do
     [] -> Nothing
     xs -> Just $ T.unlines $
       [ T.concat
-        [ toText note_id
-        , ". "
+        [ "id="
+        , toText note_id
+        , " "
         , title
         , " :"
-        , T.take 20 content
-        , if T.length content > 20 then "..." else ""
+        , T.take 40 content
+        , if T.length content > 40 then "...(truncated)" else ""
         ]
       | (note_id, (title, content)) <- xs
       ]
@@ -161,3 +164,35 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
     liftIO $ atomically $ modifyTVar tvarBotAction $ (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
+
+data CronTabTool
+
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) CronTabTool where
+  type ToolInput CronTabTool = ParamToData
+    (ObjectP0
+      [ StringP "crontab" "crontab format trigger, e.g. '0 0 * * *' "
+      , IntP "repeat" "number of times to trigger, 1 means one-off, 0 means repeat indefinitely"
+      , StringP "description" "description of what exactly you need to do when the time comes"
+      ]
+    )
+  type ToolOutput CronTabTool = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
+  data ToolError CronTabTool = TimedTaskToolError Text deriving Show
+  toolName _ _ = "crontab"
+  toolDescription _ _ =  "Set a cron job to trigger a chat after a certain time. Example Output : "
+                      <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"description\": <description>}}"
+  toolHandler _ _ ((StringT unVerifiedCronText) :%* (IntT repeat) :%* (StringT desc) :%* ObjT0Nil) = do
+    botId   <- lift getBotId
+    botname <- lift getBotName
+    cid <- effectEWith' (const $ TimedTaskToolError  "no ChatId found") $ getCid
+    cronText <- pureEWith' (const $ TimedTaskToolError "invalid crontab format") $ validateCronText unVerifiedCronText
+    lift $ runDBMeowTool $ insert $ BotCronJob
+      { botCronJobBotName          = botname
+      , botCronJobBotId            = botId
+      , botCronJobCronSchedule     = cronText
+      , botCronJobCronRepeatFinite = if repeat == 0 then Nothing else Just repeat
+      , botCronJobCronMeowAction   = CronMeowChatBack cid desc
+      }
+    return $ StringT "success" :%* ObjT0Nil

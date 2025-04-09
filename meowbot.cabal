@@ -57,6 +57,33 @@ common extensions
       TypeFamilies
       UndecidableInstances
       TemplateHaskell
+      DerivingVia
+
+library crontab
+    -- Modules exported by the library.
+    exposed-modules:  Cron.Match
+                    , Cron.Parser
+                    , Cron.Schedule
+
+    -- Modules included in this library but not exported.
+    -- other-modules:
+
+    -- LANGUAGE extensions used by modules in this package.
+    -- other-extensions:
+
+    -- Other library packages from which modules are imported.
+    build-depends:    base < 5
+                    , text
+                    , parsec
+                    , time
+                    , persistent
+
+    -- Directories containing source files.
+    hs-source-dirs:   crontab
+
+    -- Base language which the package is written in.
+    default-language: Haskell2010
+
 
 library item
 
@@ -170,6 +197,8 @@ library meowbot-lib
                    , MeowBot.API
                    , MeowBot.Async
                    , MeowBot.BotStructure
+                   , MeowBot.CronTab
+                   , MeowBot.CronTab.CronMeowAction
                    , MeowBot.CQCode
                    , MeowBot.CQMessage.Convert
                    , MeowBot.CommandRule
@@ -182,6 +211,7 @@ library meowbot-lib
                    , Module
                    , Module.Async
                    , Module.AsyncInstance
+                   , Module.CronTabTick
                    , Module.Command
                    , Module.CommandInstance
                    , Module.ConnectionManager
@@ -216,6 +246,7 @@ library meowbot-lib
                  , base64-bytestring
                  , bytestring
                  , containers
+                 , crontab
                  , crypton-connection
                  , data-default
                  , deepseq

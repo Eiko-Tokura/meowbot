@@ -68,7 +68,7 @@ instance ExceptionOverride Maybe emsg where
   pureEWith' msgf = effectEWith' msgf . return
   {-# INLINE pureEWith' #-}
 
-instance ExceptionOverride (Either e) e where
+instance ExceptionOverride (Either e') e where
   effectEWith' msgf mfa = ExceptT $ do
     fa <- mfa
     case fa of
