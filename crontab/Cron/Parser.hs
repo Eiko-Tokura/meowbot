@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, FlexibleInstances, DerivingVia #-}
+{-# LANGUAGE OverloadedStrings, ViewPatterns, FlexibleInstances, DerivingVia #-}
 module Cron.Parser
   ( -- * Data Types
     CronSchedule(..)
@@ -46,23 +46,19 @@ import Data.List.NonEmpty (NonEmpty(..))
 -- >   Right cron -> print cron
 --
 parseCron :: Text -> Either ParseError CronSchedule
-parseCron = parse (cronScheduleParser <* eof) "cron"
+parseCron = parse (cronScheduleParser <* skipSpaces <* eof) "cron"
 
 isValidCron :: Text -> Bool
-isValidCron cronStr =
-  case parse cronScheduleParser "cron" cronStr of
-    Left _  -> False
-    Right _ -> True
+isValidCron (parseCron -> Left _) = False
+isValidCron _                     = True
 
 validateCronText :: Text -> Either ParseError CronText
-validateCronText cronText =
-  case parse cronScheduleParser "cron" cronText of
-    Left err  -> Left err
-    Right _cron -> Right $ CronText cronText
+validateCronText (parseCron -> Left err) = Left err
+validateCronText cronText                = Right (CronText cronText)
 
 cronTextToCronSchedule :: CronText -> CronSchedule
 cronTextToCronSchedule (CronText cronText) =
-  case parse cronScheduleParser "cron" cronText of
+  case parseCron cronText of
     Left err  -> error $ "Invalid cron text: " ++ show err
     Right cron -> cron
 
