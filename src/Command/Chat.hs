@@ -5,7 +5,7 @@ import Command.Cat (catParser)
 import MeowBot
 import MeowBot.GetInfo
 import System.General (MeowT)
-import Data.Maybe (fromMaybe, catMaybes)
+-- import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
@@ -28,6 +28,7 @@ import Command.Cat.CatSet
 import Command.Hangman
 
 import Module.ConnectionManager
+import Data.Maybe
 import Data.Time
 import Data.Default
 import Data.PersistModel
@@ -75,11 +76,24 @@ type ModelChat = Local QwQ
 -- What we will do first is to try this in private chat, providing note taking and scheduled message
 commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
-  (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
-  _ <- MaybeT    $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
-  hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
-  let ignoredPatterns = MP.runParser hangmanParser'
-  _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
+  -- find chat id whose oneOffActive = true
+  let newChatState = SM.empty :: AllChatState
+  allChatState <- lift $ getTypeWithDef newChatState
+  let activeStateList = listToMaybe $ filter (\(_, cs) -> activeTriggerOneOff cs) $ SM.toList allChatState
+
+  (mMsg, cid, mMid) <-
+    case activeStateList of
+      Nothing -> do -- trigger for the newest message
+        (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
+        _ <- MaybeT    $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
+        hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
+        let ignoredPatterns = MP.runParser hangmanParser'
+        _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
+        return (Just msg, cid, Just mid)
+      Just (cid, _) -> do
+        mess <- getEssentialContentChatId cid <$> query -- trigger for the specified cid instead
+        return ((\(m,_,_,_,_) -> m) <$> mess, cid, (\(_,_,_,mid,_) -> mid) <$> mess)
+
   cqmsg  <- queries getNewMsg
   cqmsg3 <- queries $ getNewMsgN 3
   other_data <- query
@@ -160,7 +174,6 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
         ]
-      newChatState = SM.empty :: AllChatState
 
       -- | If a text is empty, make it Nothing
       nullify :: Maybe Text -> Maybe Text
@@ -249,8 +262,10 @@ commandChat = BotCommand Chat $ botT $ do
 
   chatState <- pureMaybe $ SM.lookup cid allChatState
 
+  when oneOffActive $ $(logInfo) $ "One off active, replying to " <> tshow cid
+
   $(logDebug) "Determining if reply"
-  determineIfReply oneOffActive atReply activeProbability cid cqmsg3 msg botname msys chatState
+  determineIfReply oneOffActive atReply activeProbability cid cqmsg3 mMsg botname msys chatState
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
@@ -292,7 +307,9 @@ commandChat = BotCommand Chat $ botT $ do
                       } -> [c | displayToolMessage]
                     m   -> [content m]
                   ) newMsgs
-            meowAsyncSplitSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage (last newMsgs)] 2_000_000 splitedMessageToSend
+            meowAsyncSplitSendToChatIdFull cid (mMid) [] 
+              ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
+              2_000_000 splitedMessageToSend
 
   -- update busy status
   lift $ markMeow cid MeowBusy
@@ -334,8 +351,9 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . fromMaybe [] . fmap mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply oneOff atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meowStatus = MeowIdle} = do
+determineIfReply :: Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply True _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} = pureMaybe $ Just ()
+determineIfReply oneOff atReply prob GroupChat{} cqmsgs (Just msg) bn cs ChatState {meowStatus = MeowIdle} = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
   replied <- lift $ boolMaybe <$> beingReplied
@@ -347,7 +365,7 @@ determineIfReply oneOff atReply prob GroupChat{} cqmsgs msg bn cs ChatState {meo
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed <|> replied <|> ated <|> boolMaybe oneOff
-determineIfReply _ _ _ PrivateChat{} _ msg _ _ ChatState {meowStatus = MeowIdle} = do
+determineIfReply _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()

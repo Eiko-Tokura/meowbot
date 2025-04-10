@@ -1,23 +1,24 @@
 module MeowBot.CronTab where
 
-import Command.Chat
 import Command.Cat.CatSet
+import Command.Chat
+import Control.Concurrent.Async
+import Control.Monad
+import Control.Monad.Logger
+import Control.Monad.IO.Class
 import Control.Monad.Readable
 import Cron.Match
 import Cron.Parser
+import Data.Additional.Default
 import Data.Default
 import Data.PersistModel
 import Data.Time
 import External.ChatAPI
 import MeowBot.CronTab.CronMeowAction
 import System.Meow
-import Utils.Text
 import Utils.RunDB
+import Utils.Text
 import qualified Data.Map.Strict as SM
-import Data.Additional.Default
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Concurrent.Async
 
 data CronTabTick = CronTabTick UTCTime
 
@@ -30,13 +31,18 @@ meowHandleCronTabTick (CronTabTick time) = do
         hasChanceToRun (Just n) = n > 0
         reduceRepeatCount :: [Entity BotCronJob] -> Meow ()
         reduceRepeatCount list = forM_ list $ \(Entity key job) -> do
+          $(logInfo) $ "CronJob triggered: " <> toText job
           let newTimes = case botCronJobCronRepeatFinite job of
                 Nothing -> Nothing
                 Just n -> if n > 1 then Just (n - 1) else Just 0
               newJob = job { botCronJobCronRepeatFinite = newTimes }
           if newTimes == Just 0
-            then runDB $ delete key
-            else runDB $ replace key newJob
+            then do
+              $(logInfo) $ "CronJob reapeat finished, removing from database : " <> toText job
+              runDB $ delete key
+            else do
+              $(logInfo) $ "CronJob repeat count reduced: " <> toText newJob
+              runDB $ replace key newJob
   
 getCronSchedulesDb :: Meow [(Entity BotCronJob, CronSchedule, CronMeowAction)]
 getCronSchedulesDb = do

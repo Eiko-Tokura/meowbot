@@ -22,7 +22,7 @@ module MeowBot.BotStructure
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
 
-  , getEssentialContent, getEssentialContentAtN
+  , getEssentialContent, getEssentialContentAtN, getEssentialContentChatId
   -- , sendIOeToChatId
   -- , sendIOeToChatIdAsync
   -- , baSendToChatId, sendToChatId, meowSendToChatIdFull
@@ -142,6 +142,9 @@ getNewMsgChatIdN n (headWholeChat:_) = Just $ second (take n . snd) headWholeCha
 -- | Get the most important informations from the most recent one chat message
 getEssentialContent :: WholeChat -> Maybe EssentialContent
 getEssentialContent wchat = cqmsgToEssentialContent (getNewMsg wchat)
+
+getEssentialContentChatId :: ChatId -> WholeChat -> Maybe EssentialContent
+getEssentialContentChatId cid wchat = listToMaybe (getTimeLineCid cid wchat) >>= cqmsgToEssentialContent
 
 -- | Get the most important informations from the n-th chat message
 getEssentialContentAtN :: Int -> WholeChat -> Maybe EssentialContent

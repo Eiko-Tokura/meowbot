@@ -173,16 +173,16 @@ instance
   ) => ToolClass (MeowToolEnv r mods) CronTabTool where
   type ToolInput CronTabTool = ParamToData
     (ObjectP0
-      [ StringP "crontab" "crontab format trigger, e.g. '0 0 * * *' "
+      [ StringP "crontab" "crontab format trigger, for example '0 0 * * *' "
       , IntP "repeat" "number of times to trigger, 1 means one-off, 0 means repeat indefinitely"
-      , StringP "description" "description of what exactly you need to do when the time comes"
+      , StringP "detail" "informative description of what exactly you need to do when the time comes"
       ]
     )
   type ToolOutput CronTabTool = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
   data ToolError CronTabTool = TimedTaskToolError Text deriving Show
   toolName _ _ = "crontab"
   toolDescription _ _ =  "Set a cron job to trigger a chat after a certain time. Example Output : "
-                      <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"description\": <description>}}"
+                      <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"detail\": <detailed description>}}"
   toolHandler _ _ ((StringT unVerifiedCronText) :%* (IntT repeat) :%* (StringT desc) :%* ObjT0Nil) = do
     botId   <- lift getBotId
     botname <- lift getBotName
