@@ -53,11 +53,12 @@ flag deploy
 
 common extensions
     default-extensions:
+      DerivingStrategies
+      DerivingVia
       OverloadedStrings
+      TemplateHaskell
       TypeFamilies
       UndecidableInstances
-      TemplateHaskell
-      DerivingVia
 
 library crontab
     -- Modules exported by the library.

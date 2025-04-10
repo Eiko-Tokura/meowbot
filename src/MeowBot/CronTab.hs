@@ -80,8 +80,9 @@ performCronMeowAction (CronMeowChatBack chatId message) = do
               , activeTriggerOneOff = True
               } s
 
-  allChatState <- updateChatState <$> getTypeWithDef newChatState
-  putType $ allChatState
 
-  asyncChat <- liftIO $ async $ return $ command commandChat
+  asyncChat <- liftIO $ async $ return $ do
+    allChatState <- updateChatState <$> getTypeWithDef newChatState
+    putType $ allChatState
+    command commandChat
   return [BAAsync asyncChat]

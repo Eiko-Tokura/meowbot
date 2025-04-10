@@ -1,4 +1,3 @@
-
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.AsyncInstance where
