@@ -3,6 +3,7 @@ module System.Meow where
 
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Monad.Reader
 import System
 import System.General
 import MeowBot.BotStructure
@@ -131,6 +132,12 @@ type Meow a = MeowT MeowData Mods IO a
 
 -- | The monad the bot instance runs in
 type Cat  a = CatT  MeowData Mods IO a
+
+
+overrideMeow :: OverrideSettings -> Meow a -> Meow a
+overrideMeow override = local
+  ( \((wc, bc), other) -> ((wc, bc { overrideSettings = Just override }), other)
+  )
 
 ------------------------------------------------------------------------
 data BotAction

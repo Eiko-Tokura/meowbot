@@ -31,6 +31,7 @@ BotCronJob
   cronSchedule   CronText
   cronRepeatFinite Int          Maybe  -- nothing means always repeat
   cronMeowAction CronMeowAction
+  cronDetail     Text           Maybe  -- display / override the MeowActionMessage
   deriving Show
 
 BotSetting -- Overlappable by BotSettingPerChat

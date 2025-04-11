@@ -116,7 +116,7 @@ runBot initglobs glob bot = do
 runBotServer ip port bot initglobs glob el = do
   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
-  let botconfig = BotConfig botm (botDebugFlags bot)
+  let botconfig = BotConfig botm (botDebugFlags bot) Nothing
       watchDog = listToMaybe $ botWatchDogFlags bot
   alldata       <- initAllData botconfig glob
   connectedTVar <- liftIO $ newTVarIO False
@@ -158,7 +158,7 @@ runBotServer ip port bot initglobs glob el = do
 runBotClient ip port bot initglobs glob el = do
   $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
   botm     <- botInstanceToModule bot
-  let botconfig = BotConfig botm (botDebugFlags bot)
+  let botconfig = BotConfig botm (botDebugFlags bot) Nothing
   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
   alldata  <- initAllData botconfig glob
   void $ 

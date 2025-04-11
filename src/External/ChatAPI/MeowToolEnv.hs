@@ -1,5 +1,7 @@
 module External.ChatAPI.MeowToolEnv where
 
+import Control.Applicative
+import Control.Monad
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger
 import Control.Monad.Reader
@@ -35,6 +37,16 @@ newtype MeowToolEnv r mods a = MeowToolEnv
 
 type MeowToolEnvDefault = MeowToolEnv MeowData Mods
 
+overrideMeowToolEnv :: OverrideSettings -> MeowToolEnv r mods a -> MeowToolEnv r mods a
+overrideMeowToolEnv override = local
+  ( \( (wc_bc, allGlob_r), localStates_otherdata) ->
+      ( ((fst wc_bc, (snd wc_bc) { overrideSettings = Just override })
+        , allGlob_r
+        )
+      , localStates_otherdata
+      )
+  )
+
 getBotName :: MeowToolEnv r mods (Maybe String)
 getBotName = asks (maybeBotName . nameOfBot . botModules . snd . fst . fst)
 {-# INLINE getBotName #-}
@@ -44,7 +56,11 @@ getBotId = asks (botId . botModules . snd . fst . fst)
 {-# INLINE getBotId #-}
 
 getCid :: MeowToolEnv r mods (Maybe ChatId)
-getCid = asks (cqmsgToCid . getNewMsg . fst . fst . fst)
+getCid = asks
+  (liftA2 (<|>)
+    ((chatIdOverride <=< overrideSettings) . snd . fst . fst)
+    (cqmsgToCid . getNewMsg . fst . fst . fst)
+  )
 {-# INLINE getCid #-}
 
 embedMeowToolEnv :: MeowToolEnv r mods a -> MeowT r mods IO a

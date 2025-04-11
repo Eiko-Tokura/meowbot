@@ -10,7 +10,7 @@ module MeowBot.BotStructure
   --, Meow, MeowT(..), globalizeMeow
   --, Cat, CatT
   --, BotCommand(..)
-  , BotModules(..), BotConfig(..)
+  , BotModules(..), BotConfig(..), OverrideSettings(..)
   , GroupId(..), UserId(..), ChatId(..)
   --, BotAction(..)
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
@@ -56,8 +56,13 @@ import MeowBot.Parser (Tree(..))
 -- newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
 
 data BotConfig = BotConfig
-  { botModules  :: BotModules
-  , runningMode :: RunningMode
+  { botModules       :: BotModules
+  , runningMode      :: RunningMode
+  , overrideSettings :: Maybe OverrideSettings
+  } deriving Show
+
+data OverrideSettings = OverrideSettings
+  { chatIdOverride :: Maybe ChatId
   } deriving Show
 
 data AllData = AllData

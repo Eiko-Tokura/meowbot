@@ -175,7 +175,7 @@ instance
     (ObjectP0
       [ StringP "crontab" "crontab format schedule in UTC, for example '10 0 * * *' means trigger at every 0:10 UTC"
       , IntP "repeat" "number of times to trigger, 1 means one-off, 0 means repeat indefinitely"
-      , StringP "detail" "informative description of what exactly you need to do when the time comes"
+      , StringP "detail" "informative description of what exactly you need to do when the scheduled time comes, the information will be displayed to you. Include contexts you will need like user_id of the user you need to inform."
       ]
     )
   type ToolOutput CronTabTool = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
@@ -194,5 +194,40 @@ instance
       , botCronJobCronSchedule     = cronText
       , botCronJobCronRepeatFinite = if repeat == 0 then Nothing else Just repeat
       , botCronJobCronMeowAction   = CronMeowChatBack cid desc
+      , botCronJobCronDetail       = Just desc
       }
     return $ StringT "success" :%* ObjT0Nil
+
+-- data CronTabEdit
+-- 
+-- instance
+--   ( HasSystemRead (TVar [Meow [BotAction]]) r
+--   , In LogDatabase mods
+--   ) => ToolClass (MeowToolEnv r mods) CronTabEdit where
+--   type ToolInput CronTabEdit = ParamToData
+--     (ObjectP0
+--       [ StringP "crontab" "crontab format schedule in UTC, for example '10 0 * * *' means trigger at every 0:10 UTC"
+--       , IntP "repeat" "number of times to trigger, 1 means one-off, 0 means repeat indefinitely"
+--       , StringP "detail" "informative description of what exactly you need to do when the time comes"
+--       ]
+--     )
+--   type ToolOutput CronTabEdit = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
+--   data ToolError CronTabEdit = CronTabEditError Text deriving Show
+--   toolName _ _ = "crontab"
+--   toolDescription _ _ =  "Set a cron job to trigger a chat after a certain time. Example Output : "
+--                       <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"repeat\": <repeat>, \"detail\": <detailed description>}}"
+--   toolHandler _ _ ((StringT unVerifiedCronText) :%* (IntT repeat) :%* (StringT desc) :%* ObjT0Nil) = do
+--     botId   <- lift getBotId
+--     botname <- lift getBotName
+--     cid    <- effectEWith' (const $ CronTabEditError  "no ChatId found") $ getCid
+--     cronText <- pureEWith' (const $ CronTabEditError "invalid crontab format") $ validateCronText unVerifiedCronText
+--     lift $ runDBMeowTool $ insert $ BotCronJob
+--       { botCronJobBotName          = botname
+--       , botCronJobBotId            = botId
+--       , botCronJobCronSchedule     = cronText
+--       , botCronJobCronRepeatFinite = if repeat == 0 then Nothing else Just repeat
+--       , botCronJobCronMeowAction   = CronMeowChatBack cid desc
+--       , botCronJobCronDetail       = Just desc
+--       }
+--     return $ StringT "success" :%* ObjT0Nil
+-- 

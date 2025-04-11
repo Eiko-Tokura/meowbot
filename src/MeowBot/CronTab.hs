@@ -12,12 +12,13 @@ import Cron.Parser
 import Data.Additional.Default
 import Data.Default
 import Data.PersistModel
+import Data.Maybe
 import Data.Time
 import External.ChatAPI
 import MeowBot.CronTab.CronMeowAction
+import MeowBot.BotStructure
 import System.Meow
 import Utils.RunDB
-import Utils.Text
 import qualified Data.Map.Strict as SM
 
 data CronTabTick = CronTabTick UTCTime
@@ -48,14 +49,20 @@ getCronSchedulesDb :: Meow [(Entity BotCronJob, CronSchedule, CronMeowAction)]
 getCronSchedulesDb = do
   botId <- query
   botCronJobs <- runDB $ selectList [BotCronJobBotId ==. botId] []
-  return $ (\en@(Entity _ job) -> (en, cronTextToCronSchedule $ botCronJobCronSchedule job, botCronJobCronMeowAction job)) <$> botCronJobs
+  return $
+    (\en@(Entity _ job) -> let cronMeowAction = botCronJobCronMeowAction job in
+      ( en
+      , cronTextToCronSchedule $ botCronJobCronSchedule job
+      , cronMeowAction { cronMeowActionMessage = cronMeowActionMessage cronMeowAction `fromMaybe` botCronJobCronDetail job }
+      )
+    ) <$> botCronJobs
 
 performCronMeowAction :: CronMeowAction -> Meow [BotAction]
 performCronMeowAction (CronMeowChatBack chatId message) = do
   time <- liftIO getCurrentTime
   -- need to modify ChatState
   -- then trigger the command Chat
-  let newMsg = ToolMessage ("Time reached: " <> toText time <> "\n" <> message) def
+  let newMsg = ToolMessage ("Crontab scheduled time reached: " <> toText time <> ", please see the description you wrote :\n" <> message) def
 
       cid = chatId
 
@@ -84,5 +91,5 @@ performCronMeowAction (CronMeowChatBack chatId message) = do
   asyncChat <- liftIO $ async $ return $ do
     allChatState <- updateChatState <$> getTypeWithDef newChatState
     putType $ allChatState
-    command commandChat
+    overrideMeow OverrideSettings { chatIdOverride = Just cid } $ command commandChat
   return [BAAsync asyncChat]
