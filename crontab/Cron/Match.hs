@@ -44,7 +44,7 @@ timeMatchesCron utcTime cron =
         hourOk   = matchesField (fromIntegral hour)   (cronHour cron)
         monOk    = matchesField (fromIntegral mon)    (cronMonth cron)
         doMOk    = matchesField (fromIntegral dom)    (cronDayOfMonth cron)
-        doWOk    = matchesField (toEnum dayOfWeekNum) (cronDayOfWeek cron)
+        doWOk    = matchesField (dayOfWeekNum)        (cronDayOfWeek cron)
 
         dayMatches = doMOk || doWOk -- a special convention that when both
                                     -- day-of-month and day-of-week are specified,
@@ -95,18 +95,9 @@ matchesRange v (SteppedRange low high step) =
 -------------------------------------------------------------------------------
 -- | Compute the day-of-week as an Int in [0..6], with 0=Sunday, 1=Monday, etc.
 -------------------------------------------------------------------------------
-dayOfWeekGregorian :: Integer -> Int -> Int -> Int
+dayOfWeekGregorian :: Integer -> Int -> Int -> DayOfWeek
 dayOfWeekGregorian year month day =
   let date  = fromGregorian year month day
       -- Data.Time has Sunday=0, Monday=1, Tuesday=2, ... Sunday=7
-      wd    = dayOfWeek date  -- re-export from Data.Time if using >=1.12, or define your own
-      i     = case wd of
-                Sunday    -> 0
-                Monday    -> 1
-                Tuesday   -> 2
-                Wednesday -> 3
-                Thursday  -> 4
-                Friday    -> 5
-                Saturday  -> 6
-  in i
-
+      wd    = dayOfWeek date
+  in wd
