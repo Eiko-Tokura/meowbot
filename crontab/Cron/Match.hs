@@ -22,7 +22,7 @@ import Data.Time
 --   from a 'UTCTime' and compares them against the fields in 'CronSchedule'.
 --
 --   Note that a special convention in cron is that if both day-of-month and
---   day-of-week are specified, the job should run if either matches.
+--   day-of-week are specified, the job should run if any of them matches.
 -------------------------------------------------------------------------------
 timeMatchesCron :: UTCTime -> CronSchedule -> Bool
 timeMatchesCron utcTime cron =
@@ -46,11 +46,11 @@ timeMatchesCron utcTime cron =
         doMOk    = matchesField (fromIntegral dom)    (cronDayOfMonth cron)
         doWOk    = matchesField (dayOfWeekNum)        (cronDayOfWeek cron)
 
-        dayMatches = doMOk || doWOk -- a special convention that when both
-                                    -- day-of-month and day-of-week are specified,
-                                    -- the cron job should run if either matches.
-    in
-      minuteOk && hourOk && monOk && dayMatches
+    in minuteOk && hourOk && monOk && case (cronDayOfMonth cron, cronDayOfWeek cron) of
+          (FieldAny, FieldAny) -> True
+          (FieldAny, _)        -> doWOk
+          (_, FieldAny)        -> doMOk
+          (_, _)               -> doMOk || doWOk
 
 -------------------------------------------------------------------------------
 -- | 2. Function to compute how many seconds from the given time
