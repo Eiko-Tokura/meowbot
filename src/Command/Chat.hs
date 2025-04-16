@@ -84,11 +84,18 @@ commandChat = BotCommand Chat $ botT $ do
   (mMsg, cid, mMid) <-
     case activeStateList of
       Nothing -> do -- trigger for the newest message
-        (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
-        _ <- MaybeT    $ invertMaybe_ . (`MP.runParser` msg) <$> commandParserTransformByBotName catSetParser
+        (msg, cid, uid, mid, _sender) <- MaybeT $ getEssentialContent <$> query
+        catParser' <- lift $ commandParserTransformByBotName catSetParser
+        _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> pure catParser'
         hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
-        let ignoredPatterns = MP.runParser hangmanParser'
+        commandHead' <- lift $ commandParserTransformByBotName (MP.headCommand "" >> MP.itemsNotIn " ")
+        -- let senderUsername  = senderNickname sender
+        let qGroupManagerId = 2854196310
+            ignoredPatterns = liftM2 (<|>)
+              (fmap Left  . MP.runParser hangmanParser')
+              (fmap Right . MP.runParser commandHead')
         _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
+        guard $ uid /= qGroupManagerId
         return (Just msg, cid, Just mid)
       Just (cid, _) -> do
         mess <- getEssentialContentChatId cid <$> query -- trigger for the specified cid instead

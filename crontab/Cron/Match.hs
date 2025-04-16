@@ -35,8 +35,6 @@ timeMatchesCron utcTime cron =
     tod              = localTimeOfDay localTime
     hour             = todHour tod
     minute           = todMin tod
-    -- Sunday = 0, Monday = 1, ... per Data.Time default? Actually,
-    -- 'Data.Time.Calendar.Weekday' can produce 1==Monday. We'll define our own:
     dayOfWeekNum    = dayOfWeekGregorian year mon dom  -- 0=Sunday, 1=Monday, ... 6=Saturday
   in
     -- Now check each cron field

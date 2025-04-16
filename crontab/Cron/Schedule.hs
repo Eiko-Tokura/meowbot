@@ -6,7 +6,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import Database.Persist.Sql (PersistField, PersistFieldSql)
 
-newtype CronText = CronText Text
+newtype CronText = CronText { unCronText :: Text }
   deriving (PersistField, PersistFieldSql, Show, Eq, Ord) via Text
 
 newtype Minute        = Minute Int        deriving (Eq, Show, Num, Ord, Real, Integral, Enum) via Int

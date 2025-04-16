@@ -115,7 +115,7 @@ itemsIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 itemsIn = some . itemIn
 {-# INLINE itemsIn #-}
 
--- | one or more items not in the list
+-- | one item not in the list
 itemNotIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
 itemNotIn is = satisfy (`notElemE` is)
 {-# INLINE itemNotIn #-}

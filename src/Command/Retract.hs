@@ -64,12 +64,12 @@ commandRetract = BotCommand Retract $ botT $ do
         guard $ not . null $ [ props | CQOther "image" props <- cqs ] -- there is an image
         return [BARetractMsg mid]                                     -- retract the message
     , do
-        guard $ uid `elem` asllIds
+        guard $ uid `elem` (asllIds <> dogIds)
         guard . not . null
           $  [ props | CQOther "image" props <- cqs ]
-          <> [ props | CQOther "json" props <- cqs ]
+          <> [ props | CQOther "json"  props <- cqs ]
         return [BARetractMsg mid]
     ]
     where chinoBotIds = [UserId 3287727775, UserId 3055323571, UserId 1714828270]
           asllIds     = [UserId 1102028091]
-
+          dogIds      = [UserId 3853372175]

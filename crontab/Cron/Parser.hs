@@ -4,7 +4,8 @@ module Cron.Parser
     CronSchedule(..)
   , FieldExpr(..)
   , RangeExpr(..)
-  , CronText -- no constructor
+  , CronText -- ^ no constructor exported
+  , unCronText
 
     -- * Field types
   , Minute(..)
