@@ -6,29 +6,31 @@ module Command
   , doBotCommands
   , doBotAction
   , botCommandsToMeow
+  , botCommandsWithIgnore
   , botT
   , restrictNumber
   , commandParserTransformByBotName
   ) where
 
-import MeowBot.CommandRule
-import qualified Data.Set as S
-import qualified Data.Text as T
-import Network.WebSockets (Connection, sendTextData)
-
-import Data.Aeson
+import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
+import Data.Aeson
 import Data.HList
 import Data.Maybe (fromMaybe)
-import MeowBot.BotStructure
-import MeowBot.Update
 import MeowBot.API
+import MeowBot.BotStructure
+import MeowBot.CommandRule
+import MeowBot.IgnoreMatch
+import MeowBot.Update
 import Module.Async
 import Module.AsyncInstance
+import Network.WebSockets (Connection, sendTextData)
 import System.General
 import System.Meow
+import qualified Data.Set as S
+import qualified Data.Text as T
 import qualified MeowBot.Parser as MP
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)
@@ -127,3 +129,10 @@ doBotCommands conn commands = globalizeMeow $ do
 -- | Extract the bot actions from a list of bot commands, checking the permissions
 botCommandsToMeow :: [BotCommand] -> [Meow [BotAction]]
 botCommandsToMeow = fmap permissionCheck
+
+botCommandsWithIgnore :: CQMessage -> [BotCommand] -> Meow [BotAction]
+botCommandsWithIgnore cqmsg bcs = do
+  ignore <- isIgnoredMessage cqmsg
+  if ignore 
+  then return []
+  else fmap concat . sequence $ botCommandsToMeow bcs

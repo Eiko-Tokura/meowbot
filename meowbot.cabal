@@ -59,6 +59,7 @@ common extensions
       TemplateHaskell
       TypeFamilies
       UndecidableInstances
+      ViewPatterns
 
 library crontab
     -- Modules exported by the library.
@@ -206,6 +207,8 @@ library meowbot-lib
                    , MeowBot.Data
                    , MeowBot.Data.Book
                    , MeowBot.GetInfo
+                   , MeowBot.IgnoreMatch
+                   , MeowBot.Data.IgnoreMatchType
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Update

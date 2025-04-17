@@ -5,6 +5,7 @@ module Module.CommandInstance where
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
@@ -114,12 +115,12 @@ instance
             $(logInfo) $ pack nameBot <> " <- response."
           PrivateMessage -> do
             updateStates nameBot cqmsg
-            tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow pcmds)
+            tmeow   <- readSystem <$> asks snd
+            liftIO $ atomically $ modifyTVar tmeow $ (<> [botCommandsWithIgnore cqmsg pcmds])
           GroupMessage -> do
             updateStates nameBot cqmsg
-            tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> botCommandsToMeow gcmds)
+            tmeow   <- readSystem <$> asks snd
+            liftIO $ atomically $ modifyTVar tmeow $ (<> [botCommandsWithIgnore cqmsg gcmds])
           RequestEvent -> do
             tmeow <- readSystem <$> asks snd
             liftIO $ atomically $ modifyTVar tmeow $ (<> [botHandleRequestEvent cqmsg nameBot])

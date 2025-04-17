@@ -1,37 +1,48 @@
 {-# LANGUAGE FlexibleContexts, DeriveAnyClass, GADTs, TypeFamilies, DerivingStrategies, UndecidableInstances, OverloadedStrings, DataKinds, TemplateHaskell, QuasiQuotes #-}
 module Data.PersistModel where
 
-import Database.Persist.Sqlite
-import Database.Persist.TH
-import MeowBot.CommandRule
-import MeowBot.CQCode
-import MeowBot.Data
-import MeowBot.CronTab.CronMeowAction
-import MeowBot.Data.Book
-import Data.Time.Clock
-import Data.Time.Clock.POSIX
-import Utils.Persist
-import Data.Maybe
+import Command.Hangman.Model
+import Control.Applicative
+import Cron.Parser
+import Data.Additional.Saved
 import Data.Coerce
 import Data.Default
-import Cron.Parser
-import Control.Applicative
-import Command.Hangman.Model
+import Data.Maybe
+import Data.Time.Clock
+import Data.Time.Clock.POSIX
+import Database.Persist.Sqlite
+import Database.Persist.TH
 import External.ChatAPI
-import Data.Additional.Saved
 import GHC.Generics
+import MeowBot.CQCode
+import MeowBot.CommandRule
+import MeowBot.CronTab.CronMeowAction
+import MeowBot.Data
+import MeowBot.Data.Book
+import MeowBot.Data.IgnoreMatchType
+import Utils.Persist
 
 import qualified Data.Set as S
 
+
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
+BotIgnore
+  botId     BotId
+  botName   String          Maybe
+  string    Text            Maybe
+  matchType IgnoreMatchType
+  atPattern Bool            Maybe  -- nothing for no requirement, Just bool for require at / non-at
+  private   Bool            Maybe  -- nothing for no requirement
+  group     Bool            Maybe
+
 BotCronJob
-  botName        String         Maybe
-  botId          BotId
-  cronSchedule   CronText
-  cronRepeatFinite Int          Maybe  -- nothing means always repeat
-  cronMeowAction CronMeowAction
-  cronDetail     Text           Maybe  -- display / override the MeowActionMessage
+  botName          String         Maybe
+  botId            BotId
+  cronSchedule     CronText
+  cronRepeatFinite Int            Maybe  -- nothing means always repeat
+  cronMeowAction   CronMeowAction
+  cronDetail       Text           Maybe  -- display / override the MeowActionMessage
   deriving Show
 
 BotSetting -- Overlappable by BotSettingPerChat
