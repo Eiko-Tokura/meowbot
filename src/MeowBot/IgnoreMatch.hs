@@ -21,6 +21,15 @@ matchIgnoredMessage cqmsg bot_ignore@BotIgnore{ botIgnoreMatchType = IgnoreExact
            ]
         ++ [eventType cqmsg == PrivateMessage | fromMaybe False $ botIgnorePrivate bot_ignore]
         ++ [eventType cqmsg == GroupMessage   | fromMaybe False $ botIgnoreGroup   bot_ignore]
+matchIgnoredMessage cqmsg bot_ignore@BotIgnore{ botIgnoreMatchType = IgnoreExactStrip } =
+  let hasAt = fromMaybe False $ (\l -> not . null $ [() | Left (CQAt {}) <- l]) . mixedMessage <$> metaMessage cqmsg
+      pureMsg = fromMaybe ""  $ (\l -> T.strip $ T.concat [t | Right t <- l])   . mixedMessage <$> metaMessage cqmsg
+  in  and
+        $  [ fromMaybe True $ (== hasAt)   <$> botIgnoreAtPattern bot_ignore
+           , fromMaybe True $ (== pureMsg) <$> botIgnoreString    bot_ignore
+           ]
+        ++ [eventType cqmsg == PrivateMessage | fromMaybe False $ botIgnorePrivate bot_ignore]
+        ++ [eventType cqmsg == GroupMessage   | fromMaybe False $ botIgnoreGroup   bot_ignore]
 matchIgnoredMessage cqmsg bot_ignore@BotIgnore { botIgnoreMatchType = IgnorePrefix } =
   let hasAt = fromMaybe False $ (\l -> not . null $ [() | Left (CQAt {}) <- l]) . mixedMessage <$> metaMessage cqmsg
       pureMsg = fromMaybe ""  $ (\l -> T.concat [t | Right t <- l])             . mixedMessage <$> metaMessage cqmsg

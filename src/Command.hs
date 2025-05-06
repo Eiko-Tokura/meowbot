@@ -133,6 +133,8 @@ botCommandsToMeow = fmap permissionCheck
 botCommandsWithIgnore :: CQMessage -> [BotCommand] -> Meow [BotAction]
 botCommandsWithIgnore cqmsg bcs = do
   ignore <- isIgnoredMessage cqmsg
-  if ignore 
-  then return []
+  if ignore
+  then do
+    $(logInfo) "Ignored, not triggering commands"
+    return []
   else fmap concat . sequence $ botCommandsToMeow bcs
