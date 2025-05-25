@@ -139,10 +139,10 @@ catSetParser =
       , MP.string "note"                   >> fmap (action range) (Note <$> MP.optMaybe (MP.spaces >> MP.int))
       , MP.string "crontab"                >> fmap (action range) (CronTab <$> MP.optMaybe (MP.spaces >> MP.int))
       ]
-    ) <|> (MP.headCommand "cat-clear" >> Clear <$> asum
+    ) <|> (MP.headCommand "cat-clear" >> MP.spaces >> Clear <$> asum
             [ MP.string "default"  *> return Default
+            , MP.string "perchat"  *> MP.spaces *> (PerChatWithChatId <$> chatIdP)
             , MP.string "perchat"  *> return PerChat
-            , MP.string "perchat"  *> (PerChatWithChatId <$> chatIdP)
             , return PerChat
             ])
   where chatIdP = asum
@@ -488,7 +488,7 @@ catSet (View (PerChatWithChatId cid) item) = do
 
 catSet (Clear range) = do
   let newChatState = SM.empty ::SM.Map ChatId ChatState
-  (_, original_cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+  (_, original_cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   ecid <- case range of
     PerChat -> do
       (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -510,6 +510,8 @@ catSet (Clear range) = do
     Left err -> do
       return [baSendToChatId original_cid $ "Error: " <> T.pack err]
     Right cid -> do
+      _ <- MaybeT $ (<|> if cid == original_cid then Just () else Nothing) . void
+          <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
       allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
       -- ^ get the chat state and clear it
     
