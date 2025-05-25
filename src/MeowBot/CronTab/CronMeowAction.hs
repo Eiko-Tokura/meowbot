@@ -12,3 +12,7 @@ data CronMeowAction
     }
   deriving (Eq, Show, Read)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CronMeowAction)
+
+instance ToText CronMeowAction Text where
+  toText (CronMeowChatBack chatId message) =
+    "CronMeowChatBack { chatId = " <> toText chatId <> ", message = " <> message <> " }"

@@ -3,7 +3,7 @@ module Utils.Base64 where
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as BL
-import Data.ByteString.Base64.Lazy
+import Data.ByteString.Base64.Lazy (encode, decode)
 import Control.DeepSeq
 import GHC.Generics
 import Control.Exception

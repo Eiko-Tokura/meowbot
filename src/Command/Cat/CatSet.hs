@@ -12,6 +12,7 @@ import Data.Default
 import Data.Additional.Default
 import Data.HList
 import Data.Proxy
+import Data.Maybe
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 import Control.Monad
@@ -79,7 +80,7 @@ data CatSetCommand
   = Set   DefaultOrPerChat BotSettingItem
   | UnSet DefaultOrPerChat BotSettingItem
   | View  DefaultOrPerChat BotSettingItem
-  | Clear
+  | Clear DefaultOrPerChat
   deriving (Show)
 
 data DefaultOrPerChat = Default | PerChat | PerChatWithChatId ChatId deriving (Show)
@@ -99,6 +100,8 @@ data BotSettingItem
   | ActiveChat              (Maybe Bool)
   | AtReply                 (Maybe Bool)
   | ActiveProbability       (Maybe Double)
+  | Note                    (Maybe Int) -- ^ note id
+  | CronTab                 (Maybe Int) -- ^ cron tab id
   deriving (Show)
 
 catSetParser :: Parser T.Text Char CatSetCommand
@@ -133,8 +136,15 @@ catSetParser =
       , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.21 && x >= 0) MP.nFloat))
+      , MP.string "note"                   >> fmap (action range) (Note <$> MP.optMaybe (MP.spaces >> MP.int))
+      , MP.string "crontab"                >> fmap (action range) (CronTab <$> MP.optMaybe (MP.spaces >> MP.int))
       ]
-    ) <|> (MP.headCommand "cat-clear" >> return Clear)
+    ) <|> (MP.headCommand "cat-clear" >> Clear <$> asum
+            [ MP.string "default"  *> return Default
+            , MP.string "perchat"  *> return PerChat
+            , MP.string "perchat"  *> (PerChatWithChatId <$> chatIdP)
+            , return PerChat
+            ])
   where chatIdP = asum
           [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
           , MP.string "group" >> MP.spaces >> GroupChat   . GroupId <$> MP.int
@@ -168,6 +178,9 @@ helpCatSet = T.intercalate "\n" $
   , "    activeChat :: Bool"
   , "    atReply :: Bool"
   , "    activeProbability :: Double"
+  , "   special item:"
+  , "    note"
+  , "    crontab"
   , ""
   , "* ChatModel can be one of \n" <> T.intercalate ", " modelsInUseText
   , ""
@@ -230,6 +243,10 @@ catSet (Set Default item) = do
     ActiveProbability    mdt -> do
       lift $ runDB (updateWhere selector [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
+    Note                 _   -> do
+      return [ baSendToChatId cid $ "Not available" ]
+    CronTab              _   -> do
+      return [ baSendToChatId cid $ "Not available" ]
 
 catSet (Set PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -238,6 +255,8 @@ catSet (Set PerChat item) = do
 catSet (Set (PerChatWithChatId cid) item) = do
   botid <- query
   (_, cid', uid, _, _) <- MaybeT $ getEssentialContent <$> query
+  -- | If the cid to be set matches the cid of the current chat, we allow it
+  -- otherwise you must be an Admin to set it
   _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void
        <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
   lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
@@ -293,8 +312,15 @@ catSet (Set (PerChatWithChatId cid) item) = do
     ActiveProbability    mdt -> do
       lift $ runDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
+    Note                 _   -> do
+      return [ baSendToChatId cid $ "Not available" ]
+    CronTab              _   -> do
+      return [ baSendToChatId cid $ "Not available" ]
 
-catSet (UnSet range item) =
+catSet (UnSet range item) = do
+  botid <- query
+  BotName botname <- query
+  (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   case item of
     DisplayThinking         _ -> catSet (Set range $ DisplayThinking Nothing)
     DisplayToolMessage      _ -> catSet (Set range $ DisplayToolMessage Nothing)
@@ -310,6 +336,29 @@ catSet (UnSet range item) =
     ActiveChat              _ -> catSet (Set range $ ActiveChat Nothing)
     AtReply                 _ -> catSet (Set range $ AtReply Nothing)
     ActiveProbability       _ -> catSet (Set range $ ActiveProbability Nothing)
+    _ -> do
+      cid' <- MaybeT . lift $ case range of
+          Default -> pure Nothing
+          PerChat -> pure $ Just cid
+          PerChatWithChatId c -> pure $ Just c
+      -- | If the cid to be set matches the cid of the current chat, we allow it
+      -- otherwise you must be an Admin to set it
+      _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void
+           <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+      case item of
+        Note           (Just nid) -> do
+          lift $ runDB $ deleteWhere [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "Note with id " <> tshow nid <> " deleted"]
+        Note           Nothing    -> do
+          lift $ runDB $ deleteWhere [AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " deleted"]
+        CronTab       (Just ctid) -> do
+          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobId ==. intToKey ctid]
+          return [baSendToChatId cid $ "CronTab with id " <> tshow ctid <> " deleted"]
+        CronTab       Nothing     -> do
+          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid]
+          return [baSendToChatId cid $ "All CronTabs for bot " <> toText botname <> " deleted"]
+
 catSet (View Default item) = do
   botid <- query
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -357,6 +406,12 @@ catSet (View Default item) = do
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
+    CronTab        Nothing -> do
+      cronJobs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
+      let cronJobTexts = fmap cronTabDisplayText cronJobs
+      return [baSendToChatId cid $ T.intercalate "\n\n" cronJobTexts]
+    _ -> do
+      return [baSendToChatId cid $ "Not available"]
 
 catSet (View PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -364,56 +419,82 @@ catSet (View PerChat item) = do
 
 catSet (View (PerChatWithChatId cid) item) = do
   botid <- query
-  (_, cid', _, _, _) <- MaybeT $ getEssentialContent <$> query
+  BotName botname <- query
+  (_, cidOrigin, uid, _, _) <- MaybeT $ getEssentialContent <$> query
+  -- | If the cid to be set matches the cid of the current chat, we allow it
+  -- otherwise you must be an Admin to set it
+  _ <- MaybeT $ (<|> if cid == cidOrigin then Just () else Nothing) . void
+          <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
   let selector = [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid]
   case item of
     DisplayThinking      _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "DisplayThinking: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "DisplayThinking: " <> tshow mdt]
     DisplayToolMessage   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayToolMessage . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "DisplayToolMessage: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "DisplayToolMessage: " <> tshow mdt]
     DefaultModel         _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "DefaultModel: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "DefaultModelSuper: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemMessage: " <> toText mdt]
+      return [baSendToChatId cidOrigin $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemTemp: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemMaxToolDepth: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemAPIKeyOpenAI: " <> redacted mdt]
+      return [baSendToChatId cidOrigin $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
+      return [baSendToChatId cidOrigin $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
     SystemAPIKeyOpenRouter _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
+      return [baSendToChatId cidOrigin $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
     SystemAPIKeySiliconFlow _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
+      return [baSendToChatId cidOrigin $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "ActiveChat: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "ActiveChat: " <> tshow mdt]
     AtReply              _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "AtReply: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "AtReply: " <> tshow mdt]
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst selector []
-      return [baSendToChatId cid' $ "ActiveProbability: " <> tshow mdt]
+      return [baSendToChatId cidOrigin $ "ActiveProbability: " <> tshow mdt]
+    Note           Nothing -> do
+      notes <- lift $ runDB $ selectList [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
+      let noteTexts = fmap (noteDisplayText . entityVal) notes
+      return [baSendToChatId cidOrigin $ "Notes: " <> T.intercalate "\n\n" noteTexts]
+    Note          (Just nid) -> do
+      note <- lift $ runDB $ selectFirst [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
+      case note of
+        Just n  -> return [baSendToChatId cidOrigin $ noteDisplayText (entityVal n)]
+        Nothing -> return [baSendToChatId cidOrigin $ "No note with id " <> tshow nid <> " found."]
+    CronTab         Nothing -> do
+      cronTabs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
+      let cronTabTexts = fmap (cronTabDisplayTextWithCid cid) cronTabs
+      return [baSendToChatId cidOrigin $ T.intercalate "\n\n" $ catMaybes cronTabTexts]
+    _                       -> do
+      return [baSendToChatId cidOrigin $ "Unavailable item & mode combination."]
 
-catSet Clear = do
+
+catSet (Clear range) = do
   let newChatState = SM.empty ::SM.Map ChatId ChatState
-
-  (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+  (_, original_cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+  ecid <- case range of
+    PerChat -> do
+      (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
+      return $ Right cid
+    PerChatWithChatId c -> return $ Right c
+    _ -> pure $ Left "Clear command can only be used in perchat mode"
 
   let updateChatState :: ChatId -> (ChatState -> ChatState) -> AllChatState -> AllChatState
       updateChatState cid f s =
@@ -425,13 +506,17 @@ catSet Clear = do
       clear :: ChatState -> ChatState
       clear _ = def
 
-  allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
-  -- ^ get the chat state and clear it
-
-  lift . putType $ allChatState
-  -- ^ update in the state
-
-  return [baSendToChatId cid "Chat state cleared"]
+  case ecid of
+    Left err -> do
+      return [baSendToChatId original_cid $ "Error: " <> T.pack err]
+    Right cid -> do
+      allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
+      -- ^ get the chat state and clear it
+    
+      lift . putType $ allChatState
+      -- ^ update in the state
+    
+      return [baSendToChatId original_cid $ "Chat state for chat " <> tshow cid <> " cleared."]
 
 class MaybeRedacted a where
   redacted :: a -> Text

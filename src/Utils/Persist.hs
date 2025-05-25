@@ -3,6 +3,7 @@ module Utils.Persist
   ( PersistUseShow(..)
   , PersistUseInt64(..)
   , PersistField, PersistFieldSql
+  , intToKey, keyToInt
   ) where
 
 import Database.Persist
@@ -11,6 +12,7 @@ import Data.Bifunctor
 import Control.Monad
 import Text.Read
 import Data.Text (pack)
+import Data.Coerce
 
 -- | This is a newtype wrapper for PersistField and PersistFieldSql instances stored as Show
 -- to use it, either wrap your data type with PersistUseInt64
@@ -45,3 +47,11 @@ instance (Bounded t, Enum t) => PersistField (PersistUseInt64 t) where
 instance (Bounded t, Enum t) => PersistFieldSql (PersistUseInt64 t) where
     sqlType _ = SqlInt64
     {-# INLINE sqlType #-}
+
+
+intToKey :: (Coercible (BackendKey SqlBackend) b, Integral a) => a -> b
+intToKey = coerce @(BackendKey SqlBackend) . fromIntegral
+
+{-@ ignore keyToInt @-}
+keyToInt :: (Coercible (Key a) (BackendKey SqlBackend)) => Key a -> Int
+keyToInt = fromIntegral . coerce @_ @(BackendKey SqlBackend)

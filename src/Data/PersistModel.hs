@@ -269,3 +269,34 @@ hangmanRecordToState hr = HangmanState
   , hangmanEnded     = hangmanRecordEnded hr
   , hangmanScore     = hangmanRecordScore hr
   }
+
+noteDisplayText :: AssistantNote -> Text
+noteDisplayText note = let
+  noteId = assistantNoteNoteId note
+  titleText   = "id=" <> toText noteId <> ": " <> assistantNoteTitle note <> " - "
+  contentText = assistantNoteContent note
+  in titleText <> contentText
+
+cronTabDisplayText :: Entity BotCronJob -> Text
+cronTabDisplayText enCron = let
+  cronId = keyToInt $ entityKey enCron
+  cronJob = entityVal enCron
+  cronText = botCronJobCronSchedule cronJob
+  repeatText = case botCronJobCronRepeatFinite cronJob of
+    Nothing -> "repeat forever"
+    Just n  -> "repeat " <> toText n <> " times"
+  action = botCronJobCronMeowAction cronJob
+  in "id=" <> toText cronId <> ". " <> toText cronText <> " - " <> repeatText <> " - " <> toText action
+
+cronTabDisplayTextWithCid :: ChatId -> Entity BotCronJob -> Maybe Text
+cronTabDisplayTextWithCid cid enCron = let
+  cronId = keyToInt $ entityKey enCron
+  cronJob = entityVal enCron
+  cronText = botCronJobCronSchedule cronJob
+  repeatText = case botCronJobCronRepeatFinite cronJob of
+    Nothing -> "repeat forever"
+    Just n  -> "repeat " <> toText n <> " times"
+  action = botCronJobCronMeowAction cronJob
+  in case cronMeowActionChatId action == cid of
+      True -> Just $ toText cronId <> ". " <> toText cronText <> " - " <> repeatText <> " - " <> toText action
+      False -> Nothing
