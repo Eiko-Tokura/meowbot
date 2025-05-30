@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings, TypeOperators, TypeApplications, DataKinds, TemplateHaskell, FlexibleContexts #-}
 module Command.Study
   ( commandStudy
-  , commandBook
+  , commandBookMan
   , helpStudy
   , makeBook
   , studyParser
@@ -288,8 +288,8 @@ makeBookFromImageDir bookname bookinfo mpdfFile imgDir = do
 
 readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stringQ "page_") *> positiveInt <* canBeEmpty $(stringQ ".png"))
 
-commandBook :: BotCommand
-commandBook = BotCommand BookMan $ botT $ do
+commandBookMan :: BotCommand
+commandBookMan = BotCommand BookMan $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   bquery <- pureMaybe $ MP.runParser bookParser msg
   other_data <- lift $ query @OtherData

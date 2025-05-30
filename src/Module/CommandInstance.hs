@@ -5,7 +5,6 @@ module Module.CommandInstance where
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
@@ -18,6 +17,7 @@ import Network.WebSockets hiding (Response)
 import System.Meow
 import qualified Data.ByteString.Lazy as BL
 
+import MeowBot.CommandRule
 import Command
 import Command.Cat
 import Command.Chat
@@ -31,17 +31,23 @@ import Command.Retract
 import Command.Study
 import Command.Poll
 import Command.Hangman
+-- import Command.Haskell
 
 import Module.Command
 import Module
 
 import Utils.ByteString
 
+
 allPrivateCommands :: [BotCommand]
-allPrivateCommands = [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]
+allPrivateCommands = $(makeBotCommands $ filter (`notElem` [Retract]) [minBound .. maxBound :: CommandId])
+
+-- [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]--, commandHaskell]
 
 allGroupCommands :: [BotCommand]
-allGroupCommands   = [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]
+allGroupCommands   = $(makeBotCommands [minBound .. maxBound :: CommandId])
+
+-- [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]--, commandHaskell]
 
 instance
   ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions

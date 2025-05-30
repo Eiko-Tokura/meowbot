@@ -157,7 +157,9 @@ library meowbot-lib
                    , Command.Aokana.Scripts
                    , Command.Cat
                    , Command.Cat.CatSet
+                   , Command.Cat.CatSet.Parser
                    , Command.Chat
+                   -- , Command.Haskell
                    , Command.Hangman
                    , Command.Hangman.Data
                    , Command.Hangman.Model
@@ -238,6 +240,8 @@ library meowbot-lib
                    , Utils.Persist
                    , Utils.RunDB
                    , Utils.Text
+                   -- , Utils.LiveEval
+                   , Utils.Unit
                    --, External.ChatAPI.Tool.Search
 
     -- LANGUAGE extensions used by modules in this package.
@@ -286,6 +290,7 @@ library meowbot-lib
                  , vector
                  , websockets
                  , wuss
+                 -- , hint
     -- Directories containing source files.
     hs-source-dirs:   src
 

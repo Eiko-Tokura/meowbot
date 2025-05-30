@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
 module Command.SetSysMessage
   (
-    commandSetSysMessage
+    commandSystem
   ) where
 
 import Command
@@ -17,8 +17,8 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 
-commandSetSysMessage :: BotCommand
-commandSetSysMessage = BotCommand System $ botT $ do
+commandSystem :: BotCommand
+commandSystem = BotCommand System $ botT $ do
   ess@(msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   sysMsgParser' <- lift $ commandParserTransformByBotName sysMsgParser
   msys <- pureMaybe $ MP.runParser sysMsgParser' msg

@@ -12,7 +12,6 @@ module Command
   , commandParserTransformByBotName
   ) where
 
-import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Maybe

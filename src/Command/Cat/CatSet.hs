@@ -1,5 +1,9 @@
 {-# OPTIONS_GHC -Werror=incomplete-patterns #-}
-module Command.Cat.CatSet where
+module Command.Cat.CatSet
+  ( module Command.Cat.CatSet
+  , catSetParser
+
+  ) where
 
 import System.General
 import Module.LogDatabase
@@ -20,6 +24,9 @@ import Utils.RunDB
 import Utils.Persist
 import Data.PersistModel
 import External.ChatAPI hiding (SystemMessage)
+
+import Utils.Unit
+import Command.Cat.CatSet.Parser
 
 -- we will have to mantain a ChatState for each chat in the Chat command (not Cat command)
 data ChatState = ChatState
@@ -76,80 +83,6 @@ adminRestrictedModels =
 modelsInUseText :: [T.Text]
 modelsInUseText = cfListMap modelsInUse $ \(Proxy :: Proxy a) -> tshow (chatModel @a)
 
-data CatSetCommand
-  = Set   DefaultOrPerChat BotSettingItem
-  | UnSet DefaultOrPerChat BotSettingItem
-  | View  DefaultOrPerChat BotSettingItem
-  | Clear DefaultOrPerChat
-  deriving (Show)
-
-data DefaultOrPerChat = Default | PerChat | PerChatWithChatId ChatId deriving (Show)
-
-data BotSettingItem
-  = DisplayThinking         (Maybe Bool)
-  | DisplayToolMessage      (Maybe Bool)
-  | DefaultModel            (Maybe ChatModel)
-  | DefaultModelSuper       (Maybe ChatModel)
-  | SystemMessage           (Maybe Text)
-  | SystemTemp              (Maybe Double)
-  | SystemMaxToolDepth      (Maybe Int)
-  | SystemAPIKeyOpenAI      (Maybe Text)
-  | SystemAPIKeyDeepSeek    (Maybe Text)
-  | SystemAPIKeyOpenRouter  (Maybe Text)
-  | SystemAPIKeySiliconFlow (Maybe Text)
-  | ActiveChat              (Maybe Bool)
-  | AtReply                 (Maybe Bool)
-  | ActiveProbability       (Maybe Double)
-  | Note                    (Maybe Int) -- ^ note id
-  | CronTab                 (Maybe Int) -- ^ cron tab id
-  deriving (Show)
-
-catSetParser :: Parser T.Text Char CatSetCommand
-catSetParser =
-  (MP.headCommand "cat-" >> do
-    action <- asum
-      [ MP.string "set"   >> return Set
-      , MP.string "unset" >> return UnSet
-      , MP.string "view"  >> return View
-      ]
-    MP.spaces
-    range <- asum
-      [ MP.string "default" *> return Default  <* MP.spaces
-      , MP.string "perchat" *> MP.spaces
-            *> (PerChatWithChatId <$> chatIdP) <* MP.spaces
-      , MP.string "perchat" *> return PerChat  <* MP.spaces
-      , return PerChat
-      ]
-    return $ action range (DisplayThinking Nothing)
-    asum
-      [ MP.string "displayThinking"         >> fmap (action range) (DisplayThinking         <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "displayToolMessage"      >> fmap (action range) (DisplayToolMessage      <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "defaultModelSuper"       >> fmap (action range) (DefaultModelSuper       <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-      , MP.string "defaultModel"            >> fmap (action range) (DefaultModel            <$> MP.optMaybe (MP.spaces >> MP.parseByRead))
-      , MP.string "systemMessage"           >> fmap (action range) (SystemMessage           <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemTemp"              >> fmap (action range) (SystemTemp              <$> MP.optMaybe (MP.spaces >> MP.nFloat))
-      , MP.string "systemMaxToolDepth"      >> fmap (action range) (SystemMaxToolDepth      <$> MP.optMaybe (MP.spaces >> MP.intRange 1 10))
-      , MP.string "systemAPIKeyOpenAI"      >> fmap (action range) (SystemAPIKeyOpenAI      <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIkeyDeepSeek"    >> fmap (action range) (SystemAPIKeyDeepSeek    <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIKeyOpenRouter"  >> fmap (action range) (SystemAPIKeyOpenRouter  <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.21 && x >= 0) MP.nFloat))
-      , MP.string "note"                   >> fmap (action range) (Note <$> MP.optMaybe (MP.spaces >> MP.int))
-      , MP.string "crontab"                >> fmap (action range) (CronTab <$> MP.optMaybe (MP.spaces >> MP.int))
-      ]
-    ) <|> (MP.headCommand "cat-clear" >> MP.spaces >> Clear <$> asum
-            [ MP.string "default"  *> return Default
-            , MP.string "perchat"  *> MP.spaces *> (PerChatWithChatId <$> chatIdP)
-            , MP.string "perchat"  *> return PerChat
-            , return PerChat
-            ])
-  where chatIdP = asum
-          [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
-          , MP.string "group" >> MP.spaces >> GroupChat   . GroupId <$> MP.int
-          ]
-
 testCatSetParser = MP.runParser catSetParser ":cat-set default displayThinking true"
 
 helpCatSet = T.intercalate "\n" $
@@ -194,7 +127,7 @@ helpCatSet = T.intercalate "\n" $
 
 ----------------------------------- catSet -----------------------------------
 
-catSet :: (LogDatabase `In` mods) => CatSetCommand -> MaybeT (MeowT r mods IO) [BotAction]
+catSet :: ($(unitsNamed unitTestsCatSetParser), LogDatabase `In` mods) => CatSetCommand -> MaybeT (MeowT r mods IO) [BotAction]
 catSet (Set Default item) = do
   (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
@@ -347,11 +280,11 @@ catSet (UnSet range item) = do
            <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
       case item of
         Note           (Just nid) -> do
-          lift $ runDB $ deleteWhere [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
-          return [baSendToChatId cid $ "Note with id " <> tshow nid <> " deleted"]
+          lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "Note with id " <> tshow nid <> " in chat " <> tshow cid' <> " deleted"]
         Note           Nothing    -> do
-          lift $ runDB $ deleteWhere [AssistantNoteBotName ==. botname]
-          return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " deleted"]
+          lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " in chat " <> tshow cid' <> " deleted"]
         CronTab       (Just ctid) -> do
           lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobId ==. intToKey ctid]
           return [baSendToChatId cid $ "CronTab with id " <> tshow ctid <> " deleted"]
