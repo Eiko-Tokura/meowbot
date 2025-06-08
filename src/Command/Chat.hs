@@ -13,9 +13,11 @@ import External.ChatAPI.Tool.Search
 import External.ChatAPI.Tool.Scrape
 import External.ChatAPI.MeowTool
 import External.ChatAPI.MeowToolEnv
+import qualified Data.BSeq as BSeq
 import qualified MeowBot.Parser as MP
 import qualified Data.Map.Strict as SM
 import qualified Data.Text as T
+import qualified Data.Foldable as Foldable
 
 import Control.Applicative
 import Control.Monad
@@ -165,6 +167,10 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatActiveChat =<< botSettingPerChat
         , botSettingActiveChat =<< botSetting
         ] -- ^ whether to chat actively randomly
+      mentionReply = fromMaybe False $ asum
+        [ botSettingPerChatMentionReply =<< botSettingPerChat
+        , botSettingMentionReply =<< botSetting
+        ] -- ^ whether to reply when mentioned
       atReply = fromMaybe True $ asum
         [ botSettingPerChatAtReply =<< botSettingPerChat
         , botSettingAtReply =<< botSetting
@@ -228,6 +234,17 @@ commandChat = BotCommand Chat $ botT $ do
       cqFilter (CQOther "image" _) = Nothing
       cqFilter c@_                 = Just c
 
+      updateCurrentChatState :: (ChatState -> ChatState) -> AllChatState -> AllChatState
+      updateCurrentChatState f s =
+        let mstate = SM.lookup cid s in
+        case mstate of
+          Just cs -> SM.insert cid (f cs) s
+          Nothing -> SM.insert cid (f def { chatStatus = (ChatStatus 0 0 []) }) s
+
+      recordReplyTime :: UTCTime -> ChatState -> ChatState
+      recordReplyTime utcTime cs =
+        cs { replyTimes = BSeq.bSeqCons utcTime (replyTimes cs) }
+
       updateChatState :: AllChatState -> (Bool, AllChatState)
       updateChatState s =
         let mstate = SM.lookup cid s in
@@ -271,8 +288,9 @@ commandChat = BotCommand Chat $ botT $ do
 
   when oneOffActive $ $(logInfo) $ "One off active, replying to " <> tshow cid
 
+  -- determine If we should reply
   $(logDebug) "Determining if reply"
-  determineIfReply oneOffActive atReply activeProbability cid cqmsg3 mMsg botname msys chatState
+  determineIfReply oneOffActive atReply mentionReply activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
@@ -318,8 +336,11 @@ commandChat = BotCommand Chat $ botT $ do
               ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
               2_000_000 splitedMessageToSend
 
+
   -- update busy status
   lift $ markMeow cid MeowBusy
+  -- record the reply time
+  lift $ updateCurrentChatState (recordReplyTime utcTime) <$> getTypeWithDef newChatState
 
   return [BAAsync asyncAction] -- Async (Meow [BotAction])
   -- if you need to send multiple messages, you can use
@@ -358,12 +379,24 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . fromMaybe [] . fmap mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply True _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} = pureMaybe $ Just ()
-determineIfReply oneOff atReply prob GroupChat{} cqmsgs (Just msg) bn cs ChatState {meowStatus = MeowIdle} = do
+determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT MeowData Mods IO) ()
+determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = pureMaybe $ Just ()
+determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
   chance  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
   replied <- lift $ boolMaybe <$> beingReplied
+  let mentioned = boolMaybe $ mentionReply && case bn of
+        BotName (Just name) -> T.isInfixOf (T.pack name) msg
+        _                   -> False
+  let -- | if last 120 seconds there are >= 4 replies, decrease the chance to reply exponentially
+      recentReplyCount = length (filter
+                          (\t -> diffUTCTime utc t < 120) -- last 120 seconds
+                          (Foldable.toList (replyTimes st))
+                          )
+      rateLimitChance | recentReplyCount >= 4 = Just $ 0.6 ** (fromIntegral recentReplyCount - 3)
+                      | otherwise = Nothing
+      notRateLimited = boolMaybe . not . fromMaybe False $ (< chance) <$> rateLimitChance 
+     
   ated    <- if atReply
     then lift $ boolMaybe <$> beingAt
     else return Nothing
@@ -371,9 +404,9 @@ determineIfReply oneOff atReply prob GroupChat{} cqmsgs (Just msg) bn cs ChatSta
         boolMaybe $ chance <= prob
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chanceReply <|> parsed <|> replied <|> ated <|> boolMaybe oneOff
-determineIfReply _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} = do
+  pureMaybe $ chanceReply <|> parsed <|> replied <|> mentioned <|> notRateLimited <|> ated <|> boolMaybe oneOff
+determineIfReply _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
   else pureMaybe $ Just ()
-determineIfReply _ _ _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ _ _ _ _ = empty

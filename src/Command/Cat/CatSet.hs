@@ -17,6 +17,7 @@ import Data.Additional.Default
 import Data.HList
 import Data.Proxy
 import Data.Maybe
+import qualified Data.BSeq as BSeq
 import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 import Control.Monad
@@ -27,15 +28,18 @@ import External.ChatAPI hiding (SystemMessage)
 
 import Utils.Unit
 import Command.Cat.CatSet.Parser
+import Data.Time.Clock
 
 -- we will have to mantain a ChatState for each chat in the Chat command (not Cat command)
 data ChatState = ChatState
   { chatStatus :: !ChatStatus
   , meowStatus :: !MeowStatus -- ^ avoids crafting too many messages simultaneously
-  , activeTriggerOneOff :: Bool
+  , activeTriggerOneOff :: !Bool
     -- ^ if set, this will override the active probability for this chat
     -- used to actively trigger a chat
     -- will be reset to Nothing after one chat run
+  , replyTimes :: !(BSeq.BSeq 5 UTCTime)
+    -- ^ records the last 5 reply times
   } deriving (Show, Eq, Typeable)
 
 data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
@@ -46,6 +50,7 @@ instance Default ChatState where
     { chatStatus = ChatStatus 0 0 []
     , meowStatus = def
     , activeTriggerOneOff = False
+    , replyTimes = BSeq.BSeq mempty
     }
 
 type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state, use strict map
@@ -110,7 +115,9 @@ helpCatSet = T.intercalate "\n" $
   , "    systemAPIKeySiliconFlow :: Text"
   , "    activeChat :: Bool"
   , "    atReply :: Bool"
+  , "    mentionReply :: Bool"
   , "    activeProbability :: Double"
+  , "    maxMessageInState :: Int"
   , "   special item:"
   , "    note"
   , "    crontab"
@@ -173,13 +180,26 @@ catSet (Set Default item) = do
     AtReply              mdt -> do
       lift $ runDB (updateWhere selector [BotSettingAtReply =. mdt])
       return [ baSendToChatId cid $ "AtReply set to " <> tshow mdt ]
+    MentionReply         mdt -> do
+      lift $ runDB (updateWhere selector [BotSettingMentionReply =. mdt])
+      return [ baSendToChatId cid $ "MentionReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runDB (updateWhere selector [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
+    MaxMessageInState mdt -> do
+      lift $ runDB (updateWhere selector [BotSettingMaxMessageInState =. mdt])
+      return [ baSendToChatId cid $ "MaxMessageInState set to " <> tshow mdt ]
     Note                 _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     CronTab              _   -> do
       return [ baSendToChatId cid $ "Not available" ]
+    EnableNotes         mdt -> do
+      lift $ runDB (updateWhere selector [BotSettingEnableNotes =. mdt])
+      return [ baSendToChatId cid $ "EnableNotes set to " <> tshow mdt ]
+    EnableCronTab       mdt -> do
+      lift $ runDB (updateWhere selector [BotSettingEnableCronTab =. mdt])
+      return [ baSendToChatId cid $ "EnableCronTab set to " <> tshow mdt ]
+
 
 catSet (Set PerChat item) = do
   (_, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
@@ -242,13 +262,25 @@ catSet (Set (PerChatWithChatId cid) item) = do
     AtReply              mdt -> do
       lift $ runDB $ updateWhere selector [BotSettingPerChatAtReply =. mdt]
       return [ baSendToChatId cid' $ "AtReply set to " <> tshow mdt ]
+    MentionReply         mdt -> do
+      lift $ runDB $ updateWhere selector [BotSettingPerChatMentionReply =. mdt]
+      return [ baSendToChatId cid' $ "MentionReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
+    MaxMessageInState mdt -> do
+      lift $ runDB $ updateWhere selector [BotSettingPerChatMaxMessageInState =. mdt]
+      return [ baSendToChatId cid' $ "MaxMessageInState set to " <> tshow mdt ]
     Note                 _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     CronTab              _   -> do
       return [ baSendToChatId cid $ "Not available" ]
+    EnableNotes         mdt -> do
+      lift $ runDB $ updateWhere selector [BotSettingPerChatEnableNotes =. mdt]
+      return [ baSendToChatId cid' $ "EnableNotes set to " <> tshow mdt ]
+    EnableCronTab       mdt -> do
+      lift $ runDB $ updateWhere selector [BotSettingPerChatEnableCronTab =. mdt]
+      return [ baSendToChatId cid' $ "EnableCronTab set to " <> tshow mdt ]
 
 catSet (UnSet range item) = do
   botid <- query
@@ -268,7 +300,11 @@ catSet (UnSet range item) = do
     SystemAPIKeySiliconFlow _ -> catSet (Set range $ SystemAPIKeySiliconFlow Nothing)
     ActiveChat              _ -> catSet (Set range $ ActiveChat Nothing)
     AtReply                 _ -> catSet (Set range $ AtReply Nothing)
+    MentionReply            _ -> catSet (Set range $ MentionReply Nothing)
     ActiveProbability       _ -> catSet (Set range $ ActiveProbability Nothing)
+    MaxMessageInState       _ -> catSet (Set range $ MaxMessageInState Nothing)
+    EnableNotes             _ -> catSet (Set range $ EnableNotes Nothing)
+    EnableCronTab           _ -> catSet (Set range $ EnableCronTab Nothing)
     _ -> do
       cid' <- MaybeT . lift $ case range of
           Default -> pure Nothing
@@ -336,13 +372,25 @@ catSet (View Default item) = do
     AtReply              _ -> do
       mdt <- lift $ runDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "AtReply: " <> tshow mdt]
+    MentionReply         _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingMentionReply . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid $ "MentionReply: " <> tshow mdt]
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
+    MaxMessageInState    _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingMaxMessageInState . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid $ "MaxMessageInState: " <> tshow mdt]
     CronTab        Nothing -> do
       cronJobs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
       let cronJobTexts = fmap cronTabDisplayText cronJobs
       return [baSendToChatId cid $ T.intercalate "\n\n" cronJobTexts]
+    EnableNotes         _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingEnableNotes . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid $ "EnableNotes: " <> tshow mdt]
+    EnableCronTab       _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingEnableCronTab . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cid $ "EnableCronTab: " <> tshow mdt]
     _ -> do
       return [baSendToChatId cid $ "Not available"]
 
@@ -399,9 +447,15 @@ catSet (View (PerChatWithChatId cid) item) = do
     AtReply              _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "AtReply: " <> tshow mdt]
+    MentionReply         _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatMentionReply . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cidOrigin $ "MentionReply: " <> tshow mdt]
     ActiveProbability    _ -> do
       mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "ActiveProbability: " <> tshow mdt]
+    MaxMessageInState    _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatMaxMessageInState . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cidOrigin $ "MaxMessageInState: " <> tshow mdt]
     Note           Nothing -> do
       notes <- lift $ runDB $ selectList [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
       let noteTexts = fmap (noteDisplayText . entityVal) notes
@@ -415,6 +469,12 @@ catSet (View (PerChatWithChatId cid) item) = do
       cronTabs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
       let cronTabTexts = fmap (cronTabDisplayTextWithCid cid) cronTabs
       return [baSendToChatId cidOrigin $ T.intercalate "\n\n" $ catMaybes cronTabTexts]
+    EnableNotes         _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatEnableNotes . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cidOrigin $ "EnableNotes: " <> tshow mdt]
+    EnableCronTab       _ -> do
+      mdt <- lift $ runDB $ fmap (botSettingPerChatEnableCronTab . entityVal) <$> selectFirst selector []
+      return [baSendToChatId cidOrigin $ "EnableCronTab: " <> tshow mdt]
     _                       -> do
       return [baSendToChatId cidOrigin $ "Unavailable item & mode combination."]
 

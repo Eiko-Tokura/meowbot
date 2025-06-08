@@ -29,9 +29,13 @@ data BotSettingItem
   | SystemAPIKeySiliconFlow (Maybe Text)
   | ActiveChat              (Maybe Bool)
   | AtReply                 (Maybe Bool)
+  | MentionReply            (Maybe Bool)
   | ActiveProbability       (Maybe Double)
+  | MaxMessageInState       (Maybe Int)
   | Note                    (Maybe Int) -- ^ note id
   | CronTab                 (Maybe Int) -- ^ cron tab id
+  | EnableNotes             (Maybe Bool) -- ^ enable notes
+  | EnableCronTab           (Maybe Bool) -- ^ enable cron tab
   deriving (Show, Eq)
 
 catSetParser :: Parser T.Text Char CatSetCommand
@@ -65,9 +69,13 @@ catSetParser =
       , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
-      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.21 && x >= 0) MP.nFloat))
+      , MP.string "mentionReply"            >> fmap (action range) (MentionReply            <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.20 && x >= 0) MP.nFloat))
+      , MP.string "maxMessageInState"       >> fmap (action range) (MaxMessageInState       <$> MP.optMaybe (MP.spaces >> MP.intRange 1 24))
       , MP.string "note"                   >> fmap (action range) (Note <$> MP.optMaybe (MP.spaces >> MP.int))
       , MP.string "crontab"                >> fmap (action range) (CronTab <$> MP.optMaybe (MP.spaces >> MP.int))
+      , MP.string "enableNotes"            >> fmap (action range) (EnableNotes <$> MP.optMaybe (MP.spaces >> MP.bool))
+      , MP.string "enableCronTab"          >> fmap (action range) (EnableCronTab <$> MP.optMaybe (MP.spaces >> MP.bool))
       ]
     ) <|> (MP.headCommand "cat-clear" >> Clear <$> asum
             [ MP.spaces >> MP.string "default"  *> return Default

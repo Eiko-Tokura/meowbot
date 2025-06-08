@@ -182,6 +182,7 @@ library meowbot-lib
                    , Data.Additional
                    , Data.Additional.Default
                    , Data.Additional.Saved
+                   , Data.BSeq
                    , Data.FilePathFor
                    , Data.HList
                    , Data.Maybe.Union

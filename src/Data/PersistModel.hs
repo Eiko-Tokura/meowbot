@@ -64,8 +64,11 @@ BotSetting -- Overlappable by BotSettingPerChat
   systemAPIKeyXcApi       Text                 Maybe
   activeChat              Bool                 Maybe
   atReply                 Bool                 Maybe
+  mentionReply            Bool                 Maybe
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
+  enableNotes             Bool                 Maybe
+  enableCronTab           Bool                 Maybe
   deriving Generic
   deriving Default
 
@@ -89,8 +92,11 @@ BotSettingPerChat -- Overlapping BotSetting
   systemAPIKeyXcApi       Text                 Maybe
   activeChat              Bool                 Maybe
   atReply                 Bool                 Maybe
+  mentionReply            Bool                 Maybe
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
+  enableNotes             Bool                 Maybe
+  enableCronTab           Bool                 Maybe
   deriving Generic
   deriving Default
 
