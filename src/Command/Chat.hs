@@ -382,21 +382,28 @@ notAllNoText = not . all (all
 determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT MeowData Mods IO) ()
 determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = pureMaybe $ Just ()
 determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
-  chance  <- getUniformR (0, 1 :: Double)
+  chance   <- getUniformR (0, 1 :: Double)
+  chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
   replied <- lift $ boolMaybe <$> beingReplied
   let mentioned = boolMaybe $ mentionReply && case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let -- | if last 120 seconds there are >= 4 replies, decrease the chance to reply exponentially
+  let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
-                          (\t -> diffUTCTime utc t < 120) -- last 120 seconds
+                          (\t -> diffUTCTime utc t < 150) -- last 150 seconds
                           (Foldable.toList (replyTimes st))
                           )
-      rateLimitChance | recentReplyCount >= 4 = Just $ 0.6 ** (fromIntegral recentReplyCount - 3)
+      rateLimitChance | recentReplyCount >= 4 = Just $ 0.5 ** (fromIntegral recentReplyCount - 3)
                       | otherwise = Nothing
-      notRateLimited = boolMaybe . not . fromMaybe False $ (< chance) <$> rateLimitChance 
-     
+      notRateLimited = boolMaybe . not . fromMaybe False $ (< chance2) <$> rateLimitChance 
+  lift $ $(logDebug) $ T.intercalate "\n"
+    [ "recentTimes: " <> tshow (replyTimes st)
+    , "recentReplyCount: " <> tshow recentReplyCount
+    , "rateLimitChance: " <> tshow rateLimitChance
+    , "notRateLimited: " <> tshow notRateLimited
+    ]
+
   ated    <- if atReply
     then lift $ boolMaybe <$> beingAt
     else return Nothing
@@ -404,7 +411,8 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
         boolMaybe $ chance <= prob
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chanceReply <|> parsed <|> replied <|> mentioned <|> notRateLimited <|> ated <|> boolMaybe oneOff
+  pureMaybe $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
+  pureMaybe $ notRateLimited
 determineIfReply _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing
