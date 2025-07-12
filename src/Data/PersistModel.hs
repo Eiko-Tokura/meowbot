@@ -39,6 +39,9 @@ BotIgnore
 BotCronJob
   botName          String         Maybe
   botId            BotId
+  chatId           ChatId         Maybe
+  -- ^ nothing means global cron job
+  -- this field is used for easy searching and lookup i.e. management
   cronSchedule     CronText
   cronRepeatFinite Int            Maybe  -- nothing means always repeat
   cronMeowAction   CronMeowAction

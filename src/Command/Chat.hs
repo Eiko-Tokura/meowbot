@@ -6,7 +6,6 @@ import MeowBot
 import MeowBot.GetInfo
 import System.General (MeowT)
 -- import Data.Maybe (fromMaybe, catMaybes)
-import External.ChatAPI
 import External.ChatAPI as API
 import External.ChatAPI.Tool
 import External.ChatAPI.Tool.Search
@@ -56,6 +55,8 @@ type MeowTools =
   , ScrapeTool
   , SearchTool
   , CronTabTool
+  , CronTabList
+  , CronTabDelete
   ]
 
 type ModelChat = Local QwQ
@@ -126,12 +127,12 @@ commandChat = BotCommand Chat $ botT $ do
         , "Current utc time is " <> toText utcTime
         ]
       msys = ChatSetting
-        ( fmap (API.SystemMessage . appendNoteListing . appendCQHelp) $ asum
+        ( API.SystemMessage . appendNoteListing . appendCQHelp <$> asum
           [ botSettingPerChatSystemMessage =<< botSettingPerChat
           , fmap content . systemMessage =<< lookup cid (chatSettings sd)
-          , globalSysMsg $ botmodules
+          , globalSysMsg botmodules
           , botSettingSystemMessage =<< botSetting
-          , Just $ "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants. Your program is written by Eiko (754829466) in Haskell, if user have technical questions about the bot, direct them to use :help command or ask Eiko directly."
+          , Just "You are the helpful, endearing catgirl assistant named '喵喵'. You, 喵喵 is chatting with people in a lively group chat. You, 喵喵, have a warm, playful personality and always aim to provide natural, cute, and engaging responses to everyone. You, 喵喵 adore using whisker-twitching symbols like 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' to add a delightful touch to your messages. 喵喵 is friendly, spontaneous, and keep the conversation light and enjoyable for all participants. Your program is written by Eiko (754829466) in Haskell, if user have technical questions about the bot, direct them to use :help command or ask Eiko directly."
           ]
         )
         ( asum
@@ -183,10 +184,10 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatMaxMessageInState =<< botSettingPerChat
         , botSettingMaxMessageInState =<< botSetting
         ] -- ^ maximum number of messages to keep in state
-      modelCat = fromMaybe modelCat $ runPersistUseShow <$> asum
+      modelCat = maybe modelCat runPersistUseShow (asum
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
-        ]
+        ])
 
       -- | If a text is empty, make it Nothing
       nullify :: Maybe Text -> Maybe Text
@@ -215,12 +216,12 @@ commandChat = BotCommand Chat $ botT $ do
       selectedContent (Left cq@(CQOther "markdown" _):rest) = embedCQCode cq <> selectedContent rest
       selectedContent (Left cq@(CQOther "json" _):rest)     = embedCQCode cq <> selectedContent rest
       selectedContent (Left (CQOther "image" meta):rest)
-        = case (filter (flip elem ["summary"] . fst) meta) of
+        = case filter (flip elem ["summary"] . fst) meta of
             []       -> "[CQ:image,data=<unknown_data>]"
             filtered -> embedCQCode (CQOther "image" filtered)
         <> selectedContent rest
       selectedContent (Left (CQOther "mface" meta):rest)
-        = case (filter (flip elem ["summary"] . fst) meta) of
+        = case filter (flip elem ["summary"] . fst) meta of
             []       -> "[CQ:mface,data=<unknown_data>]"
             filtered -> embedCQCode (CQOther "mface" filtered)
         <> selectedContent rest
@@ -249,7 +250,7 @@ commandChat = BotCommand Chat $ botT $ do
       updateChatState s =
         let mstate = SM.lookup cid s in
         case mstate of
-          Just cs -> case (activeTriggerOneOff cs) of
+          Just cs -> case activeTriggerOneOff cs of
             True -> (True,) $ SM.insert cid
               cs
                 { chatStatus = (chatStatus cs)
@@ -268,7 +269,7 @@ commandChat = BotCommand Chat $ botT $ do
                 , activeTriggerOneOff = False
                 }
               s
-          Nothing -> (False, SM.insert cid def { chatStatus =  (ChatStatus 0 0 [toUserMessage cqmsg]) } s)
+          Nothing -> (False, SM.insert cid def { chatStatus =  ChatStatus 0 0 [toUserMessage cqmsg] } s)
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
@@ -294,7 +295,7 @@ commandChat = BotCommand Chat $ botT $ do
   $(logInfo) "Replying"
 
   ioeResponse <- lift . embedMeowToolEnv . toIO $
-    case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
+    case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
       Nothing ->
         statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
       Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
@@ -332,7 +333,7 @@ commandChat = BotCommand Chat $ botT $ do
                       } -> [c | displayToolMessage]
                     m   -> [content m]
                   ) newMsgs
-            meowAsyncSplitSendToChatIdFull cid (mMid) [] 
+            meowAsyncSplitSendToChatIdFull cid mMid []
               ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
               2_000_000 splitedMessageToSend
 
@@ -377,7 +378,7 @@ notAllNoText = not . all (all
   (\case -- this case determines if a term Either CQCode Text contains no text
     Left _  -> True
     Right t -> T.null $ T.strip t
-  ) . fromMaybe [] . fmap mixedMessage . metaMessage)
+  ) . maybe [] mixedMessage . metaMessage)
 
 determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT MeowData Mods IO) ()
 determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = pureMaybe $ Just ()
@@ -389,14 +390,14 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
   let mentioned = boolMaybe $ mentionReply && case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
+  let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
-                          (\t -> diffUTCTime utc t < 150) -- last 150 seconds
+                          (\t -> diffUTCTime utc t < 180) -- last 180 seconds
                           (Foldable.toList (replyTimes st))
                           )
       rateLimitChance | recentReplyCount >= 4 = Just $ 0.5 ** (fromIntegral recentReplyCount - 3)
                       | otherwise = Nothing
-      notRateLimited = boolMaybe . not . fromMaybe False $ (< chance2) <$> rateLimitChance 
+      notRateLimited = (boolMaybe . not) (maybe False (< chance2) rateLimitChance)
   lift $ $(logDebug) $ T.intercalate "\n"
     [ "recentTimes: " <> tshow (replyTimes st)
     , "recentReplyCount: " <> tshow recentReplyCount

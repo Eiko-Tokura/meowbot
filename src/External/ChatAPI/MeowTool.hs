@@ -1,4 +1,5 @@
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module External.ChatAPI.MeowTool where
 
 import Control.Monad.Except
@@ -16,6 +17,7 @@ import Module
 import Module.LogDatabase
 import System.Meow
 import Utils.RunDB hiding (In)
+import Utils.Persist
 import MeowBot.CronTab.CronMeowAction
 import qualified Data.Text as T
 import Cron.Parser (validateCronText)
@@ -38,7 +40,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead wh
   toolDescription _ _ = "Get note content by note_id"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
     botname <- lift getBotName
-    cid  <- effectEWith' (const $ NoteReadError "no cid found") $ getCid
+    cid  <- effectEWith' (const $ NoteReadError "no cid found") getCid
     note <- lift $ fmap (fmap entityVal) . runDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
     case note of
       Just (AssistantNote _ _ _ title content time) -> return $ IntT note_id :%* StringT title :%* StringT content :%* StringT (toText time) :%* ObjT0Nil
@@ -55,7 +57,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd whe
   toolDescription _ _ = "Add a note, You can use the note tools to take notes if you want to memorize things that people teach you, or you learn about the people more. The title will be added to your system prompt which becomes part of your memory."
   toolHandler _ _ ((StringT title) :%* (StringT content) :%* ObjT0Nil) = do
     botname <- lift getBotName
-    cid <- effectEWith' (const $ NoteAddError "no cid found") $ getCid
+    cid <- effectEWith' (const $ NoteAddError "no cid found") getCid
     time <- liftIO getCurrentTime
     maxNoteId <- lift
       $ fmap (maybe 0 (assistantNoteNoteId . entityVal)) . runDBMeowTool
@@ -83,7 +85,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace
   toolDescription _ _ = "Replace a note"
   toolHandler _ _ ((IntT note_id) :%* (StringT title) :%* (StringT content) :%* ObjT0Nil) = do
     botname <- lift getBotName
-    cid <- effectEWith' (const $ NoteReplaceError "no cid found") $ getCid
+    cid <- effectEWith' (const $ NoteReplaceError "no cid found") getCid
     time <- liftIO getCurrentTime
     note <- lift $ fmap (fmap entityVal) . runDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
     case note of
@@ -104,7 +106,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete 
   toolDescription _ _ = "Delete a note"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
     botname <- lift getBotName
-    cid <- effectEWith' (const $ NoteDeleteError "no cid found") $ getCid
+    cid <- effectEWith' (const $ NoteDeleteError "no cid found") getCid
     note <- lift $ fmap (fmap entityVal) . runDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
     case note of
       Just _ -> lift $ runDBMeowTool $ deleteWhere [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id]
@@ -154,14 +156,14 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
                       <> "{\"tool\": \"action\", \"args\": {\"action\": \"like\", \"user_list\": [<user_id>]}}"
   toolHandler _ _ ((StringT act) :%* (ArrayT user_ids) :%* ObjT0Nil) = do
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
-    cid <- effectEWith' (const $ ActionError "no ChatId found") $ getCid
+    cid <- effectEWith' (const $ ActionError "no ChatId found") getCid
     action <- case act of
-      "like" -> liftIO $ baSequenceDelayFullAsync intercalateDelay 
+      "like" -> liftIO $ baSequenceDelayFullAsync intercalateDelay
         [ BAActionAPI (SendLike (UserId user_id) 10)   | user_id <- user_ids ]
       "poke" -> liftIO $ baSequenceDelayFullAsync intercalateDelay
         [ BAActionAPI (SendPoke (UserId user_id) cid) | user_id <- user_ids ]
       _ -> throwError $ ActionError "action can only be 'like' or 'poke'"
-    liftIO $ atomically $ modifyTVar tvarBotAction $ (<> [return action])
+    liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
 
@@ -186,11 +188,12 @@ instance
   toolHandler _ _ ((StringT unVerifiedCronText) :%* (IntT repeat) :%* (StringT desc) :%* ObjT0Nil) = do
     botId   <- lift getBotId
     botname <- lift getBotName
-    cid <- effectEWith' (const $ TimedTaskToolError  "no ChatId found") $ getCid
+    cid <- effectEWith' (const $ TimedTaskToolError  "no ChatId found") getCid
     cronText <- pureEWith' (const $ TimedTaskToolError "invalid crontab format") $ validateCronText unVerifiedCronText
     lift $ runDBMeowTool $ insert $ BotCronJob
       { botCronJobBotName          = botname
       , botCronJobBotId            = botId
+      , botCronJobChatId           = Just cid
       , botCronJobCronSchedule     = cronText
       , botCronJobCronRepeatFinite = if repeat == 0 then Nothing else Just repeat
       , botCronJobCronMeowAction   = CronMeowChatBack cid desc
@@ -198,36 +201,37 @@ instance
       }
     return $ StringT "success" :%* ObjT0Nil
 
--- data CronTabEdit
--- 
--- instance
---   ( HasSystemRead (TVar [Meow [BotAction]]) r
---   , In LogDatabase mods
---   ) => ToolClass (MeowToolEnv r mods) CronTabEdit where
---   type ToolInput CronTabEdit = ParamToData
---     (ObjectP0
---       [ StringP "crontab" "crontab format schedule in UTC, for example '10 0 * * *' means trigger at every 0:10 UTC"
---       , IntP "repeat" "number of times to trigger, 1 means one-off, 0 means repeat indefinitely"
---       , StringP "detail" "informative description of what exactly you need to do when the time comes"
---       ]
---     )
---   type ToolOutput CronTabEdit = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
---   data ToolError CronTabEdit = CronTabEditError Text deriving Show
---   toolName _ _ = "crontab"
---   toolDescription _ _ =  "Set a cron job to trigger a chat after a certain time. Example Output : "
---                       <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"repeat\": <repeat>, \"detail\": <detailed description>}}"
---   toolHandler _ _ ((StringT unVerifiedCronText) :%* (IntT repeat) :%* (StringT desc) :%* ObjT0Nil) = do
---     botId   <- lift getBotId
---     botname <- lift getBotName
---     cid    <- effectEWith' (const $ CronTabEditError  "no ChatId found") $ getCid
---     cronText <- pureEWith' (const $ CronTabEditError "invalid crontab format") $ validateCronText unVerifiedCronText
---     lift $ runDBMeowTool $ insert $ BotCronJob
---       { botCronJobBotName          = botname
---       , botCronJobBotId            = botId
---       , botCronJobCronSchedule     = cronText
---       , botCronJobCronRepeatFinite = if repeat == 0 then Nothing else Just repeat
---       , botCronJobCronMeowAction   = CronMeowChatBack cid desc
---       , botCronJobCronDetail       = Just desc
---       }
---     return $ StringT "success" :%* ObjT0Nil
--- 
+data CronTabList
+-- ^ List all cron jobs for the current bot in the current chat.
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) CronTabList where
+  type ToolInput CronTabList = ParamToData (ObjectP0 '[])
+  type ToolOutput CronTabList = ParamToData (ObjectP0 '[StringP "cron_jobs" "list of cron jobs"])
+  data ToolError CronTabList = CronTabListError Text deriving Show
+  toolName _ _ = "crontab_list"
+  toolDescription _ _ = "List all cron jobs for the current chat."
+  toolHandler _ _ ObjT0Nil = do
+    botId   <- lift getBotId
+    cid <- effectEWith' (const $ CronTabListError "no ChatId found") getCid
+    cronJobs <- lift $ runDBMeowTool $ selectList [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid] []
+    let cronJobsJson = map cronTabDisplayText cronJobs
+    return $ StringT (T.intercalate "\n" cronJobsJson) :%* ObjT0Nil
+
+data CronTabDelete
+-- ^ Delete a cron job by its ID.
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) CronTabDelete where
+  type ToolInput CronTabDelete = ParamToData (ObjectP0 '[ArrayPInt "cron_id" "list of cron job IDs to delete"])
+  type ToolOutput CronTabDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
+  data ToolError CronTabDelete = CronTabDeleteError Text deriving Show
+  toolName _ _ = "crontab_delete"
+  toolDescription _ _ = "Delete one or more cron jobs by their ID. Use the 'crontab_list' tool to get the cron job IDs."
+  toolHandler _ _ ((ArrayT cronIds) :%* ObjT0Nil) = do
+    botId <- lift getBotId
+    cid <- effectEWith' (const $ CronTabDeleteError "no ChatId found") getCid
+    lift $ runDBMeowTool $ deleteWhere [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid, BotCronJobId <-. map intToKey cronIds]
+    return $ StringT "success" :%* ObjT0Nil
