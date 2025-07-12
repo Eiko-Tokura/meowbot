@@ -306,25 +306,37 @@ catSet (UnSet range item) = do
     EnableNotes             _ -> catSet (Set range $ EnableNotes Nothing)
     EnableCronTab           _ -> catSet (Set range $ EnableCronTab Nothing)
     _ -> do
-      cid' <- MaybeT . lift $ case range of
+      cidOperate <- case range of
           Default -> pure Nothing
           PerChat -> pure $ Just cid
           PerChatWithChatId c -> pure $ Just c
+
       -- | If the cid to be set matches the cid of the current chat, we allow it
       -- otherwise you must be an Admin to set it
-      _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void
+      _ <- MaybeT $ (<|> if Just cid == cidOperate then Just () else Nothing) . void
            <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+
       case item of
-        Note           (Just nid) -> do
+        Note           (Just nid) | Just cid' <- cidOperate -> do
           lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "Note with id " <> tshow nid <> " in chat " <> tshow cid' <> " deleted"]
-        Note           Nothing    -> do
+        Note           (Just nid) | Nothing <- cidOperate -> do
+          lift $ runDB $ deleteWhere [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "Note with id " <> tshow nid <> " deleted"]
+        Note           Nothing    | Just cid' <- cidOperate -> do
           lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " in chat " <> tshow cid' <> " deleted"]
+        Note           Nothing    | Nothing <- cidOperate -> do
+          lift $ runDB $ deleteWhere [AssistantNoteBotName ==. botname]
+          return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " deleted"]
+
         CronTab       (Just ctid) -> do
           lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobId ==. intToKey ctid]
           return [baSendToChatId cid $ "CronTab with id " <> tshow ctid <> " deleted"]
-        CronTab       Nothing     -> do
+        CronTab       Nothing     | Just cid' <- cidOperate -> do
+          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobChatId ==. Just cid']
+          return [baSendToChatId cid $ "All CronTabs for bot " <> toText botname <> " in chat " <> tshow cid' <> " deleted"]
+        CronTab       Nothing     | Nothing <- cidOperate -> do
           lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid]
           return [baSendToChatId cid $ "All CronTabs for bot " <> toText botname <> " deleted"]
 
