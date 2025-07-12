@@ -82,7 +82,7 @@ commandChat = BotCommand Chat $ botT $ do
   -- find chat id whose oneOffActive = true
   let newChatState = SM.empty :: AllChatState
   allChatState <- lift $ getTypeWithDef newChatState
-  let activeStateList = listToMaybe $ filter (\(_, cs) -> activeTriggerOneOff cs) $ SM.toList allChatState
+  let activeStateList = Foldable.find (\(_, cs) -> activeTriggerOneOff cs) (SM.toList allChatState)
 
   (mMsg, cid, mMid) <-
     case activeStateList of
@@ -240,7 +240,7 @@ commandChat = BotCommand Chat $ botT $ do
         let mstate = SM.lookup cid s in
         case mstate of
           Just cs -> SM.insert cid (f cs) s
-          Nothing -> SM.insert cid (f def { chatStatus = (ChatStatus 0 0 []) }) s
+          Nothing -> SM.insert cid (f def { chatStatus = ChatStatus 0 0 [] }) s
 
       recordReplyTime :: UTCTime -> ChatState -> ChatState
       recordReplyTime utcTime cs =
@@ -282,7 +282,7 @@ commandChat = BotCommand Chat $ botT $ do
   (oneOffActive, allChatState) <- lift $ updateChatState <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
-  lift $ putType $ allChatState
+  lift $ putType allChatState
   -- ^ update in the state
 
   chatState <- pureMaybe $ SM.lookup cid allChatState
@@ -413,7 +413,7 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
   pureMaybe $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
-  pureMaybe $ notRateLimited
+  pureMaybe notRateLimited
 determineIfReply _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then pureMaybe Nothing

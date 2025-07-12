@@ -51,8 +51,8 @@ instance
   -- | Only update when there is new message, avoids multiple insertions.
   -- record both received and sent messages.
   afterMeow _ = do
-    mrcq        <- askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . readTVar
-    mscq        <- askSystem @(TVar (Maybe SentCQMessage)) >>= liftIO . atomically . readTVar
+    mrcq        <- askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . readTVarIO
+    mscq        <- askSystem @(TVar (Maybe SentCQMessage)) >>= liftIO . readTVarIO
     let mcq = coerce mrcq <|> coerce mscq
     botname     <- gets (nameOfBot . botModules . botConfig . snd)
     botid       <- gets (botId . botModules . botConfig . snd)

@@ -163,7 +163,7 @@ InGroupGroup
 SavedAdditionalData
   botName        String      Maybe
   botId          BotId
-  additionalData (PersistUseShow Saved_AdditionalData)
+  additionalData (PersistUseShow SavedSPACEAdditionalData)
 
 BookDB
   bookName    Text
