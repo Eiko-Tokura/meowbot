@@ -2,7 +2,9 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module External.ChatAPI.MeowTool where
 
+import Control.Applicative
 import Control.Monad.Except
+import Control.Monad.Trans.Maybe
 import Control.Monad.ExceptionReturn
 import Control.Monad.Reader
 import Data.HList
@@ -36,6 +38,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead wh
      , StringP "time" "the time the note was last modified"
      ])
   data ToolError NoteToolRead = NoteReadError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
   toolName _ _ = "note_read"
   toolDescription _ _ = "Get note content by note_id"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
@@ -53,6 +56,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd whe
      ])
   type ToolOutput NoteToolAdd = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the added note"])
   data ToolError NoteToolAdd = NoteAddError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
   toolName _ _ = "note_add"
   toolDescription _ _ = "Add a note, You can use the note tools to take notes if you want to memorize things that people teach you, or you learn about the people more. The title will be added to your system prompt which becomes part of your memory."
   toolHandler _ _ ((StringT title) :%* (StringT content) :%* ObjT0Nil) = do
@@ -81,6 +85,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace
      ])
   type ToolOutput NoteToolReplace = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the replaced note"])
   data ToolError NoteToolReplace = NoteReplaceError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
   toolName _ _ = "note_replace"
   toolDescription _ _ = "Replace a note"
   toolHandler _ _ ((IntT note_id) :%* (StringT title) :%* (StringT content) :%* ObjT0Nil) = do
@@ -102,6 +107,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete 
   type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the note to delete"])
   type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the deleted note"])
   data ToolError NoteToolDelete = NoteDeleteError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
   toolName _ _ = "note_delete"
   toolDescription _ _ = "Delete a note"
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
@@ -182,6 +188,7 @@ instance
     )
   type ToolOutput CronTabTool = ParamToData (ObjectP0 '[StringP "result" "the result of the tool"])
   data ToolError CronTabTool = TimedTaskToolError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableCronTab botSettingPerChatEnableCronTab
   toolName _ _ = "crontab"
   toolDescription _ _ =  "Set a cron job to trigger a chat after a certain time. Example Output : "
                       <> "{\"tool\": \"crontab\", \"args\": {\"crontab\": <crontab format>, \"repeat\": <repeat>, \"detail\": <detailed description>}}"
@@ -210,6 +217,7 @@ instance
   type ToolInput CronTabList = ParamToData (ObjectP0 '[])
   type ToolOutput CronTabList = ParamToData (ObjectP0 '[StringP "cron_jobs" "list of cron jobs"])
   data ToolError CronTabList = CronTabListError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableCronTab botSettingPerChatEnableCronTab
   toolName _ _ = "crontab_list"
   toolDescription _ _ = "List all cron jobs for the current chat."
   toolHandler _ _ ObjT0Nil = do
@@ -228,6 +236,7 @@ instance
   type ToolInput CronTabDelete = ParamToData (ObjectP0 '[ArrayPInt "cron_id" "list of cron job IDs to delete"])
   type ToolOutput CronTabDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
   data ToolError CronTabDelete = CronTabDeleteError Text deriving Show
+  toolEnabled _        = computeSettingFromDB botSettingEnableCronTab botSettingPerChatEnableCronTab
   toolName _ _ = "crontab_delete"
   toolDescription _ _ = "Delete one or more cron jobs by their ID. Use the 'crontab_list' tool to get the cron job IDs."
   toolHandler _ _ ((ArrayT cronIds) :%* ObjT0Nil) = do
@@ -235,3 +244,68 @@ instance
     cid <- effectEWith' (const $ CronTabDeleteError "no ChatId found") getCid
     lift $ runDBMeowTool $ deleteWhere [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid, BotCronJobId <-. map intToKey cronIds]
     return $ StringT "success" :%* ObjT0Nil
+
+data SetEssenceMessage
+-- ^ Set a very good message as essence (only valid in group chats).
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) SetEssenceMessage where
+  type ToolInput SetEssenceMessage = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to set as essence"])
+  type ToolOutput SetEssenceMessage = ParamToData (ObjectP0 '[StringP "result" "the result of the action"])
+  data ToolError SetEssenceMessage = EssenceError Text deriving Show
+  enabledByDefault _ _ = False
+  toolEnabled _        = computeSettingFromDB botSettingEnableSetEssence botSettingPerChatEnableSetEssence
+  toolUsable _         = isGroupChat
+
+  toolName _ _ = "set_essence"
+  toolDescription _ _ = "Set a message as essence. 当群友发表了非常棒的见解你认为可以为全群员收藏时使用. The message will be pinned to a Highlight list."
+  toolHandler _ _ ((IntT messageId) :%* ObjT0Nil) = do
+    _ <- effectEWith' (const $ EssenceError "This tool is only valid in group chats, this is a private chat.") getGid
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetEssenceMessage messageId)]
+    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
+    return $ StringT "success" :%* ObjT0Nil
+    where intercalateDelay = 2_000_000 -- 2 second
+
+
+data SetGroupBanTool
+-- ^ A tool that provides the ability to ban a user in the current chat. (Only for group chats where the bot is an admin)
+-- This tool is useful for moderating the chat and preventing unwanted interactions.
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) SetGroupBanTool where
+  type ToolInput SetGroupBanTool  = ParamToData (ObjectP0
+      '[ IntP "user_id" "the user_id of the user to ban, 0 means ban everyone (except admins)"
+       , IntP "duration" "the duration in seconds to ban the user, 0 means cancel the ban"
+       ]
+    )
+  type ToolOutput SetGroupBanTool = ParamToData (ObjectP0 '[StringP "result" "the result of the ban action"])
+  data ToolError SetGroupBanTool = BanError Text deriving Show
+  enabledByDefault _ _ = False
+  toolEnabled _        = computeSettingFromDB botSettingEnableSetGroupBan botSettingPerChatEnableSetGroupBan
+  toolUsable _         = isGroupChat
+
+  toolName _ _ = "ban"
+  toolDescription _ _ = "Moderate tool, ban a user will disallow the user to send message in the current chat. If the user is an admin, the bot will not be able to ban them. Use with extra caution."
+  toolHandler _ _ (IntT userId :%* IntT duration :%* ObjT0Nil) = do
+    gid <- effectEWith' (const $ BanError "This tool is only valid in group chats, this is a private chat.") getGid
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetGroupBan gid (UserId userId) duration)]
+    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
+    return $ StringT "success" :%* ObjT0Nil
+    where intercalateDelay = 2_000_000 -- 2 second
+
+-- | A helper function to compute whether a setting is enabled from the database.
+computeSettingFromDB :: In LogDatabase mods => (BotSetting -> Maybe b) -> (BotSettingPerChat -> Maybe b) -> MeowToolEnv r mods (Maybe b)
+computeSettingFromDB gSel lSel = fmap (>>= id) . runMaybeT $ do
+  botId <- lift getBotId
+  cid <- MaybeT getCid
+  mGlobal <- do
+    grec <- MaybeT $ runDBMeowTool $ selectFirst [BotSettingBotId ==. botId] []
+    return $ gSel $ entityVal grec
+  mLocal <- runMaybeT $ do
+    localSetting <- MaybeT . lift . runDBMeowTool $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botId] []
+    MaybeT . pure $ lSel $ entityVal localSetting
+  return $ mLocal <|> mGlobal

@@ -1,6 +1,6 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia, DerivingStrategies #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia, RecordWildCards #-}
 {-# LANGUAGE TypeApplications, AllowAmbiguousTypes, TypeFamilies #-}
 
 module External.ChatAPI
@@ -15,7 +15,6 @@ module External.ChatAPI
 
 
 import Control.Applicative
-import Control.Concurrent
 import Control.DeepSeq
 import Control.Exception (try, SomeException)
 import Control.Monad.Except
@@ -25,7 +24,6 @@ import Control.Monad.Trans.ReaderState
 import Data.Aeson as A
 import Data.Bifunctor
 import Data.Default
-import Data.Either
 import Data.HList
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Proxy (Proxy(..))
@@ -108,7 +106,7 @@ data ChatSetting = ChatSetting
   , systemMaxToolDepth   :: Maybe Int       -- ^ Maximum tool call attempts
   , systemApiKeys        :: Maybe APIKey       -- ^ API keys for chat models
   , chatTruncateThinking :: Maybe Bool
-  } deriving (Show, Eq, Read, Generic, NFData)
+  } deriving (Show, Read, Eq, Generic, NFData)
 
 instance Default ChatSetting where
   def = ChatSetting Nothing Nothing Nothing Nothing Nothing
@@ -234,19 +232,19 @@ instance FromJSON ChatCompletionResponseOllama where
 data Message
   = SystemMessage    { content :: Text }
   | UserMessage      { content :: Text }
-  | AssistantMessage { content :: Text, thinking :: Maybe Text, pureToolCall :: Maybe Bool }
+  | AssistantMessage { content :: Text, thinking :: Maybe Text, pureToolCall :: Maybe Bool, withToolCall :: Maybe (ToolText, ToolText -> Text) }
   | ToolMessage      { content :: Text, toolMeta :: Maybe ToolMeta }
-  deriving (Generic, Eq, Ord, Read, NFData)
+  deriving (Eq, Read, Generic, NFData)
 
 mapMessage :: (Text -> Text) -> Message -> Message
-mapMessage f (SystemMessage    c)     = SystemMessage    $ f c
-mapMessage f (UserMessage      c)     = UserMessage      $ f c
-mapMessage f (AssistantMessage c t p) = AssistantMessage (f c) (f <$> t) p
-mapMessage f (ToolMessage      c m)   = ToolMessage      (f c) m
+mapMessage f (SystemMessage    c)        = SystemMessage    $ f c
+mapMessage f (UserMessage      c)        = UserMessage      $ f c
+mapMessage f (AssistantMessage c t p wt) = AssistantMessage (f c) (f <$> t) p (second (f .) <$> wt)
+mapMessage f (ToolMessage      c m)      = ToolMessage      (f c) m
 
 -- | Removes the thinking part of the assistant message
 truncateThinking :: Message -> Message
-truncateThinking (AssistantMessage c (Just _) p) = AssistantMessage c Nothing p
+truncateThinking (AssistantMessage c (Just _) p wt) = AssistantMessage c Nothing p wt
 truncateThinking m = m
 
 -- | Wrapper for model dependent content (toJSON and FromJSON)
@@ -279,7 +277,7 @@ instance FromJSON Message where
           let (thinking, ct') = case (reasoning, parseThinking ct) of
                 (Just r, _) -> (Just r, ct)
                 (_, p)      -> p
-          return $ AssistantMessage ct' thinking Nothing
+          return $ AssistantMessage ct' thinking Nothing Nothing
       "tool"      -> do
           ToolMessage <$> (v .: "content") <*> v .:? "toolMeta"
       _           -> error "Invalid role in message"
@@ -299,8 +297,8 @@ parseThinking ct = maybe (Nothing, ct)
 instance ToJSON (ModelDependent (DeepSeek DeepSeekReasoner) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c Nothing _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c (Just think) _))
+  toJSON (ModelDependent (AssistantMessage c Nothing _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c (Just think) _ _))
     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
   -- ^ deepseek model does not support tool role, and we use user role instead
@@ -308,13 +306,13 @@ instance ToJSON (ModelDependent (DeepSeek DeepSeekReasoner) Message) where
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (DeepSeek a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c _ _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c _ _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
   -- ^ we haven't implemented tool role for openai model yet, so we use user role instead
 
@@ -325,15 +323,15 @@ deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)     , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c _ _)) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c _ _ _)) = A.object ["role" .= ("assistant" :: Text), "content" .= c]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text), "content" .= c]
   -- ^ we haven't implemented tool role for ollama api yet, so we use user role instead
 
 instance ToJSON (ModelDependent (Local DeepSeekR1_32B) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c Nothing _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c (Just think) _))
+  toJSON (ModelDependent (AssistantMessage c Nothing _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+  toJSON (ModelDependent (AssistantMessage c (Just think) _ _))
     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
   -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
@@ -400,20 +398,19 @@ instance ToJSON (ModelDependent (Local a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
     [ "model" .= chatReqModel chatReq
     , "messages" .= map (ModelDependent @(Local a)) (messages chatReq)
-    , "options" .= A.object (
+    , "options" .= A.object
         ["temperature" .= temperature chatReq]
-      )
     ]
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 promptMessage :: String -> Message
 promptMessage prompt = UserMessage (pack prompt)
 
-generateRequestBody :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts) => ChatParams md ts -> [Message] -> BL.ByteString
-generateRequestBody param mes = encode $ ModelDependent @md $
+generateRequestBody :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts) => ChatParams md ts -> Maybe Message -> [Message] -> BL.ByteString
+generateRequestBody param mSys mes = encode $ ModelDependent @md $
   ChatRequest
     { chatReqModel = chatModel @md
-    , messages     = sysMessage : mes
+    , messages     = maybe mes (: mes) mSys
     , temperature  = fromMaybe 0.5 (systemTemp $ chatSetting param)
     , stream       = case chatModel @md of
         DeepSeek _    -> Just False
@@ -425,24 +422,48 @@ generateRequestBody param mes = encode $ ModelDependent @md $
         XcApi _       -> Just False
     -- , tools       = Nothing
     }
-  where sysMessage = generateSystemPrompt @md @ts @m param
 
-generateSystemPrompt :: forall md ts m. ConstraintList (ToolClass m) ts => ChatParams md ts -> Message
-generateSystemPrompt params
-  | chatMarkDown params = SystemMessage $
-      "You are a endearing catgirl assistant named '喵喵'. \
-      \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'. \
-      \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. \
-      \ Do not use \\( \\) or \\[ \\] for formulas."
-      <> appendToolPrompts @m (Proxy @ts) "\n---\n"
-  | otherwise =
-      maybe
-        (SystemMessage $
-          "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
-          <> appendToolPrompts @m (Proxy @ts) "\n---\n"
+data GenerateSystemPromptBehavior = GenerateSystemPromptBehavior
+  { staticToolPrompt                   :: Bool
+  , useDefaultSystemMessageWhenNothing :: Bool
+    -- ^ if True, use default system message when no system message is provided
+    -- otherwise, the system message will be omitted, i.e. no system message will be generated
+  }
+instance Default GenerateSystemPromptBehavior where
+  def = GenerateSystemPromptBehavior
+    { staticToolPrompt                   = False
+    , useDefaultSystemMessageWhenNothing = True
+    }
+
+-- | Reads system message from the chat setting and generates a system prompt based on tool list
+generateSystemPrompt
+  :: forall md ts m. (Monad m, ConstraintList (ToolClass m) ts)
+  => GenerateSystemPromptBehavior -> ChatParams md ts -> m (Maybe Message)
+generateSystemPrompt GenerateSystemPromptBehavior{..} params = do
+
+  toolPrompts <-
+    if staticToolPrompt
+    then pure $ computeToolPrompts    @m (Proxy @ts) "\n---\n"
+    else computeToolPromptsWithEnable @m (Proxy @ts) "\n---\n"
+
+  if chatMarkDown params
+  then
+      pure $ Just $ SystemMessage $
+        "You are a endearing catgirl assistant named '喵喵'. \
+        \ You love to use cute symbols like 'owo', '>w<', 'qwq', 'T^T'. \
+        \ Always answer in markdown format, put your formulas in latex form enclosed by $ or $$. \
+        \ Do not use \\( \\) or \\[ \\] for formulas."
+        <> toolPrompts
+  else
+      pure $ maybe
+        ( if useDefaultSystemMessageWhenNothing
+          then Just $ SystemMessage $
+                 "You are the helpful endearing catgirl assistant named '喵喵'. You adores using whisker-twitching symbols such as 'owo', '>w<', 'qwq', 'T^T', and the unique cat symbol '[CQ:face,id=307]' (no space after ',')."
+                 <> toolPrompts
+          else Nothing
         )
-        (SystemMessage . (<> appendToolPrompts @m (Proxy @ts) "\n---\n"))
-        (fmap content . systemMessage $ chatSetting params)
+        (Just . SystemMessage . (<> toolPrompts) . content)
+        (systemMessage $ chatSetting params)
 
 data APIKey = APIKey
   { apiKeyOpenAI      :: Maybe Text
@@ -466,10 +487,10 @@ getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow api
 getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKey
 getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
-fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> [Message] -> m (Either Text (ChatCompletionResponse md))
-fetchChatCompletionResponse manager _ apiKey model msg = do
+fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> m (Either Text (ChatCompletionResponse md))
+fetchChatCompletionResponse manager _ apiKey model mSys msg = do
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
-  let requestBody = generateRequestBody @md @ts @m model msg --promptMessage prompt
+  let requestBody = generateRequestBody @md @ts @m model mSys msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
     [ ""
     , "model: " <> T.pack (show $ chatModel @md) <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md)
@@ -514,18 +535,16 @@ fetchChatCompletionResponse manager _ apiKey model msg = do
                     Left  jsonError -> Left $ "Exception when parsing: " <> T.pack jsonError <> "\nResponse body: " <> TL.toStrict (TLE.decodeUtf8 resBody)
             return response
 
-instance GetMessage (ChatCompletionResponseOpenAI) where
+instance GetMessage ChatCompletionResponseOpenAI where
   getMessage = fmap message . maybe (Left "No choices in response") Right . listToMaybe . choices
 
-instance GetMessage (ChatCompletionResponseOllama) where
+instance GetMessage ChatCompletionResponseOllama where
   getMessage = return . ollamaResponse
 
 readApiKeyFile :: MonadIO m => ExceptT Text m APIKey
 readApiKeyFile = ExceptT
   . fmap
-    (bimap
-      ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show)
-      id
+    (first ((T.concat ["Expect api key file \"", T.pack apiKeyFile, "\", while trying to read this file, the following error occured: "] <>) . T.pack . show)
     )
   . liftIO
   . try @SomeException
@@ -534,8 +553,9 @@ readApiKeyFile = ExceptT
 simpleChat :: (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> ChatParams md ts -> String -> ExceptT Text m Text
 simpleChat man timeOut model prompt = do
   apiKey <- readApiKeyFile
-  result <- ExceptT $ fetchChatCompletionResponse man timeOut apiKey model [promptMessage prompt]
-  return $ fromRight "" $ content <$> getMessage result
+  sysMsg <- lift $ generateSystemPrompt def model
+  result <- ExceptT $ fetchChatCompletionResponse man timeOut apiKey model sysMsg [promptMessage prompt]
+  return $ either (const "") content (getMessage result)
 
 data ChatStatus = ChatStatus
   { chatStatusToolDepth      :: !Int
@@ -565,6 +585,7 @@ agent = do
   prevMsgs  <- (if trunThink then map truncateThinking else id) <$> gets chatStatusMessages
   toolDepth <- gets chatStatusToolDepth
   mapiKeys  <- asks (systemApiKeys . chatSetting)
+  mSys      <- lift $ generateSystemPrompt def params
   apiKeys   <- liftE $ pureEMsg "No API key found!" mapiKeys
   let man     = chatManager params
       timeOut = chatTimeout params
@@ -572,33 +593,25 @@ agent = do
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
     let getAmsg = do
-          response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params prevMsgs
+          response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params mSys prevMsgs
           amsg <- liftE . pureE $ getMessage response
           if T.null (content amsg)
-          then return $ Nothing
+          then return Nothing
           else return $ Just amsg
 
-    let getAmsgTwice = do
-          mamsg <- getAmsg
-          case mamsg of
-            Nothing -> do
-              $(logInfo) "Empty response, retrying..."
-              liftIO $ threadDelay 1000000 -- 1 second
-              mamsg2 <- getAmsg
-              case mamsg2 of
-                Nothing -> liftE $ throwE "Empty response twice"
-                Just amsg2 -> return amsg2
-            Just amsg -> return amsg
-
-    amsg' <- getAmsgTwice
+    mAmsg' <- getAmsg
+    amsg' <- liftE $ pureEMsg "No assistant message found!" mAmsg'
     $(logInfo) $ showMessage amsg'
     case parseToolCall (content amsg') of
-      Nothing -> return $ [amsg']
-      Just (Nothing, ToolCallPair toolCallName args) -> continueAgent True amsg' toolCallName args
-      Just (Just _, ToolCallPair toolCallName args)  -> continueAgent False amsg' toolCallName args
-      where continueAgent isPureToolCall amsg' toolCallName args = do
+      Nothing -> return [amsg']
+      Just (_toolText, Nothing  , ToolCallPair toolCallName args) -> continueAgent True  Nothing amsg' toolCallName args
+      Just (toolText , Just rest, ToolCallPair toolCallName args) -> continueAgent False (Just (toolText, rest)) amsg' toolCallName args
+      where continueAgent isPureToolCall withToolCall amsg' toolCallName args = do
               let amsg = case amsg' of
-                    AssistantMessage {} -> amsg' { pureToolCall = Just isPureToolCall } -- this assistant message is a pure tool call
+                    AssistantMessage {} -> amsg'
+                      { pureToolCall = Just isPureToolCall
+                      , withToolCall = withToolCall
+                      }
                     _ -> amsg'
               skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
               case skip_toolmsg of
@@ -618,8 +631,8 @@ printMessage = TIO.putStrLn . showMessage
 showMessage :: Message -> Text
 showMessage (SystemMessage c)               = "SystemMessage: "     <> c
 showMessage (UserMessage c)                 = "UserMessage: "       <> c
-showMessage (AssistantMessage c Nothing _)  = "AssistantMessage: "  <> c
-showMessage (AssistantMessage c (Just t) _) = "AssistantThinking: " <> t <> "\nAssistantMessage: " <> c
+showMessage (AssistantMessage c Nothing _ _)  = "AssistantMessage: "  <> c
+showMessage (AssistantMessage c (Just t) _ _) = "AssistantThinking: " <> t <> "\nAssistantMessage: " <> c
 showMessage (ToolMessage c tm)              = "ToolMessage: "       <> c <> "\nToolMeta: "         <> toText tm
 
 -- | If using this you will need to maintain the chat status
@@ -646,7 +659,7 @@ messageChat params prevMsg
   | otherwise = do
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
-      ExceptT $ fmap (fmap last . fst) $ statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
+      ExceptT $ fmap last . fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
 
 -- | Tool calls are also included in the output
 -- system message will be appended so don't add it to the input
@@ -654,11 +667,11 @@ messageChat params prevMsg
 -- returns the list of new messages: assistant tool calls followed by the final response
 messagesChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
 messagesChat params prevMsg
-  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap fst $ statusChat @md params (ChatStatus 0 0 prevMsg)
+  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fst <$> statusChat @md params (ChatStatus 0 0 prevMsg)
   | otherwise = do
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
-      ExceptT $ fmap fst $ statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
+      ExceptT $ fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
 
 data Skipped = Skipped
 -- | Handle tool execution, no recursion

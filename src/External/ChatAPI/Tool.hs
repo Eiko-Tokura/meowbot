@@ -21,6 +21,7 @@ module External.ChatAPI.Tool where
 import Control.Monad.State
 import Control.Applicative
 import Data.Aeson
+import Data.Maybe
 import Data.Aeson.Types
 import Data.Bifunctor
 import Data.Kind
@@ -222,8 +223,8 @@ class ParamExplained t where
 
   getExplanation :: Text
   getExplanation
-    = T.intercalate "\n" . reverse . printStateTextRev . snd
-    $ runState (printParamExplanation @t) (PrintState 0 [])
+    = T.intercalate "\n" . reverse . printStateTextRev
+    $ execState (printParamExplanation @t) (PrintState 0 []) 
   {-# INLINE getExplanation #-}
 
 data PrintState = PrintState { printStateIndent :: Int, printStateTextRev :: [Text] }
@@ -416,6 +417,17 @@ class
   type ToolInput  a :: Type
   type ToolOutput a :: Type
   data ToolError  a :: Type
+
+  enabledByDefault  :: Proxy m -> Proxy a -> Bool
+  enabledByDefault _ _ = True -- default to enabled
+
+  toolEnabled :: Proxy a -> m (Maybe Bool)
+  toolEnabled _ = return Nothing
+
+  toolUsable :: Proxy a -> m Bool
+  toolUsable _ = return True
+
+  {-# MINIMAL toolName, toolDescription, toolHandler #-}
   toolName          :: Proxy m -> Proxy a -> Text
   toolDescription   :: Proxy m -> Proxy a -> Text
   toolHandler       :: Proxy m -> Proxy a -> ToolInput a -> ExceptT (ToolError a) m (ToolOutput a)
@@ -452,17 +464,30 @@ instance FromJSON ToolCallPair where
     <$> o .: "tool"
     <*> o .: "args"
 
+newtype ToolText = ToolText { unToolText :: Text }
+  deriving newtype (Show, Read, Eq, Ord, IsString, NFData)
+
+instance Show (ToolText -> Text) where show f = show (f "<ToolText>")
+instance Eq (ToolText -> Text)   where f1 == f2 = f1 "<ToolText>" == f2 "<ToolText>"
+instance Read (ToolText -> Text) where -- treat as a constant function, use the methods from Read Text, give a constant function with the Text parsed in
+  readsPrec _ s = [(const (T.pack s), "")] -- this is a constant function that returns the parsed Text
+  
+
 -- | Parse potential tool call from message content
-parseToolCall :: Text -> Maybe (Maybe Text, ToolCallPair)
+parseToolCall :: Text -> Maybe
+  ( ToolText                 -- ^ the tool call text, separated from the rest of the message
+  , Maybe (ToolText -> Text) -- ^ a function to reconstruct the original message with the tool call text replaced
+  , ToolCallPair             -- ^ the parsed tool call pair
+  )
 parseToolCall txt
-  =   fmap (Nothing, ) (decode (encodeUtf8LBS txt))
-  <|> (parseToolCallText txt)
+  =   fmap (ToolText txt, Nothing, ) (decode (encodeUtf8LBS txt))
+  <|> parseToolCallText txt
   where parseToolCallText t
-          | all (`T.isInfixOf` t) ["\"tool\":", "\"args\":", "```json"]
+          | all (`T.isInfixOf` t) ["\"tool\":", "\"args\":", "```tool"]
              = do
                 (part1, toolText, part2)
                   <- runParser ((,,)
-                        <$> (manyTill' (string "```json") getItem <* string "```json")
+                        <$> (manyTill' (string "```tool") getItem <* string "```tool")
                         <*> (manyTill' (string "```") getItem <* string "```")
                         <*> (many' getItem <* end)
                         )
@@ -470,10 +495,10 @@ parseToolCall txt
                 case (T.null (T.strip part1), T.null (T.strip part2)) of
                   (True, True) -> do
                     decodedToolPair <- decode (encodeUtf8LBS toolText)
-                    return (Nothing, decodedToolPair)
+                    return (ToolText toolText, Nothing, decodedToolPair)
                   _ -> do
                     decodedToolPair <- decode (encodeUtf8LBS toolText)
-                    return (Just $ part1 <> "\n(Casting spells)\n" <> part2, decodedToolPair)
+                    return (ToolText toolText, Just $ \toolText' -> part1 <> unToolText toolText' <> part2, decodedToolPair)
 
           | all (`T.isInfixOf` t) ["{\"tool\":", "\"args\":"]
              = let parsed = runParser ((,) <$> manyTill' (string "{\"tool\":") getItem <*> (some' getItem <* end)) txt :: Maybe (Text, Text)
@@ -482,15 +507,15 @@ parseToolCall txt
                 let toolBS = encodeUtf8LBS toolText
                 decodedToolPair <- decode toolBS
                 case T.null (T.strip start) of
-                  True  -> return (Nothing, decodedToolPair)
-                  False -> return (Just start, decodedToolPair)
+                  True  -> return (ToolText t, Nothing, decodedToolPair)
+                  False -> return (ToolText t, Just $ \t -> unToolText t <> start, decodedToolPair)
 
           | otherwise = Nothing
 
 testParseToolCall :: IO ()
 testParseToolCall = do
-  let input = "喵~ 好的呀，我来帮您查一下相关的会议信息！[表情]\n\n```json\n{\n  \"tool\": \"search\",  \"args\": {\n    \"query\": \"p-adic number theory conferences 2024\"  }\n}```\n等一下搜索结果出来后，我会为您整理相关信息并推荐合适的会议哦~ 希望能帮到您"
-  print $ parseToolCall input
+  let input = "喵~ 好的呀，我来帮您查一下相关的会议信息！[表情]\n\n```tool\n{\n  \"tool\": \"search\",  \"args\": {\n    \"query\": \"p-adic number theory conferences 2024\"  }\n}```\n等一下搜索结果出来后，我会为您整理相关信息并推荐合适的会议哦~ 希望能帮到您"
+  print $ (\(t, _, tp) -> (t, tp)) <$> parseToolCall input
 
 -- | A unique identifier for tool call tracking
 newtype ToolCallId = ToolCallId { unToolCallId :: Text }
@@ -508,8 +533,8 @@ instance ToJSON ToolMeta
 instance FromJSON ToolMeta
 
 ---------------------------------
-appendToolPrompts :: forall m ts. ConstraintList (ToolClass m) ts => Proxy ts -> Text -> Text
-appendToolPrompts clist sep
+computeToolPrompts :: forall m ts. ConstraintList (ToolClass m) ts => Proxy ts -> Text -> Text
+computeToolPrompts clist sep
   | null toolExplainList = ""
   | otherwise =
     ( T.unlines
@@ -519,12 +544,12 @@ appendToolPrompts clist sep
       , ""
       , "* format output as JSON with 'tool' and 'args' fields"
       , ""
-      , "* **use code block (```json ... ```) to wrap the tool call**"
+      , "* **use code block (```tool ... ```) to wrap the tool call**"
       , ""
       , "* At most one tool call per message!"
       , ""
       , "Example output: "
-      , "```json"
+      , "```tool"
       , "{\"tool\": \"time\", \"args\": {\"timezone\": 8}}\n"
       , "```"
       , sep
@@ -535,6 +560,43 @@ appendToolPrompts clist sep
     )
     . T.unlines $ toolExplainList
   where toolExplainList = useConstraint (Proxy @(ToolClass m)) clist (\t -> toolExplain (Proxy @m) t <> sep)
+
+computeToolPromptsWithEnable :: forall m ts. (Monad m, ConstraintList (ToolClass m) ts)
+  => Proxy ts -> Text -> m Text
+computeToolPromptsWithEnable clist sep
+  | null toolExplainList = return ""
+  | otherwise =
+    ( T.unlines
+      [ sep
+      , "## Available Tools"
+      , "If you need to use tool, you should:"
+      , ""
+      , "* format output as JSON with 'tool' and 'args' fields"
+      , ""
+      , "* **use code block (```tool ... ```) to wrap the tool call**"
+      , ""
+      , "* At most one tool call per message!"
+      , ""
+      , "Example output: "
+      , "```tool"
+      , "{\"tool\": \"time\", \"args\": {\"timezone\": 8}}\n"
+      , "```"
+      , sep
+      , "### Tools List"
+      , ""
+      ]
+    <>
+    )
+    . T.unlines . catMaybes <$> sequence toolExplainList
+  where toolExplainList =
+          useConstraint (Proxy @(ToolClass m)) clist (\t ->
+            do
+              enabled <- fromMaybe (enabledByDefault (Proxy @m) t) <$> toolEnabled t
+              valid   <- toolUsable t
+              if enabled && valid
+                then return $ Just $ toolExplain (Proxy @m) t
+                else return Nothing
+            )
 
 --------------------------------- example tool ---------------------------------
 

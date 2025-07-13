@@ -233,6 +233,9 @@ data ActionAPI
     { sendLikeUserId         :: UserId
     , sendLikeTimes          :: Int
     }
+  | SetEssenceMessage
+    { setEssenceMessageMessageId :: MessageId
+    }
   | SetGroupKick
     { setGroupKickGroupId    :: GroupId
     , setGroupKickUserId     :: UserId
@@ -242,6 +245,10 @@ data ActionAPI
     { setGroupBanGroupId     :: GroupId
     , setGroupBanUserId      :: UserId
     , setGroupBanDuration    :: Int
+    }
+  | SetGroupWholeBan
+    { setGroupWholeBanGroupId :: GroupId
+    , setGroupWholeBanEnable  :: Bool
     }
   | SetGroupCard
     { setGroupCardGroupId    :: GroupId
@@ -296,6 +303,9 @@ instance ToJSON ActionAPI where
     [ "user_id" .= uid
     , "times" .= times
     ]
+  toJSON (SetEssenceMessage mid) = object
+    [ "message_id" .= mid
+    ]
   toJSON (SetGroupKick gid uid rej) = object
     [ "group_id" .= gid
     , "user_id" .= uid
@@ -305,6 +315,10 @@ instance ToJSON ActionAPI where
     [ "group_id" .= gid
     , "user_id" .= uid
     , "duration" .= dur
+    ]
+  toJSON (SetGroupWholeBan gid enable) = object
+    [ "group_id" .= gid
+    , "enable" .= enable
     ]
   toJSON (SetGroupCard gid uid card) = object
     [ "group_id" .= gid
@@ -347,8 +361,10 @@ actionString SendGroupMessage{}     = "send_group_msg"
 actionString DeleteMessage{}        = "delete_msg"
 actionString GetMessage{}           = "get_msg"
 actionString SendLike{}             = "send_like"
+actionString SetEssenceMessage{}    = "set_essence_msg"
 actionString SetGroupKick{}         = "set_group_kick"
 actionString SetGroupBan{}          = "set_group_ban"
+actionString SetGroupWholeBan{}     = "set_group_whole_ban"
 actionString SetGroupCard{}         = "set_group_card"
 actionString SetGroupLeave{}        = "set_group_leave"
 actionString SetGroupSpecialTitle{} = "set_group_special_title"
@@ -508,7 +524,7 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderNa
         chatId         = maybe "" show . groupId $ cqmsg
         senderId       = maybe "" (\c -> "(" ++ show c ++ ")") . userId $ cqmsg
         senderName     = maybe "" unpack $ senderNickname =<< sender cqmsg
-        senderCard'    = surround $ maybe "" (unpack) $ senderCard =<< sender cqmsg
+        senderCard'    = surround $ maybe "" unpack $ senderCard =<< sender cqmsg
         messageContent = maybe "" unpack $ message cqmsg
         surround s     = if null s then s else "(" ++ s ++ ")"
         -- mcqcodes       = maybe "" (("\n"++) . show) $ mNonEmpty . cqcodes =<< metaMessage cqmsg

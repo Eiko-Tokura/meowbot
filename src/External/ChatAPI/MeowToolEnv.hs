@@ -63,11 +63,27 @@ getCid = asks
   )
 {-# INLINE getCid #-}
 
+getGid :: MeowToolEnv r mods (Maybe GroupId)
+getGid = do
+  cid <- getCid
+  return $ case cid of
+    Just (GroupChat gid) -> Just gid
+    _                    -> Nothing
+{-# INLINE getGid #-}
+
+isGroupChat :: MeowToolEnv r mods Bool
+isGroupChat = do
+  cid <- getCid
+  return $ case cid of
+    Just (GroupChat _) -> True
+    _                  -> False
+{-# INLINE isGroupChat #-}
+
 embedMeowToolEnv :: MeowToolEnv r mods a -> MeowT r mods IO a
 embedMeowToolEnv
   = MeowT
   . ReaderStateT
-  . (\arr (wc_bc, allGlob_r) allLocl_other -> fmap (, allLocl_other) $ arr ((wc_bc, allGlob_r), allLocl_other)
+  . (\arr (wc_bc, allGlob_r) allLocl_other -> (, allLocl_other) <$> arr ((wc_bc, allGlob_r), allLocl_other)
     )
   . runReaderT
   . runMeowToolEnv
@@ -75,5 +91,5 @@ embedMeowToolEnv
 
 runDBMeowTool :: (LogDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv r mods b
 runDBMeowTool acts = do
-  pool <- databasePool <$> asks (getF @LogDatabase . fst . snd . fst)
+  pool <- asks (databasePool . getF @LogDatabase . fst . snd . fst)
   liftIO $ runSqlPool acts pool

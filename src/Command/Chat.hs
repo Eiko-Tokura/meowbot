@@ -57,6 +57,8 @@ type MeowTools =
   , CronTabTool
   , CronTabList
   , CronTabDelete
+  , SetEssenceMessage
+  , SetGroupBanTool
   ]
 
 type ModelChat = Local QwQ
@@ -233,7 +235,7 @@ commandChat = BotCommand Chat $ botT $ do
       cqFilter :: CQCode -> Maybe CQCode
       cqFilter (CQImage _)         = Nothing
       cqFilter (CQOther "image" _) = Nothing
-      cqFilter c@_                 = Just c
+      cqFilter c                   = Just c
 
       updateCurrentChatState :: (ChatState -> ChatState) -> AllChatState -> AllChatState
       updateCurrentChatState f s =
@@ -319,12 +321,18 @@ commandChat = BotCommand Chat $ botT $ do
             mergeChatStatus maxMessageInState cid newMsgs newStatus
             let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
                   (\case
-                    AssistantMessage
+                    AssistantMessage -- Case 1 : assistant returned pure tool call
                       { pureToolCall = Just True
                       , content      = c
                       , thinking     = mt
                       } -> [t | displayThinking, Just t <- [mt]] <> [c | displayToolMessage]
-                    AssistantMessage
+                    AssistantMessage -- Case 2 : assistant returned a message with tool call
+                      { content  = c
+                      , thinking = mt
+                      , withToolCall = Just (_, rest)
+                      } -> [t | displayThinking, Just t <- [mt]]
+                        <> [if displayToolMessage then c else rest "(Casting Spell...)"]
+                    AssistantMessage -- Case 3 : assistant returned a message with no tool call
                       { content  = c
                       , thinking = mt
                       } -> [t | displayThinking, Just t <- [mt]] <> [c]

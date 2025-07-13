@@ -72,6 +72,8 @@ BotSetting -- Overlappable by BotSettingPerChat
   maxMessageInState       Int                  Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
+  enableSetEssence        Bool                 Maybe
+  enableSetGroupBan       Bool                 Maybe
   deriving Generic
   deriving Default
 
@@ -100,6 +102,8 @@ BotSettingPerChat -- Overlapping BotSetting
   maxMessageInState       Int                  Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
+  enableSetEssence        Bool                 Maybe
+  enableSetGroupBan       Bool                 Maybe
   deriving Generic
   deriving Default
 
