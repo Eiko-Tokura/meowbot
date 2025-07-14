@@ -277,7 +277,7 @@ instance
   ) => ToolClass (MeowToolEnv r mods) SetGroupBanTool where
   type ToolInput SetGroupBanTool  = ParamToData (ObjectP0
       '[ IntP "user_id" "the user_id of the user to ban, 0 means ban everyone (except admins)"
-       , IntP "duration" "the duration in seconds to ban the user, 0 means cancel the ban"
+       , IntP "duration" "the duration in seconds to ban the user, 0 means cancel the ban. When banning everyone, duration can only be 0 (stop ban) or 1 (enable ban)."
        ]
     )
   type ToolOutput SetGroupBanTool = ParamToData (ObjectP0 '[StringP "result" "the result of the ban action"])
@@ -287,10 +287,16 @@ instance
   toolUsable _         = isGroupChat
 
   toolName _ _ = "ban"
-  toolDescription _ _ = "Moderate tool, ban a user will disallow the user to send message in the current chat. If the user is an admin, the bot will not be able to ban them. Use with extra caution."
+  toolDescription _ _ = "disallow a user (non-admin) to send message in the current chat. Use with extra caution."
   toolHandler _ _ (IntT userId :%* IntT duration :%* ObjT0Nil) = do
     gid <- effectEWith' (const $ BanError "This tool is only valid in group chats, this is a private chat.") getGid
-    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetGroupBan gid (UserId userId) duration)]
+    banAction <- case (userId, duration) of
+      (0, 0) -> return $ BAActionAPI (SetGroupWholeBan gid False) -- disable ban for everyone
+      (0, 1) -> return $ BAActionAPI (SetGroupWholeBan gid True) -- enable ban for everyone
+      (uid, duration) | uid /= 0
+        -> return $ BAActionAPI (SetGroupBan gid (UserId uid) duration)
+      _ -> throwE $ BanError "Invalid user_id duration combination."
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [banAction]
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
