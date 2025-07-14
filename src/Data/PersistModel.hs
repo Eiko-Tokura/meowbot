@@ -74,6 +74,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
+  enableLeaveGroup        Bool                 Maybe
   deriving Generic
   deriving Default
 
@@ -104,6 +105,7 @@ BotSettingPerChat -- Overlapping BotSetting
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
+  enableLeaveGroup        Bool                 Maybe
   deriving Generic
   deriving Default
 

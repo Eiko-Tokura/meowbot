@@ -59,6 +59,7 @@ type MeowTools =
   , CronTabDelete
   , SetEssenceMessage
   , SetGroupBanTool
+  , LeaveGroupTool
   ]
 
 type ModelChat = Local QwQ

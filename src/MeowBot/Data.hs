@@ -1,4 +1,5 @@
-{-# LANGUAGE DerivingStrategies, DeriveAnyClass, OverloadedStrings, DerivingVia #-}
+{-# LANGUAGE DeriveAnyClass, OverloadedStrings, DerivingVia #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module MeowBot.Data
   ( module MeowBot.MetaMessage
   , UserId(..), GroupId(..), ChatId(..), BotId(..)
@@ -69,7 +70,7 @@ data DebugFlag       = DebugJson | DebugCQMessage deriving (Eq, Show)
 data RunningFlag     = RunClient String Int | RunServer String Int deriving (Eq, Show)
 data IdentityFlag    = UseName String | UseId BotId | UseSysMsg String deriving (Eq, Show)
 data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
-data LogFlag         = LogFlag FilePath deriving (Eq, Show)
+newtype LogFlag      = LogFlag FilePath deriving (Eq, Show)
 data WatchDogFlag    = WatchDogFlag
     Int -- ^ interval in seconds
     String -- ^ action command
@@ -279,6 +280,10 @@ data ActionAPI
     { sendPokeUserId :: UserId
     , sendPokeChatId :: ChatId
     }
+  -- | SendForwardMessage
+  --   { sendForwardMessageChatId :: ChatId
+  --   , sendForwardMessageMessages :: [CQMessage]
+  --   }
   -- | GetFriendList
   deriving (Show, Eq, Read, Generic)
 
@@ -545,4 +550,3 @@ cqmsgToCid cqmsg = case eventType cqmsg of
   GroupMessage -> GroupChat <$> groupId cqmsg
   PrivateMessage -> PrivateChat <$> userId cqmsg
   _ -> Nothing
-

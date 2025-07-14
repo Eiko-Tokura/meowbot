@@ -297,6 +297,31 @@ instance
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
 
+data LeaveGroupTool
+-- ^ A tool that provides the ability to make the bot leave the current group chat.
+-- It can be useful when the bot is getting abused.
+
+instance
+  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  , In LogDatabase mods
+  ) => ToolClass (MeowToolEnv r mods) LeaveGroupTool where
+  type ToolInput LeaveGroupTool = ParamToData (ObjectP0 '[])
+  type ToolOutput LeaveGroupTool = ParamToData (ObjectP0 '[StringP "result" "the result of the leave action"])
+  data ToolError LeaveGroupTool = LeaveError Text deriving Show
+  enabledByDefault _ _ = False
+  toolEnabled _        = computeSettingFromDB botSettingEnableLeaveGroup botSettingPerChatEnableLeaveGroup
+  toolUsable _         = isGroupChat
+
+  toolName _ _ = "leave_group"
+  toolDescription _ _ = "Make the bot leave the current group chat. Can be useful when getting extreme abuse and bullying, use with extra caution."
+  toolHandler _ _ ObjT0Nil = do
+    gid <- effectEWith' (const $ LeaveError "This tool is only valid in group chats, this is a private chat.") getGid
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetGroupLeave gid False)]
+    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
+    return $ StringT "success" :%* ObjT0Nil
+    where intercalateDelay = 2_000_000 -- 2 second
+
 -- | A helper function to compute whether a setting is enabled from the database.
 computeSettingFromDB :: In LogDatabase mods => (BotSetting -> Maybe b) -> (BotSettingPerChat -> Maybe b) -> MeowToolEnv r mods (Maybe b)
 computeSettingFromDB gSel lSel = fmap (>>= id) . runMaybeT $ do
