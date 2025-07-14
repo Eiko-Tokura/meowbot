@@ -104,21 +104,20 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace
     return $ IntT note_id :%* ObjT0Nil
 
 instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete where
-  type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the note to delete"])
-  type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the deleted note"])
+  type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[ArrayPInt "note_id" "array of note_id to delete"])
+  type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
   data ToolError NoteToolDelete = NoteDeleteError Text deriving Show
-  toolEnabled _        = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
-  toolName _ _ = "note_delete"
-  toolDescription _ _ = "Delete a note"
-  toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
+  toolEnabled _ = computeSettingFromDB botSettingEnableNotes botSettingPerChatEnableNotes
+  toolName _ _  = "note_delete"
+  toolDescription _ _ = "Delete one or more note"
+  toolHandler _ _ ((ArrayT note_ids) :%* ObjT0Nil) = do
     botname <- lift getBotName
     cid <- effectEWith' (const $ NoteDeleteError "no cid found") getCid
-    note <- lift $ fmap (fmap entityVal) . runDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
+    note <- lift $ fmap (fmap entityVal) . runDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids] []
     case note of
-      Just _ -> lift $ runDBMeowTool $ deleteWhere [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id]
+      Just _ -> lift $ runDBMeowTool $ deleteWhere [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids]
       Nothing -> throwError $ NoteDeleteError "Note not found"
-    return $ IntT note_id :%* ObjT0Nil
-
+    return $ StringT "success" :%* ObjT0Nil
 
 listNoteTitleAndContents :: BotName -> ChatId -> Meow [(Int, (Text, Text))]
 listNoteTitleAndContents botname cid
@@ -238,7 +237,7 @@ instance
   data ToolError CronTabDelete = CronTabDeleteError Text deriving Show
   toolEnabled _        = computeSettingFromDB botSettingEnableCronTab botSettingPerChatEnableCronTab
   toolName _ _ = "crontab_delete"
-  toolDescription _ _ = "Delete one or more cron jobs by their ID. Use the 'crontab_list' tool to get the cron job IDs."
+  toolDescription _ _ = "Delete one or more cron jobs by their ID. Use the 'crontab_list' tool to get the cron job list and IDs before using this tool."
   toolHandler _ _ ((ArrayT cronIds) :%* ObjT0Nil) = do
     botId <- lift getBotId
     cid <- effectEWith' (const $ CronTabDeleteError "no ChatId found") getCid
