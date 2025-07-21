@@ -1,5 +1,5 @@
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, TemplateHaskell, OverloadedRecordDot #-}
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia, RecordWildCards #-}
 {-# LANGUAGE TypeApplications, AllowAmbiguousTypes, TypeFamilies #-}
 
@@ -10,6 +10,7 @@ module External.ChatAPI
   , OpenRouterModel(..), SiliconFlowModel(..), AnthropicModel(..), XcApiModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   , ChatAPI(..), APIKey(..)
+  , EstimateTokens(..)
   , printMessage
   ) where
 
@@ -35,6 +36,7 @@ import Parser.Run
 
 import Data.Text (Text, pack)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
+import Utils.TokenEstimator (estimateTokens)
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -423,6 +425,29 @@ generateRequestBody param mSys mes = encode $ ModelDependent @md $
     -- , tools       = Nothing
     }
 
+estimateInputTokens :: Maybe Message -> [Message] -> Int
+estimateInputTokens mSys mes
+  = maybe 0 (estimateTokens . content) mSys
+  + sum (estimateTokens . content <$> mes)
+
+estimateOutputTokens :: Message -> Int
+estimateOutputTokens (AssistantMessage c t _ _) = estimateTokens c + maybe 0 estimateTokens t
+estimateOutputTokens _ = 0
+
+data EstimateTokens = EstimateTokens
+  { inputTokens  :: !Int
+  , outputTokens :: !Int
+  , apiCalls     :: !Int
+  , apiErrors    :: !Int
+  , apiSkips     :: !Int
+  } deriving (Show, Eq, Generic, Default, NFData)
+
+instance Semigroup EstimateTokens where
+  EstimateTokens i1 o1 a1 b1 c1 <> EstimateTokens i2 o2 a2 b2 c2
+    = EstimateTokens (i1 + i2) (o1 + o2) (a1 + a2) (b1 + b2) (c1 + c2)
+instance Monoid EstimateTokens where
+  mempty = def
+
 data GenerateSystemPromptBehavior = GenerateSystemPromptBehavior
   { staticToolPrompt                   :: Bool
   , useDefaultSystemMessageWhenNothing :: Bool
@@ -487,13 +512,13 @@ getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow api
 getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKey
 getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
-fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> m (Either Text (ChatCompletionResponse md))
+fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> m (Either Text (ChatCompletionResponse md, EstimateTokens))
 fetchChatCompletionResponse manager _ apiKey model mSys msg = do
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
   let requestBody = generateRequestBody @md @ts @m model mSys msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
     [ ""
-    , "model: " <> T.pack (show $ chatModel @md) <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md)
+    , "model: " <> T.pack (show $ chatModel @md) <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md) <> ", estimated input tokens: " <> T.pack (show $ estimateInputTokens mSys msg)
     , "------------------- Message Start -------------------" ]
     <> map showMessage msg <>
     [ "------------------- Message End ---------------------" ]
@@ -533,7 +558,15 @@ fetchChatCompletionResponse manager _ apiKey model mSys msg = do
                   case eitherDecode resBody of
                     Right parsedJson -> Right parsedJson
                     Left  jsonError -> Left $ "Exception when parsing: " <> T.pack jsonError <> "\nResponse body: " <> TL.toStrict (TLE.decodeUtf8 resBody)
-            return response
+            return $ (\resp -> (resp, EstimateTokens
+              { inputTokens  = estimateInputTokens mSys msg
+              , outputTokens = either (const 0) estimateOutputTokens (getMessage resp)
+              , apiCalls     = 1
+              , apiErrors    = case res of
+                  Left _  -> 1
+                  Right _ -> 0
+              , apiSkips     = 0
+              })) <$> response
 
 instance GetMessage ChatCompletionResponseOpenAI where
   getMessage = fmap message . maybe (Left "No choices in response") Right . listToMaybe . choices
@@ -550,17 +583,18 @@ readApiKeyFile = ExceptT
   . try @SomeException
   $ read <$> readFile apiKeyFile
 
-simpleChat :: (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> ChatParams md ts -> String -> ExceptT Text m Text
+simpleChat :: (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> ChatParams md ts -> String -> ExceptT Text m (Text, EstimateTokens)
 simpleChat man timeOut model prompt = do
   apiKey <- readApiKeyFile
   sysMsg <- lift $ generateSystemPrompt def model
-  result <- ExceptT $ fetchChatCompletionResponse man timeOut apiKey model sysMsg [promptMessage prompt]
-  return $ either (const "") content (getMessage result)
+  (result, usage) <- ExceptT $ fetchChatCompletionResponse man timeOut apiKey model sysMsg [promptMessage prompt]
+  return $ (either (const "") content (getMessage result), usage)
 
 data ChatStatus = ChatStatus
   { chatStatusToolDepth      :: !Int
   , chatStatusTotalToolCalls :: !Int
   , chatStatusMessages       :: ![Message]
+  , chatEstimateTokens       :: !EstimateTokens
   } deriving (Show, Eq, Generic, NFData)
 
 -- | Remember that ExceptT is right monad transformer, it composes inside out
@@ -593,14 +627,15 @@ agent = do
   then liftE $ throwE "Maximum tool depth exceeded"
   else do
     let getAmsg = do
-          response <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params mSys prevMsgs
+          (response, usage) <- liftE . ExceptT $ fetchChatCompletionResponse man timeOut apiKeys params mSys prevMsgs
           amsg <- liftE . pureE $ getMessage response
           if T.null (content amsg)
           then return Nothing
-          else return $ Just amsg
+          else return $ Just (amsg, usage)
 
     mAmsg' <- getAmsg
-    amsg' <- liftE $ pureEMsg "No assistant message found!" mAmsg'
+    (amsg', usage) <- liftE $ pureEMsg "No assistant message found!" mAmsg'
+    modify $ \st -> st { chatEstimateTokens = chatEstimateTokens st <> usage }
     $(logInfo) $ showMessage amsg'
     case parseToolCall (content amsg') of
       Nothing -> return [amsg']
@@ -615,7 +650,9 @@ agent = do
                     _ -> amsg'
               skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
               case skip_toolmsg of
-                Left Skipped -> liftE $ throwE "Skipped"
+                Left Skipped -> do
+                  modify $ \st -> st { chatEstimateTokens = st.chatEstimateTokens {apiSkips = st.chatEstimateTokens.apiSkips + 1 }}
+                  liftE $ throwE "Skipped"
                 Right toolmsg -> do
                   $(logInfo) $ showMessage toolmsg
                   modify $ \st -> st
@@ -655,11 +692,11 @@ statusChatReadAPIKey params st = do
 -- will try to read apiKey file if no api key is found in the chat setting
 messageChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m Message
 messageChat params prevMsg
-  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap (fmap last . fst) $ statusChat @md params (ChatStatus 0 0 prevMsg)
+  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap (fmap last . fst) $ statusChat @md params (ChatStatus 0 0 prevMsg mempty)
   | otherwise = do
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
-      ExceptT $ fmap last . fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
+      ExceptT $ fmap last . fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg mempty)
 
 -- | Tool calls are also included in the output
 -- system message will be appended so don't add it to the input
@@ -667,11 +704,11 @@ messageChat params prevMsg
 -- returns the list of new messages: assistant tool calls followed by the final response
 messagesChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
 messagesChat params prevMsg
-  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fst <$> statusChat @md params (ChatStatus 0 0 prevMsg)
+  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fst <$> statusChat @md params (ChatStatus 0 0 prevMsg mempty)
   | otherwise = do
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
-      ExceptT $ fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg)
+      ExceptT $ fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg mempty)
 
 data Skipped = Skipped
 -- | Handle tool execution, no recursion

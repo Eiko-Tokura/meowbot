@@ -202,6 +202,7 @@ library meowbot-lib
                    , MeowBot.API
                    , MeowBot.Async
                    , MeowBot.BotStructure
+                   , MeowBot.BotStatistics
                    , MeowBot.CronTab
                    , MeowBot.CronTab.CronMeowAction
                    , MeowBot.CQCode
@@ -244,6 +245,7 @@ library meowbot-lib
                    , Utils.Text
                    -- , Utils.LiveEval
                    , Utils.Unit
+                   , Utils.TokenEstimator
                    --, External.ChatAPI.Tool.Search
 
     -- LANGUAGE extensions used by modules in this package.

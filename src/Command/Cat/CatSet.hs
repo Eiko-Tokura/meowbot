@@ -47,7 +47,7 @@ data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
 instance Default MeowStatus where def = MeowIdle
 instance Default ChatState where
   def = ChatState
-    { chatStatus = ChatStatus 0 0 []
+    { chatStatus = ChatStatus 0 0 [] mempty
     , meowStatus = def
     , activeTriggerOneOff = False
     , replyTimes = BSeq.BSeq mempty

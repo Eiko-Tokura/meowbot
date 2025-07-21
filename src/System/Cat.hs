@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant $" #-}
 module System.Cat where
 
 import System.General
@@ -64,7 +66,7 @@ performMeowActions = do
   actions <- askSystem
   conn    <- askSystem
   as <- liftIO . atomically $ readTVar actions <* writeTVar actions []
-  globalizeMeow $ mapM_ (doBotAction conn) =<< (concat <$> sequence as)
+  globalizeMeow $ mapM_ (doBotAction conn) . concat =<< sequence as
 
 type R = MeowData -- ^ the r parameter
 
@@ -132,24 +134,22 @@ runBotServer ip port bot initglobs glob el = do
       wd <- liftIO $ initWatchDog connectedTVar interval checkHandle (void $ system action)
       liftIO $ Just <$> startWatchDog wd
     Nothing -> return Nothing
-  void $ 
-    (logThroughCont (runServer ip port) $ \pendingconn -> do
+  void $
+    logThroughCont (runServer ip port) (\pendingconn -> do
       conn <- lift $ acceptRequest pendingconn
       liftIO . atomically $ writeTVar connectedTVar True
-      (logThroughCont (withPingPong pingpongOptions conn) $ \conn -> do
+      logThroughCont (withPingPong pingpongOptions conn) (\conn -> do
         $(logInfo) $ "Connected to client"
         meowData <- liftIO $ initMeowData conn
         $(logDebug) $ "initMeowData finished"
         local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
         $(logDebug) $ "initAllModulesL finished, entering bot loop"
-        void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))
-        ) `logCatch`
+        void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))) `logCatch`
           (\e -> do
             $(logError) $ "ERROR In connection with client : " <> tshow e
           )
       $(logInfo) $ "Disconnected from client"
-      liftIO . atomically $ writeTVar connectedTVar False
-    ) `logForkFinally` 
+      liftIO . atomically $ writeTVar connectedTVar False) `logForkFinally`
         ( \e -> do
           maybe (pure ()) (liftIO . killThread) mWatchDogId
           rerunBot initglobs glob el bot e
@@ -161,13 +161,13 @@ runBotClient ip port bot initglobs glob el = do
   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
   alldata  <- initAllData botconfig glob
-  void $ 
-    (logThroughCont (runClient ip port "") $ \conn -> do
+  void $
+    logThroughCont (runClient ip port "") (\conn -> do
       $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
       meowData <- liftIO $ initMeowData conn
       local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
       runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
-    ) `logForkFinally` rerunBot initglobs glob el bot
+      ) `logForkFinally` rerunBot initglobs glob el bot
 
 initMeowData :: Connection -> IO MeowData
 initMeowData conn = MeowData <$> initAllMeowData (conn :* () :* () :* () :* () :* Nil)

@@ -1,9 +1,11 @@
-{-# LANGUAGE TemplateHaskell #-}module Command.Chat where
+{-# LANGUAGE TemplateHaskell, RecordWildCards #-}
+module Command.Chat where
 
 import Command
 import Command.Cat (catParser)
 import MeowBot
 import MeowBot.GetInfo
+import MeowBot.BotStatistics
 import System.General (MeowT)
 -- import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI as API
@@ -198,7 +200,7 @@ commandChat = BotCommand Chat $ botT $ do
       nullify x = x
 
       toUserMessage :: CQMessage -> Message
-      toUserMessage cqm = UserMessage $ mconcat $ catMaybes $
+      toUserMessage cqm = UserMessage $ mconcat $ catMaybes
         [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
         , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
         , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
@@ -243,7 +245,7 @@ commandChat = BotCommand Chat $ botT $ do
         let mstate = SM.lookup cid s in
         case mstate of
           Just cs -> SM.insert cid (f cs) s
-          Nothing -> SM.insert cid (f def { chatStatus = ChatStatus 0 0 [] }) s
+          Nothing -> SM.insert cid (f def { chatStatus = ChatStatus 0 0 [] mempty }) s
 
       recordReplyTime :: UTCTime -> ChatState -> ChatState
       recordReplyTime utcTime cs =
@@ -259,6 +261,7 @@ commandChat = BotCommand Chat $ botT $ do
                 { chatStatus = (chatStatus cs)
                   { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) -- active trigger, not append
                   , chatStatusToolDepth = 0 -- ^ reset tool depth
+                  , chatEstimateTokens = mempty
                   }
                 , activeTriggerOneOff = False
                 }
@@ -268,11 +271,12 @@ commandChat = BotCommand Chat $ botT $ do
                 { chatStatus = (chatStatus cs)
                   { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
                   , chatStatusToolDepth = 0 -- ^ reset tool depth
+                  , chatEstimateTokens = mempty
                   }
                 , activeTriggerOneOff = False
                 }
               s
-          Nothing -> (False, SM.insert cid def { chatStatus =  ChatStatus 0 0 [toUserMessage cqmsg] } s)
+          Nothing -> (False, SM.insert cid def { chatStatus =  ChatStatus 0 0 [toUserMessage cqmsg] mempty } s)
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
@@ -314,11 +318,13 @@ commandChat = BotCommand Chat $ botT $ do
           flip runLoggingT logger $ $(logError) $ "Error: " <> err
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
+            logBotStatistics cid (StatTokens newStatus)
             pure [] -- ^ do nothing
         Right newMsgs' -> do -- responded with new messages
           let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix cqFilter)) newMsgs'
           return $ do
             markMeow cid MeowIdle -- ^ update status to idle
+            logBotStatistics cid (StatTokens newStatus)
             mergeChatStatus maxMessageInState cid newMsgs newStatus
             let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
                   (\case
@@ -345,7 +351,6 @@ commandChat = BotCommand Chat $ botT $ do
             meowAsyncSplitSendToChatIdFull cid mMid []
               ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
               2_000_000 splitedMessageToSend
-
 
   -- update busy status
   lift $ markMeow cid MeowBusy

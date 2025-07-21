@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts, DeriveAnyClass, GADTs, TypeFamilies, DerivingStrategies, UndecidableInstances, OverloadedStrings, DataKinds, TemplateHaskell, QuasiQuotes #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Data.PersistModel where
 
 import Command.Hangman.Model
@@ -8,6 +9,7 @@ import Data.Additional.Saved
 import Data.Coerce
 import Data.Default
 import Data.Maybe
+import Data.Time.Calendar
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Database.Persist.Sqlite
@@ -24,6 +26,8 @@ import Utils.Persist
 
 import qualified Data.Set as S
 
+instance Default Day where
+  def = ModifiedJulianDay 0
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
@@ -123,9 +127,11 @@ BotStatistics
   UniqueBotStatisticsBotId    botId
   totalMessageRecv            Int
   totalMessageSent            Int
-  totalApiCall                Int
-  totalApiCallError           Int
-  totalApiCallSkip            Int
+  totalInputEstimateTokens    Int
+  totalOutputEstimateTokens   Int
+  totalApiCalls               Int
+  totalApiCallErrors          Int
+  totalApiCallSkips           Int
   deriving Generic
   deriving Default
 
@@ -135,9 +141,26 @@ BotStatisticsPerChat
   UniqueBotStatisticsPerChat  botId chatId
   totalMessageRecv            Int
   totalMessageSent            Int
-  totalApiCall                Int
-  totalApiCallError           Int
-  totalApiCallSkip            Int
+  totalInputEstimateTokens    Int
+  totalOutputEstimateTokens   Int
+  totalApiCalls               Int
+  totalApiCallErrors          Int
+  totalApiCallSkips           Int
+  deriving Generic
+  deriving Default
+
+BotStatisticsPerChatPerDay
+  botId                       BotId
+  chatId                      ChatId
+  day                         Day
+  UniqueBotStatisticsPerChatPerDay botId chatId day
+  totalMessageRecv            Int
+  totalMessageSent            Int
+  totalInputEstimateTokens    Int
+  totalOutputEstimateTokens   Int
+  totalApiCalls               Int
+  totalApiCallErrors          Int
+  totalApiCallSkips           Int
   deriving Generic
   deriving Default
 

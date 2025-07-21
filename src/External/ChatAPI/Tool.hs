@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE LambdaCase, AllowAmbiguousTypes, UndecidableInstances #-}
 {-# LANGUAGE DerivingVia, DeriveAnyClass #-}
@@ -20,7 +20,6 @@ module External.ChatAPI.Tool where
 -- ... existing imports ...
 import Control.Monad.State
 import Control.Applicative
-import Data.Aeson
 import Data.Maybe
 import Data.Aeson.Types
 import Data.Bifunctor

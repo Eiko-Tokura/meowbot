@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, TemplateHaskell, UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, UndecidableInstances #-}
 module System.Meow where
 
 import Control.Concurrent.Async

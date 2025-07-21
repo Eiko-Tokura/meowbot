@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module MeowBot.CronTab where
 
 import Command.Cat.CatSet
@@ -21,13 +22,13 @@ import System.Meow
 import Utils.RunDB
 import qualified Data.Map.Strict as SM
 
-data CronTabTick = CronTabTick UTCTime
+newtype CronTabTick = CronTabTick UTCTime
 
 meowHandleCronTabTick :: CronTabTick -> Meow [BotAction]
 meowHandleCronTabTick (CronTabTick time) = do
-  triggeredJobs <- filter ((\(en,s,_) -> timeMatchesCron time s && hasChanceToRun (botCronJobCronRepeatFinite $ entityVal en))) <$> getCronSchedulesDb
+  triggeredJobs <- filter (\(en,s,_) -> timeMatchesCron time s && hasChanceToRun (botCronJobCronRepeatFinite $ entityVal en)) <$> getCronSchedulesDb
   reduceRepeatCount $ (\(en,_,_) -> en) <$> triggeredJobs
-  fmap concat . sequence $ map (performCronMeowAction . (\(_,_,m) -> m)) triggeredJobs
+  concat <$> mapM (\(en,_,m) -> performCronMeowAction en m) triggeredJobs
   where hasChanceToRun Nothing = True
         hasChanceToRun (Just n) = n > 0
         reduceRepeatCount :: [Entity BotCronJob] -> Meow ()
@@ -44,7 +45,7 @@ meowHandleCronTabTick (CronTabTick time) = do
             else do
               $(logInfo) $ "CronJob repeat count reduced: " <> toText newJob
               runDB $ replace key newJob
-  
+
 getCronSchedulesDb :: Meow [(Entity BotCronJob, CronSchedule, CronMeowAction)]
 getCronSchedulesDb = do
   botId <- query
@@ -57,12 +58,12 @@ getCronSchedulesDb = do
       )
     ) <$> botCronJobs
 
-performCronMeowAction :: CronMeowAction -> Meow [BotAction]
-performCronMeowAction (CronMeowChatBack chatId message) = do
+performCronMeowAction :: Entity BotCronJob -> CronMeowAction -> Meow [BotAction]
+performCronMeowAction en (CronMeowChatBack chatId _message) = do
   time <- liftIO getCurrentTime
   -- need to modify ChatState
   -- then trigger the command Chat
-  let newMsg = ToolMessage ("Crontab scheduled time reached: " <> toText time <> ", please see the description you wrote :\n" <> message) def
+  let newMsg = ToolMessage ("CronTabSystem: Crontab scheduled time reached: " <> toText time <> ", please see the description and perform actions :\n" <> cronTabDisplayText en) def
 
       cid = chatId
 
@@ -83,13 +84,13 @@ performCronMeowAction (CronMeowChatBack chatId message) = do
             s
           Nothing -> SM.insert cid
             def
-              { chatStatus =  (ChatStatus 0 0 [newMsg])
+              { chatStatus =  ChatStatus 0 0 [newMsg] mempty
               , activeTriggerOneOff = True
               } s
 
 
   asyncChat <- liftIO $ async $ return $ do
     allChatState <- updateChatState <$> getTypeWithDef newChatState
-    putType $ allChatState
+    putType allChatState
     overrideMeow OverrideSettings { chatIdOverride = Just cid } $ command commandChat
   return [BAAsync asyncChat]
