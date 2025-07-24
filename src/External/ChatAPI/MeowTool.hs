@@ -313,7 +313,7 @@ instance
   type ToolInput LeaveGroupTool = ParamToData (ObjectP0 '[])
   type ToolOutput LeaveGroupTool = ParamToData (ObjectP0 '[StringP "result" "the result of the leave action"])
   data ToolError LeaveGroupTool = LeaveError Text deriving Show
-  enabledByDefault _ _ = False
+  enabledByDefault _ _ = True
   toolEnabled _        = computeSettingFromDB botSettingEnableLeaveGroup botSettingPerChatEnableLeaveGroup
   toolUsable _         = isGroupChat
 
