@@ -118,7 +118,7 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
-        res <- runStdoutLoggingT . runExceptT $ messagesChat params [UserMessage "现在几点了"]
+        (res, _) <- runStdoutLoggingT $ messagesChat params [UserMessage "现在几点了"]
         case res of
           Left err -> assertFailure $ "messagesChat failed: " ++ show err
           Right res -> mapM_ printMessage res

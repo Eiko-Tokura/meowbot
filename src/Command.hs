@@ -18,6 +18,7 @@ import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.HList
 import Data.Maybe (fromMaybe)
+import Data.Bifunctor
 import MeowBot.API
 import MeowBot.BotStructure
 import MeowBot.CommandRule
@@ -57,9 +58,10 @@ doBotAction conn (BARetractMsg mid)      = MeowT . lift $ deleteMsg conn mid
 doBotAction conn (BAActionAPI af)           = query >>= MeowT . lift . actionAPI conn . ActionForm af . Just . pack . show . message_number
 doBotAction _    (BAAsync act)      = do
   $(logDebug) "BAAsync put into set"
-  modify $ \(f, o) -> (modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet) f, o)
+  modify . first $ modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet)
 --change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
+doBotAction _    (BASimpleAction meow) = meow
 
 -- | Low-level functions to send private messages
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()

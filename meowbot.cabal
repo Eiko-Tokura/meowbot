@@ -51,6 +51,9 @@ flag deploy
     manual: False
     default: False
 
+common warnings
+    ghc-options: -Wall -Werror=incomplete-pattenrs
+
 common extensions
     default-extensions:
       DerivingStrategies

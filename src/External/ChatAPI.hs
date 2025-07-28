@@ -692,7 +692,7 @@ statusChatReadAPIKey params st = do
 -- will try to read apiKey file if no api key is found in the chat setting
 messageChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m Message
 messageChat params prevMsg
-  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap (fmap last . fst) $ statusChat @md params (ChatStatus 0 0 prevMsg mempty)
+  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fmap last . fst <$> statusChat @md params (ChatStatus 0 0 prevMsg mempty) 
   | otherwise = do
       apiKey <- readApiKeyFile
       let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
@@ -702,13 +702,17 @@ messageChat params prevMsg
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
 -- returns the list of new messages: assistant tool calls followed by the final response
-messagesChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> ExceptT Text m [Message]
+messagesChat :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> [Message] -> m (Either Text [Message], ChatStatus)
 messagesChat params prevMsg
-  | Just _ <- systemApiKeys (chatSetting params) = ExceptT $ fst <$> statusChat @md params (ChatStatus 0 0 prevMsg mempty)
+  | Just _ <- systemApiKeys (chatSetting params) = statusChat @md params defChatStatus
   | otherwise = do
-      apiKey <- readApiKeyFile
-      let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
-      ExceptT $ fst <$> statusChat @md @ts params' (ChatStatus 0 0 prevMsg mempty)
+      eApiKey <- runExceptT readApiKeyFile
+      case eApiKey of
+        Left err -> return (Left err, defChatStatus)
+        Right apiKey -> do
+          let params' = params { chatSetting = (chatSetting params) { systemApiKeys = Just apiKey } }
+          statusChat @md @ts params' (ChatStatus 0 0 prevMsg mempty)
+  where defChatStatus = (ChatStatus 0 0 prevMsg mempty)
 
 data Skipped = Skipped
 -- | Handle tool execution, no recursion

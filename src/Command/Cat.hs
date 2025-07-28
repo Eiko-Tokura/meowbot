@@ -11,6 +11,7 @@ import External.ChatAPI hiding (SystemMessage)
 import qualified External.ChatAPI as API
 -- import External.ChatAPI.Tool
 import MeowBot.Parser (Parser, Chars)
+import MeowBot.BotStatistics
 import Parser.Definition (IsStream)
 import qualified MeowBot.Parser as MP
 
@@ -96,14 +97,14 @@ commandCat = BotCommand Cat $ botT $ do
                      ]
                    )
                    Nothing
-      let modelCat = fromMaybe (modelCat) $ runPersistUseShow <$> asum
+      let modelCat = maybe modelCat runPersistUseShow (asum
             [ botSettingPerChatDefaultModel =<< botSettingPerChat
             , botSettingDefaultModel =<< botSetting
-            ]
-          modelSuperCat = fromMaybe (DeepSeek DeepSeekReasoner) $ runPersistUseShow <$> asum
+            ])
+          modelSuperCat = maybe (DeepSeek DeepSeekReasoner) runPersistUseShow (asum
             [ botSettingPerChatDefaultModelS =<< botSettingPerChat
             , botSettingDefaultModelS =<< botSetting
-            ]
+            ])
           displayThinking = fromMaybe True $ asum
             [ botSettingPerChatDisplayThinking =<< botSettingPerChat
             , botSettingDisplayThinking =<< botSetting
@@ -119,26 +120,26 @@ commandCat = BotCommand Cat $ botT $ do
           ioEChatResponse = case params of
 
             Left  paramCat      ->
-              case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat)) of
+              case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
                 Nothing ->
-                  useLoggerInExceptT logger $ do
+                  fmap (second Just) . flip runLoggingT  logger $ do
                   messagesChat @ModelCat @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-                  useLoggerInExceptT logger $ do
+                  fmap (second Just) . flip runLoggingT  logger $ do
                   messagesChat @a @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
             Right paramSuperCat ->
-              case (cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat)) of
+              case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat) of
                 Nothing ->
-                  useLoggerInExceptT logger $ do
+                  fmap (second Just) . flip runLoggingT  logger $ do
                   messagesChat @ModelSuperCat @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-                  useLoggerInExceptT logger $ do
+                  fmap (second Just) . flip runLoggingT logger $ do
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
       asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
       $(logDebug) $ "created async: " <> T.pack (show asyncAction)
-      return $ pure $ BAAsync $ asyncAction
+      return $ pure $ BAAsync asyncAction
 
 type UseMarkdown = Bool
 type DisplayThinking = Bool
@@ -146,11 +147,12 @@ actionSendMessages
   :: DisplayThinking -> UseMarkdown
   -> EssentialContent
   -> Meow () -- ^ arbitrary action performed in Meow [BotAction] returned
-  -> ExceptT Text IO [Message]
+  -> IO (Either Text [Message], Maybe ChatStatus)
   -> IO (Async (Meow [BotAction]))
 actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) act ioess = async $ do
-  ess <- runExceptT ioess
-  case ess of
+  (ess, mstat) <- ioess
+  let logStatAction = [BASimpleAction $ logBotStatistics cid (StatTokens stat) | Just stat <- [mstat]]
+  fmap (logStatAction <>) <$> case ess of
     Left err   -> return . return $ [ baSendToChatId cid ("喵~出错啦：" <> err) ]
     Right msgs -> casingMessages usemd essc msgs
   where casingMessages :: UseMarkdown -> EssentialContent -> [Message] -> IO (Meow [BotAction])
@@ -165,14 +167,14 @@ actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) act ioess = async
                   send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] mdcq
                   waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
                       liftIO $ threadDelay 2000000
-                      ExceptT $ return $ Right rest
+                      return (Right rest, Nothing)
                   act
                   return $ send <> [BAAsync waitAndDoRest]
             else do
               send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] str
               waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
                   liftIO $ threadDelay 2000000
-                  ExceptT $ return $ Right rest
+                  return (Right rest, Nothing)
               act
               return $ send <> [BAAsync waitAndDoRest]
           AssistantMessage { thinking = Just think } -> do
@@ -181,7 +183,7 @@ actionSendMessages displayThink usemd essc@(_, cid, _, mid, _) act ioess = async
                 send <- meowSendToChatIdFull cid (Just mid) [] [MReplyTo mid, MMessage msg] $ "(..." <> T.strip think <> ")"
                 waitAndDoRest <- liftIO . actionSendMessages displayThink usemd essc (return ()) $ do
                     liftIO $ threadDelay 2000000
-                    ExceptT $ return $ Right $ msg { thinking = Nothing } : rest
+                    return (Right $ msg { thinking = Nothing } : rest, Nothing)
                 act
                 return $ send <> [BAAsync waitAndDoRest]
               else

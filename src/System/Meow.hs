@@ -155,6 +155,7 @@ data BotAction
       (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
   | BAPureAsync
       (Async [BotAction])        -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
+  | BASimpleAction (Meow ()) -- ^ a simple action that can be run immediately, without blocking the main thread.
 
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
