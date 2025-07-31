@@ -63,7 +63,7 @@ performCronMeowAction en (CronMeowChatBack chatId _message) = do
   time <- liftIO getCurrentTime
   -- need to modify ChatState
   -- then trigger the command Chat
-  let newMsg = ToolMessage ("CronTabSystem: Crontab scheduled time reached: " <> toText time <> ", please see the description and perform actions :\n" <> cronTabDisplayText en) def
+  let newMsg = ToolMessage ("CronTabSystem: A crontab scheduled time reached: " <> toText time <> ", this is a crontab you already set before, do not repeating adding the same crontab unless instructed to do so. Please see the description and perform actions :\n" <> cronTabDisplayText en) def
 
       cid = chatId
 
