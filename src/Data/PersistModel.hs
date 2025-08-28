@@ -149,11 +149,13 @@ BotStatisticsPerChat
   deriving Generic
   deriving Default
 
-BotStatisticsPerChatPerDay
+-- | Note this date is in UTC
+BotStatisticsPerApiKeyPerChatPerDay
   botId                       BotId
   chatId                      ChatId
   day                         Day
-  UniqueBotStatisticsPerChatPerDay botId chatId day
+  apiKey                      Text
+  UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey botId chatId day
   totalMessageRecv            Int
   totalMessageSent            Int
   totalInputEstimateTokens    Int
@@ -161,6 +163,7 @@ BotStatisticsPerChatPerDay
   totalApiCalls               Int
   totalApiCallErrors          Int
   totalApiCallSkips           Int
+  totalCost                   Double Maybe
   deriving Generic
   deriving Default
 
@@ -338,3 +341,6 @@ cronTabDisplayTextWithCid cid enCron = let
   in case cronMeowActionChatId action == cid of
       True -> Just $ toText cronId <> ". " <> toText cronText <> " - " <> repeatText <> " - " <> toText action
       False -> Nothing
+
+instance Default Text where
+  def = ""

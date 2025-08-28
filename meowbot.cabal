@@ -56,6 +56,7 @@ common warnings
 
 common extensions
     default-extensions:
+      DeriveAnyClass
       DerivingStrategies
       DerivingVia
       OverloadedStrings
@@ -63,6 +64,9 @@ common extensions
       TypeFamilies
       UndecidableInstances
       ViewPatterns
+      OverloadedRecordDot
+      DuplicateRecordFields
+      RecordWildCards
 
 library crontab
     -- Modules exported by the library.
@@ -192,6 +196,8 @@ library meowbot-lib
                    , Data.PersistModel
                    , Data.Template
                    , External.ChatAPI
+                   , External.ChatAPI.Cost
+                   , External.ChatAPI.Models
                    , External.ChatAPI.Function
                    , External.ChatAPI.MeowTool
                    , External.ChatAPI.MeowToolEnv

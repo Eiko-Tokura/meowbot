@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, PartialTypeSignatures, ScopedTypeVariables, OverloadedStrings, OverloadedRecordDot #-}
 module Command.Cat where
 
 import Command
@@ -32,7 +32,6 @@ import Data.Bifunctor
 
 import Utils.RunDB
 import Utils.Persist
-import Utils.Logging
 import Data.PersistModel
 import Module.ConnectionManager
 
@@ -136,7 +135,6 @@ commandCat = BotCommand Cat $ botT $ do
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
                   fmap (second Just) . flip runLoggingT logger $ do
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
-
       asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
       $(logDebug) $ "created async: " <> T.pack (show asyncAction)
       return $ pure $ BAAsync asyncAction

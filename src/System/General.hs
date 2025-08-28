@@ -41,7 +41,7 @@ newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT
     , MonadState (AllModuleLocalStates mods, OtherData)
     ) via ReaderStateT ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r)) (AllModuleLocalStates mods, OtherData) (LoggingT m)
 
-deriving instance MonadIO m => MonadLoggerIO (MeowT r mods m)
+deriving newtype instance MonadIO m => MonadLoggerIO (MeowT r mods m)
 
 -----------------------------------------------------------------------
 instance MonadTrans (MeowT r mods) where

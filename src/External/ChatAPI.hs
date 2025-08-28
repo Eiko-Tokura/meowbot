@@ -12,6 +12,7 @@ module External.ChatAPI
   , ChatAPI(..), APIKey(..)
   , EstimateTokens(..)
   , printMessage
+  , findApiKey
   ) where
 
 
@@ -26,9 +27,12 @@ import Data.Aeson as A
 import Data.Bifunctor
 import Data.Default
 import Data.HList
+import Data.Time
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Proxy (Proxy(..))
 import External.ChatAPI.Tool
+import External.ChatAPI.Cost
+import External.ChatAPI.Models
 import GHC.Generics (Generic)
 import Network.HTTP.Client hiding (Proxy)
 
@@ -42,56 +46,6 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
-
-data ChatModel
-  = OpenAI OpenAIModel
-  | DeepSeek DeepSeekModel
-  | Local LocalModel
-  | OpenRouter OpenRouterModel
-  | SiliconFlow SiliconFlowModel
-  | Anthropic AnthropicModel
-  | XcApi XcApiModel
-  deriving (Show, Read, Eq)
-
-data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq)
-data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel       = QwQ | DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
-data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
-data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
-data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq)
-data XcApiModel       = XC_Claude_3_7 | XC_Claude_3_5 deriving (Show, Read, Eq)
-
-modelEndpoint :: ChatModel -> String
-modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
-modelEndpoint DeepSeek {}    = "https://api.deepseek.com/chat/completions"
-modelEndpoint  (Local DummyTestModel) = "http://localhost:8000/v1/chat/completions"
-modelEndpoint Local {}       = "http://10.52.1.55:11434/api/chat" -- ^ my local network, won't work for anyone else
-modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
-modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
-modelEndpoint Anthropic {}   = "https://api.anthropic.com/v1/messages"
-modelEndpoint XcApi {}       = "http://xcapi.top/v1/chat/completions"
-
-instance ToJSON ChatModel where
-  toJSON (OpenAI GPT4oMini)              = "gpt-4o-mini"
-  toJSON (OpenAI GPT4o)                  = "gpt-4o"
-  toJSON (OpenAI O1Mini)                 = "o1-mini"
-  toJSON (OpenAI O3Mini)                 = "o3-mini"
-  toJSON (DeepSeek DeepSeekChat)         = "deepseek-chat"
-  toJSON (DeepSeek DeepSeekReasoner)     = "deepseek-reasoner"
-  toJSON (Local DummyTestModel)          = "dummy-test-model"
-  toJSON (Local DeepSeekR1_14B)          = "deepseek-r1:14b"
-  toJSON (Local DeepSeekR1_32B)          = "deepseek-r1:32b"
-  toJSON (Local Qwen2_5_32B)             = "qwen2.5:32b"
-  toJSON (Local Command_R_Latest)        = "command-r:latest"
-  toJSON (Local QwQ)                     = "qwq:latest"
-  toJSON (OpenRouter OR_DeepSeekR1)      = "deepseek/deepseek-r1"
-  toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
-  toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
-  toJSON (SiliconFlow SF_DeepSeekV3)     = "deepseek-ai/DeepSeek-V3"
-  toJSON (SiliconFlow SF_DeepSeekR1)     = "deepseek-ai/DeepSeek-R1"
-  toJSON (Anthropic Claude_3_7)          = "claude-3.7-sonnet"
-  toJSON (XcApi XC_Claude_3_7)           = "[W2+]claude-3.7-sonnet"
-  toJSON (XcApi XC_Claude_3_5)           = "[W]claude-3.5-sonnet"
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -434,20 +388,6 @@ estimateOutputTokens :: Message -> Int
 estimateOutputTokens (AssistantMessage c t _ _) = estimateTokens c + maybe 0 estimateTokens t
 estimateOutputTokens _ = 0
 
-data EstimateTokens = EstimateTokens
-  { inputTokens  :: !Int
-  , outputTokens :: !Int
-  , apiCalls     :: !Int
-  , apiErrors    :: !Int
-  , apiSkips     :: !Int
-  } deriving (Show, Eq, Generic, Default, NFData)
-
-instance Semigroup EstimateTokens where
-  EstimateTokens i1 o1 a1 b1 c1 <> EstimateTokens i2 o2 a2 b2 c2
-    = EstimateTokens (i1 + i2) (o1 + o2) (a1 + a2) (b1 + b2) (c1 + c2)
-instance Monoid EstimateTokens where
-  mempty = def
-
 data GenerateSystemPromptBehavior = GenerateSystemPromptBehavior
   { staticToolPrompt                   :: Bool
   , useDefaultSystemMessageWhenNothing :: Bool
@@ -499,6 +439,15 @@ data APIKey = APIKey
   , apiKeyXcApi       :: Maybe Text
   } deriving (Show, Read, Eq, Generic, NFData)
 
+findApiKey :: ChatModel -> ChatSetting -> Maybe Text
+findApiKey (OpenAI _)      setting = apiKeyOpenAI      =<< systemApiKeys setting
+findApiKey (DeepSeek _)    setting = apiKeyDeepSeek    =<< systemApiKeys setting
+findApiKey (Local _)       _       = Just "LOCAL_NO_API_KEY_NEEDED"
+findApiKey (OpenRouter _)  setting = apiKeyOpenRouter  =<< systemApiKeys setting
+findApiKey (SiliconFlow _) setting = apiKeySiliconFlow =<< systemApiKeys setting
+findApiKey (Anthropic _)   setting = apiKeyAnthropic   =<< systemApiKeys setting
+findApiKey (XcApi _)       setting = apiKeyXcApi       =<< systemApiKeys setting
+
 data GetAPIKey
   = NoAPIKeyRequired
   | APIKeyRequired (Maybe Text)
@@ -513,32 +462,39 @@ getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKe
 getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
 fetchChatCompletionResponse :: forall md ts m. (MonadLogger m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> m (Either Text (ChatCompletionResponse md, EstimateTokens))
-fetchChatCompletionResponse manager _ apiKey model mSys msg = do
+fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
-  let requestBody = generateRequestBody @md @ts @m model mSys msg --promptMessage prompt
+  utcTime <- liftIO getCurrentTime
+  let tokenPrice = modelPrice (chatModel @md) utcTime
+      requestBody = generateRequestBody @md @ts @m model mSys msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
     [ ""
-    , "model: " <> T.pack (show $ chatModel @md) <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md) <> ", estimated input tokens: " <> T.pack (show $ estimateInputTokens mSys msg)
+    , "model: " <> T.pack (show $ chatModel @md)
+      <> " , endpoint: " <> T.pack (modelEndpoint $ chatModel @md)
+      <> " , estimated input tokens: " <> T.pack (show $ estimateInputTokens mSys msg)
+      <> " , estimated input cost: " <> T.pack (show $ tokenCost <$> tokenPrice <*> pure (TokenConsumption (estimateInputTokens mSys msg) 0 (Just meowBotCacheHitRate)))
     , "------------------- Message Start -------------------" ]
     <> map showMessage msg <>
     [ "------------------- Message End ---------------------" ]
-  case getApiKeyByModel (chatModel @md) apiKey of
+
+  case getApiKeyByModel (chatModel @md) allApiKey of
     APIKeyRequired Nothing       -> return . Left $ "No API key found for the model " <> T.pack (show $ chatModel @md)
-    APIKeyRequired (Just apikey) -> do
+    APIKeyRequired (Just apiKey') -> do
       let request' = request
             { method = "POST"
             , requestBody = RequestBodyBS (BL.toStrict requestBody)
             , requestHeaders =
                 [ ("Content-Type", "application/json")
-                , ("Authorization", "Bearer " <> encodeUtf8 apikey)
+                , ("Authorization", "Bearer " <> encodeUtf8 apiKey')
                 ]
             }
+          apiInfo = APIInfo apiKey' tokenPrice
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of
           Right res -> return $ Right res
           Left e -> return $ Left $ "Exception In Getting Response: " <> toText e
-      handleReturnRawResult result
+      handleReturnRawResult apiInfo result
     NoAPIKeyRequired -> do
       let request' = request
             { method = "POST"
@@ -547,13 +503,14 @@ fetchChatCompletionResponse manager _ apiKey model mSys msg = do
                 [ ("Content-Type", "application/json")
                 ]
             }
+          apiInfo = APIInfo "LOCAL_NO_API_KEY_NEEDED" tokenPrice
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of
           Right res -> return $ Right res
           Left e -> return $ Left $ "Exception In Getting Response: " <> toText e
-      handleReturnRawResult result
-    where handleReturnRawResult res = do
+      handleReturnRawResult apiInfo result
+    where handleReturnRawResult info res = do
             let response = second responseBody res >>= \resBody ->
                   case eitherDecode resBody of
                     Right parsedJson -> Right parsedJson
@@ -566,6 +523,7 @@ fetchChatCompletionResponse manager _ apiKey model mSys msg = do
                   Left _  -> 1
                   Right _ -> 0
               , apiSkips     = 0
+              , apiInfo      = Just info
               })) <$> response
 
 instance GetMessage ChatCompletionResponseOpenAI where
