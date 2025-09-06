@@ -404,8 +404,8 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
   let mentioned = boolMaybe $ mentionReply && case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let thrSeconds = 360
-      thrReplyCount = 4
+  let thrSeconds = 300
+      thrReplyCount = 3
   let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
@@ -422,6 +422,13 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
     , "rateLimitChance: " <> tshow rateLimitChance
     , "notRateLimited: " <> tshow notRateLimited
     ]
+  case notRateLimited of
+    Nothing -> lift $ $(logInfo) $ T.intercalate "\n"
+      [ "Rate limited, not replying to " <> tshow cqmsgs
+      , "recentReplyCount: " <> tshow recentReplyCount
+      , "rateLimitChance: " <> tshow rateLimitChance
+      ]
+    _       -> pure ()
 
   ated    <- if atReply
     then lift $ boolMaybe <$> beingAt

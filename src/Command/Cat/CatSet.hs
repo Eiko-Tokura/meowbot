@@ -38,11 +38,10 @@ data ChatState = ChatState
     -- ^ if set, this will override the active probability for this chat
     -- used to actively trigger a chat
     -- will be reset to Nothing after one chat run
-  , replyTimes :: !(BSeq.BSeq 5 UTCTime)
-    -- ^ records the last 5 reply times
-  } deriving (Show, Eq, Typeable)
+  , replyTimes :: !(BSeq.BSeq 10 UTCTime)
+  } deriving (Show, Eq)
 
-data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq, Typeable)
+data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq)
 
 instance Default MeowStatus where def = MeowIdle
 instance Default ChatState where

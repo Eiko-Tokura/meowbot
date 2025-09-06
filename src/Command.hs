@@ -16,9 +16,10 @@ import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Data.Aeson
+import Data.Bifunctor
 import Data.HList
 import Data.Maybe (fromMaybe)
-import Data.Bifunctor
+import Data.PersistModel
 import MeowBot.API
 import MeowBot.BotStructure
 import MeowBot.CommandRule
@@ -29,6 +30,7 @@ import Module.AsyncInstance
 import Network.WebSockets (Connection, sendTextData)
 import System.General
 import System.Meow
+import Utils.RunDB
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified MeowBot.Parser as MP
@@ -138,4 +140,24 @@ botCommandsWithIgnore cqmsg bcs = do
   then do
     $(logInfo) "Ignored, not triggering commands"
     return []
-  else fmap concat . sequence $ botCommandsToMeow bcs
+  else do
+    updateSavedDataDB -- ^ make sure the saved data is up-to-date
+    fmap concat . sequence $ botCommandsToMeow bcs
+
+updateSavedDataDB :: Meow ()
+updateSavedDataDB = do
+  botid <- query
+  inUserGroups   <- map entityVal <$> runDB (selectList [InUserGroupBotId ==. botid] [])
+  inGroupGroups  <- map entityVal <$> runDB (selectList [InGroupGroupBotId ==. botid] [])
+  commandRulesDB <- map entityVal <$> runDB (selectList [CommandRuleDBBotId ==. botid] [])
+  let  
+      userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
+      groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
+      commandRules         = [commandRuleDBCommandRule c | c <- commandRulesDB]
+  change $ \od -> od { savedData = (savedData od)
+                        { userGroups   = userIds_userGroups
+                        , groupGroups  = groupIds_groupGroups
+                        , commandRules = commandRules
+                        }
+                     }
+
