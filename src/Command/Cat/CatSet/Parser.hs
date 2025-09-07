@@ -3,6 +3,7 @@ module Command.Cat.CatSet.Parser where
 import External.ChatAPI hiding (SystemMessage)
 import MeowBot
 import MeowBot.Parser
+import MeowBot.Data.Parser
 import qualified Data.Text as T
 import qualified MeowBot.Parser as MP
 
@@ -83,10 +84,6 @@ catSetParser =
             , MP.spaces >> MP.string "perchat"  *> return PerChat
             , return PerChat
             ])
-  where chatIdP = asum
-          [ MP.string "user"  >> MP.spaces >> PrivateChat . UserId  <$> MP.int
-          , MP.string "group" >> MP.spaces >> GroupChat   . GroupId <$> MP.int
-          ]
 
 unitTestsCatSetParser :: [(String, Bool)]
 unitTestsCatSetParser =

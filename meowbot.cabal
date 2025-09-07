@@ -162,6 +162,7 @@ library meowbot-lib
     exposed-modules: Command
                    , Command.Aokana
                    , Command.Aokana.Scripts
+                   , Command.Balance
                    , Command.Cat
                    , Command.Cat.CatSet
                    , Command.Cat.CatSet.Parser
@@ -218,6 +219,7 @@ library meowbot-lib
                    , MeowBot.CQMessage.Convert
                    , MeowBot.CommandRule
                    , MeowBot.Data
+                   , MeowBot.Data.Parser
                    , MeowBot.Data.Book
                    , MeowBot.GetInfo
                    , MeowBot.GetSelfInfo

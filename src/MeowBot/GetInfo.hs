@@ -7,16 +7,24 @@ import Data.Maybe
 import MeowBot.Parser
 -- import External.ChatAPI
 import Data.List.NonEmpty (NonEmpty(..), prependList)
+import Data.PersistModel
+import Utils.RunDB
+
+type IsAdmin = Bool
+isAdmin :: UserId -> Meow IsAdmin
+isAdmin uid = do
+  mRecord <- runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+  return $ isJust mRecord
 
 -- | Whether the newest message contains @bot
 beingAt :: Meow Bool
 beingAt = fmap (fromMaybe False) . runMaybeT $ do
   cqmsg  <- MaybeT $ queries (fmap cqcodes . metaMessage . getNewMsg)
   selfId <- MaybeT $ queries (fmap ((\(UserId uid) -> uid) . selfId) . selfInfo)
-  return $ not . null . filter (\case
+  return $ any (\case
       CQAt uid _ -> uid == selfId
       _          -> False
-    ) $ cqmsg
+    ) cqmsg
 {-# INLINABLE beingAt #-}
 
 -- | Whether the newest message replies to the bot

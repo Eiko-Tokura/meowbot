@@ -2,7 +2,6 @@
 module Command.Cat.CatSet
   ( module Command.Cat.CatSet
   , catSetParser
-
   ) where
 
 import System.General
@@ -130,6 +129,16 @@ helpCatSet = T.intercalate "\n" $
   , "Clear chat context (only effective in chat mode):"
   , ":cat-clear"
   ]
+
+insertBotSettingPerChatIfNotExists
+  :: (LogDatabase `In` mods)
+  => BotId -> ChatId -> MaybeT (MeowT r mods IO) ()
+insertBotSettingPerChatIfNotExists botid cid = lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
+    True -> return ()
+    False -> insert_ $ def
+      { botSettingPerChatChatId = cid
+      , botSettingPerChatBotId = botid
+      }
 
 ----------------------------------- catSet -----------------------------------
 

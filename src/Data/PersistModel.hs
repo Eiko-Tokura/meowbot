@@ -29,6 +29,13 @@ import qualified Data.Set as S
 instance Default Day where
   def = ModifiedJulianDay 0
 
+data CostModel = Free | Subscription | PayAsYouGo
+  deriving (Show, Eq, Ord, Read)
+  deriving (PersistField, PersistFieldSql) via (PersistUseShow CostModel)
+
+newtype OwnerId = OwnerId { ownerChatId :: ChatId }
+  deriving newtype (Show, Eq, PersistField, PersistFieldSql)
+
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
 BotIgnore
@@ -39,6 +46,39 @@ BotIgnore
   atPattern Bool            Maybe  -- nothing for no requirement, Just bool for require at / non-at
   private   Bool            Maybe  -- nothing for no requirement
   group     Bool            Maybe
+
+-- | wallet owner can choose to own multiple bots or (bot, chat) pairs
+-- [ownerId] own <chatId> -- this will give (bot, chat) pair wallet
+-- [ownerId] own bot [botId] -- this will own all chats of the bot
+-- 
+-- (only admin can issue [ownerId] own ...)
+Wallet
+  ownerId       OwnerId
+  balance       Double
+  description   Text      Maybe
+  UniqueOwnerId ownerId
+
+-- | Transactions are issued by admin users
+--
+-- add <amount> owned by <chatId>
+-- add <amount> to <walletId>
+--
+Transaction
+  walletId    WalletId
+  amount      Double
+  time        UTCTime
+  handlerId   UserId    Maybe
+  description Text      Maybe
+
+-- | These records are issued by the system automatically
+ApiCostRecord
+  botId       BotId
+  chatId      ChatId
+  walletId    WalletId  Maybe
+  amount      Double
+  time        UTCTime
+  apiKey      Text      Maybe
+  description Text      Maybe
 
 BotCronJob
   botName          String         Maybe
@@ -79,6 +119,8 @@ BotSetting -- Overlappable by BotSettingPerChat
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
+  costModel               CostModel            Maybe
+  billingWalletId         WalletId             Maybe
   deriving Generic
   deriving Default
 
@@ -110,6 +152,8 @@ BotSettingPerChat -- Overlapping BotSetting
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
+  costModel               CostModel            Maybe
+  billingWalletId         WalletId             Maybe
   deriving Generic
   deriving Default
 

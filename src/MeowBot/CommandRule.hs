@@ -5,19 +5,18 @@ import Data.Aeson
 import Control.DeepSeq
 import Database.Persist
 import Database.Persist.Sqlite
-import Data.Typeable
 import Utils.Persist
 
 import Language.Haskell.TH
 
-data CommandId = Aokana | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman -- | Haskell
-  deriving (Show, Eq, Ord, Read, Enum, Bounded, Typeable)
+data CommandId = Aokana | Balance | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman -- | Haskell
+  deriving (Show, Eq, Ord, Read, Enum, Bounded)
 
 -- | show each command id into string, and prepend "command" to each. return a list of these functions
 makeBotCommands :: [CommandId] -> Q Exp
 makeBotCommands cmdIds = do
   let cmdNames = map (\cid -> "command" ++ show cid) cmdIds
-  let cmdExps = map (\name -> VarE (mkName name)) cmdNames
+  let cmdExps = map (VarE . mkName) cmdNames
   return $ ListE cmdExps
 
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int

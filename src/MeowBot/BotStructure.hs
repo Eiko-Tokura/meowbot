@@ -104,6 +104,11 @@ data SavedData = SavedData
   , savedAdditional :: [Saved AdditionalData]
   } deriving (Show, Eq, Read)
 
+data UserAndGroupInfo = UserAndGroupInfo
+  { userGroups :: [(UserId, UserGroup)]
+  , groupGroups :: [(GroupId, GroupGroup)]
+  } deriving (Show, Eq, Read)
+
 rseqSavedData :: Strategy SavedData
 rseqSavedData (SavedData cs ug gg cr b sa) = do
   cs' <- rseq cs
