@@ -19,6 +19,7 @@ import qualified Data.ByteString.Lazy as BL
 
 import MeowBot.CommandRule
 import Command
+import Command.Balance
 import Command.Cat
 import Command.Chat
 import Command.Md
