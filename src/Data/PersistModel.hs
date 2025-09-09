@@ -52,11 +52,31 @@ BotIgnore
 -- [ownerId] own bot [botId] -- this will own all chats of the bot
 -- 
 -- (only admin can issue [ownerId] own ...)
+--
+-- should never be deleted, must be immutable
+-- if we want to delete, we should add a column "deleted :: Bool" instead
+--
+-- do not create a wallet with non-zero balance, use Transaction to add balance instead
+-- this is to make the whole history of balance changes traceable
 Wallet
-  ownerId       OwnerId
-  balance       Double
-  description   Text      Maybe
-  UniqueOwnerId ownerId
+  ownerId         OwnerId
+  balance         Double
+  description     Text            Maybe
+  overdueBehavior OverdueBehavior Maybe
+  overdueNotified Bool            Maybe
+  lastNotified    UTCTime         Maybe
+  created         UTCTime
+  UniqueOwnerId   ownerId
+
+WalletOverdue
+  walletId        WalletId
+  overdueBehavior OverdueBehavior Maybe
+  overdueNotified Bool            Maybe
+  lastNotified    UTCTime         Maybe
+  UniqueWalletId  walletId
+
+WalletOverdueDefault
+  overdueBehavior OverdueBehavior Maybe
 
 -- | Transactions are issued by admin users
 --
@@ -65,7 +85,7 @@ Wallet
 --
 Transaction
   walletId    WalletId
-  amount      Double
+  amount      Double    -- actual amount
   time        UTCTime
   handlerId   UserId    Maybe
   description Text      Maybe
@@ -75,10 +95,40 @@ ApiCostRecord
   botId       BotId
   chatId      ChatId
   walletId    WalletId  Maybe
-  amount      Double
+  nominalCost Double    Maybe -- client cost, Nothing means free to user
+  actualCost  Double          -- actual cost to us, so the difference is our profit/loss
   time        UTCTime
+  coveredBySubscription Bool Maybe
   apiKey      Text      Maybe
   description Text      Maybe
+
+SubscriptionCostRecord
+  botId       BotId
+  chatId      ChatId
+  walletId    WalletId
+  monthlyCost Double
+  actualCost  Double          -- actual cost to us, so the difference is our profit/loss
+  time        UTCTime
+  description Text      Maybe
+
+-- | Meant to persist whole history of cost model / owner changes
+-- should not be deleted, must be immutable
+BotCostModel
+  botName     String               Maybe
+  botId       BotId
+  costModel   CostModel
+  walletId    WalletId             Maybe
+  inserted    UTCTime
+
+-- | Meant to persist whole history of cost model / owner changes
+-- should not be deleted, must be immutable
+BotCostModelPerChat
+  botName     String               Maybe
+  botId       BotId
+  chatId      ChatId
+  costModel   CostModel
+  walletId    WalletId             Maybe
+  inserted    UTCTime
 
 BotCronJob
   botName          String         Maybe

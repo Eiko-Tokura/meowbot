@@ -1,5 +1,5 @@
 module External.ChatAPI.Cost 
-  ( tokenCost
+  ( tokenCost, TokenCost
   , EstimateTokens(..)
   , APIInfo(..)
   , TokenPrice(..), TokenConsumption(..)
@@ -51,7 +51,8 @@ data TokenConsumption = TokenConsumption
   , cacheHitRate :: Maybe Double
   } deriving (Show, Eq, Generic, NFData)
 
-tokenCost :: TokenPrice -> TokenConsumption -> Double
+type TokenCost = Double
+tokenCost :: TokenPrice -> TokenConsumption -> TokenCost
 tokenCost TokenPrice {..} TokenConsumption {..} =
   let costInputTokens = case (inputTokenPriceCache, cacheHitRate) of
         (Just cachePrice, Just hitRate) ->

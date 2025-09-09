@@ -1,5 +1,5 @@
 module Utils.RunDB
-  ( runDB
+  ( runDB, DB
   , module Database.Persist.Sql
   , module Database.Persist
   ) where
@@ -13,5 +13,7 @@ import System.General
 
 runDB :: (LogDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowT r mods IO b
 runDB acts = do
-  pool <- databasePool <$> asks (getF @LogDatabase . fst . snd)
+  pool <- asks (databasePool . getF @LogDatabase . fst . snd)
   lift $ runSqlPool acts pool
+
+type DB = ReaderT SqlBackend IO

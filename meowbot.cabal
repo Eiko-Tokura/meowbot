@@ -213,6 +213,8 @@ library meowbot-lib
                    , MeowBot.Async
                    , MeowBot.BotStructure
                    , MeowBot.BotStatistics
+                   , MeowBot.CostModel
+                   , MeowBot.CostModel.Types
                    , MeowBot.CronTab
                    , MeowBot.CronTab.CronMeowAction
                    , MeowBot.CQCode
