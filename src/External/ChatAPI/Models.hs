@@ -1,6 +1,8 @@
 module External.ChatAPI.Models where
 
 import Data.Aeson
+import GHC.Generics (Generic)
+import Control.DeepSeq (NFData)
 
 data ChatModel
   = OpenAI OpenAIModel
@@ -10,15 +12,15 @@ data ChatModel
   | SiliconFlow SiliconFlowModel
   | Anthropic AnthropicModel
   | XcApi XcApiModel
-  deriving (Show, Read, Eq)
+  deriving (Show, Read, Eq, Generic, NFData)
 
-data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq)
-data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq)
-data LocalModel       = QwQ | DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq)
-data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq)
-data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq)
-data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq)
-data XcApiModel       = XC_Claude_3_7 | XC_Claude_3_5 deriving (Show, Read, Eq)
+data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq, Generic, NFData)
+data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq, Generic, NFData)
+data LocalModel       = QwQ | DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq, Generic, NFData)
+data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
+data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
+data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq, Generic, NFData)
+data XcApiModel       = XC_Claude_3_7 | XC_Claude_3_5 deriving (Show, Read, Eq, Generic, NFData)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"

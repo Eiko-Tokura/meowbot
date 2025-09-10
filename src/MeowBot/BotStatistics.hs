@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, OverloadedRecordDot #-}
+{-# LANGUAGE RecordWildCards #-}
 module MeowBot.BotStatistics
   ( logBotStatistics
   , StatType(..)
@@ -7,13 +7,14 @@ module MeowBot.BotStatistics
   ) where
 
 import Control.Monad.IO.Class
+import Control.Monad
 import Data.Default
 import Data.PersistModel
 import Data.Time
-import Data.Maybe
 import External.ChatAPI
 import External.ChatAPI.Cost
 import MeowBot
+import MeowBot.CostModel
 import Utils.RunDB
 
 data StatType
@@ -26,11 +27,11 @@ logBotStatistics chatId StatRecv = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
   runDB $ do
-    let apiInfo = APIInfo "STATISTICS" Nothing
+    let apiKey' = "STATISTICS"
     upsertBy
-      (UniqueBotStatisticsPerApiKeyPerChatPerDay apiInfo.apiKey botId chatId day)
+      (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
-        { botStatisticsPerApiKeyPerChatPerDayApiKey           = apiInfo.apiKey
+        { botStatisticsPerApiKeyPerChatPerDayApiKey           = apiKey'
         , botStatisticsPerApiKeyPerChatPerDayBotId            = botId
         , botStatisticsPerApiKeyPerChatPerDayChatId           = chatId
         , botStatisticsPerApiKeyPerChatPerDayDay              = day
@@ -59,12 +60,12 @@ logBotStatistics chatId StatRecv = do
 logBotStatistics chatId StatSent = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
-  let apiInfo = APIInfo "STATISTICS" Nothing
+  let apiKey' = "STATISTICS"
   runDB $ do
     upsertBy
-      (UniqueBotStatisticsPerApiKeyPerChatPerDay apiInfo.apiKey botId chatId day)
+      (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
-        { botStatisticsPerApiKeyPerChatPerDayApiKey           = apiInfo.apiKey
+        { botStatisticsPerApiKeyPerChatPerDayApiKey           = apiKey'
         , botStatisticsPerApiKeyPerChatPerDayBotId            = botId
         , botStatisticsPerApiKeyPerChatPerDayChatId           = chatId
         , botStatisticsPerApiKeyPerChatPerDayDay              = day
@@ -91,14 +92,16 @@ logBotStatistics chatId StatSent = do
       ]
     pure ()
 logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTokens {..} }) = do
-  day <- liftIO $ utctDay <$> getCurrentTime
+  utcTime <- liftIO getCurrentTime
+  let day = utctDay utcTime
   botId <- query
-  let info = fromMaybe (APIInfo "NO_API_KEY" Nothing) apiInfo
+  let apiKey' = maybe "NO_API_KEY" apiKey apiInfo
+      consumption = TokenConsumption inputTokens outputTokens $ Just meowBotCacheHitRate
   runDB $ do
     upsertBy
-      (UniqueBotStatisticsPerApiKeyPerChatPerDay info.apiKey botId chatId day)
+      (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
-        { botStatisticsPerApiKeyPerChatPerDayApiKey                    = info.apiKey
+        { botStatisticsPerApiKeyPerChatPerDayApiKey                    = apiKey'
         , botStatisticsPerApiKeyPerChatPerDayBotId                     = botId
         , botStatisticsPerApiKeyPerChatPerDayChatId                    = chatId
         , botStatisticsPerApiKeyPerChatPerDayDay                       = day
@@ -108,8 +111,8 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
         , botStatisticsPerApiKeyPerChatPerDayTotalApiCallErrors        = apiErrors
         , botStatisticsPerApiKeyPerChatPerDayTotalApiCallSkips         = apiSkips
         , botStatisticsPerApiKeyPerChatPerDayTotalCost = do
-            price <- info.price
-            pure $ tokenCost price (TokenConsumption inputTokens outputTokens $ Just meowBotCacheHitRate)
+            price <- price =<< apiInfo
+            pure $ tokenCost price consumption
         }
       [ BotStatisticsPerApiKeyPerChatPerDayTotalInputEstimateTokens  +=. inputTokens
       , BotStatisticsPerApiKeyPerChatPerDayTotalOutputEstimateTokens +=. outputTokens
@@ -117,8 +120,8 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
       , BotStatisticsPerApiKeyPerChatPerDayTotalApiCallErrors +=. apiErrors
       , BotStatisticsPerApiKeyPerChatPerDayTotalApiCallSkips +=. apiSkips
       , BotStatisticsPerApiKeyPerChatPerDayTotalCost +=. do
-          price <- info.price
-          pure $ tokenCost price (TokenConsumption inputTokens outputTokens $ Just meowBotCacheHitRate) 
+          price <- price =<< apiInfo
+          pure $ tokenCost price consumption
       ]
     upsertBy
       (UniqueBotStatisticsPerChat botId chatId)
@@ -154,4 +157,4 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
       , BotStatisticsTotalApiCallSkips +=. apiSkips
       ]
     pure ()
-
+  void . runDB $ insertApiCostRecord utcTime botId chatId (model <$> apiInfo) (apiKey <$> apiInfo) consumption

@@ -488,7 +488,7 @@ fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
                 , ("Authorization", "Bearer " <> encodeUtf8 apiKey')
                 ]
             }
-          apiInfo = APIInfo apiKey' tokenPrice
+          apiInfo = APIInfo apiKey' tokenPrice (chatModel @md)
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of
@@ -503,7 +503,7 @@ fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
                 [ ("Content-Type", "application/json")
                 ]
             }
-          apiInfo = APIInfo "LOCAL_NO_API_KEY_NEEDED" tokenPrice
+          apiInfo = APIInfo "LOCAL_NO_API_KEY_NEEDED" tokenPrice (chatModel @md)
       result <- liftIO $ do
         mres <- try @SomeException $ httpLbs request' manager
         case mres of

@@ -18,10 +18,11 @@ import External.ChatAPI.Models
 data APIInfo = APIInfo
   { apiKey :: Text
   , price  :: Maybe TokenPrice
+  , model  :: ChatModel
   } deriving (Show, Eq, Generic, NFData)
 
 instance Semigroup APIInfo where
-  APIInfo _k1 p1 <> APIInfo k2 p2 = APIInfo k2 (p2 <|> p1)
+  APIInfo _k1 p1 _m1 <> APIInfo k2 p2 m2 = APIInfo k2 (p2 <|> p1) m2
 
 data EstimateTokens = EstimateTokens
   { inputTokens  :: !Int
@@ -67,6 +68,7 @@ meowBotCacheHitRate = 0.1
 modelPrice :: ChatModel -> UTCTime -> Maybe TokenPrice
 modelPrice (DeepSeek DeepSeekChat) t = Just $ deepSeekTokenPrice t
 modelPrice _ _ = Nothing
+{-# DEPRECATED modelPrice "we should move to database-based price data instead" #-}
 
 deepSeekTokenPrice :: UTCTime -> TokenPrice
 deepSeekTokenPrice u -- price change on 2025-09-05 UTC 16:00

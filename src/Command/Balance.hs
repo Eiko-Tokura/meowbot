@@ -12,11 +12,10 @@ import Data.Time.Clock
 import MeowBot
 import MeowBot.Data.Parser
 import MeowBot.GetInfo
+import MeowBot.CostModel
 import MeowBot.CostModel.Types
 import Utils.RunDB
 import qualified Data.Text as T
-
-type Amount = Double
 
 data BalanceCommand
   = Own        (Maybe OwnerId) ChatId        (Maybe CostModel) -- ^ a owner of a wallet decides to own a (bot, chat) pair
@@ -63,43 +62,6 @@ walletOwns wid = do
       | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
       ]
     )
-
--- | This function handles differently, global ownership first, overriding chat-specific ownership
--- walletOwnsGlobalFirst :: WalletId -> Meow ([BotId], [(BotId, ChatId)])
--- walletOwnsGlobalFirst wid = runDB $ do
---   ownsBot     <- selectList [BotCostModelWalletId ==. Just wid] []
---   ownsBotChat <- selectList [BotCostModelPerChatWalletId ==. Just wid] []
---   let chadIdsOfOwnedBotChat = botCostModelPerChatBotId . entityVal <$> ownsBotChat
---   ofWhichOwned <- map (botCostModelBotId . entityVal) <$> selectList
---     [ BotCostModelBotId    <-. chadIdsOfOwnedBotChat
---     , BotCostModelWalletId !=. Nothing
---     ]
---     []
---   return
---     ( map (botCostModelBotId . entityVal) ownsBot
---     , [ (botCostModelPerChatBotId, botCostModelPerChatChatId)
---       | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
---       , botCostModelPerChatBotId `notElem` ofWhichOwned
---       ] -- exclude those botChat pairs whose bot is owned
---     )
-
--- | For a specific (bot, chat) pair, find the associated cost model and wallet
--- first finds chat-specific ownership, then global ownership, otherwise Nothing
---
--- can be wrapped in runDB as atomic if needed
-findWalletAssociatedToBotChat :: BotId -> ChatId -> DB (Maybe (CostModel, Maybe WalletId))
-findWalletAssociatedToBotChat bid cid = do
-  mBotChatRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]
-  case mBotChatRecord of
-    Just (Entity _ BotCostModelPerChat { botCostModelPerChatCostModel, botCostModelPerChatWalletId }) ->
-      return $ Just (botCostModelPerChatCostModel, botCostModelPerChatWalletId)
-    Nothing -> do
-      mBotRecord <- selectFirst [BotCostModelBotId ==. bid] [Desc BotCostModelInserted]
-      case mBotRecord of
-        Just (Entity _ BotCostModel { botCostModelCostModel, botCostModelWalletId }) ->
-          return $ Just (botCostModelCostModel, botCostModelWalletId)
-        Nothing ->
-          return Nothing
 
 balanceAction
   :: Maybe String  -- ^ bot name for logging purpose, optional
@@ -263,33 +225,3 @@ commandBalance = BotCommand Balance $ botT $ do
     (Nothing, _)        -> return [baSendToChatId cid "Invalid command or parameters."]
     (Just action, True) -> MaybeT $ balanceAction botName cid action
     (Just _, False)     -> return [baSendToChatId cid "Operation not permitted."]
-
-data ServiceBalanceCheck
-  = NoWalletAssociated
-  | WalletBalanceGood    (Maybe OverdueBehavior) Amount
-  | WalletBalanceLow     (Maybe OverdueBehavior) Amount
-  | WalletBalanceOverdue (Maybe OverdueBehavior) Amount
-  | WalletUnlimited      (Maybe Amount)
-  deriving (Show, Eq)
-
-determineOverdue :: CostModel -> Maybe OverdueBehavior -> Amount -> ServiceBalanceCheck
-determineOverdue cm ob amt
-  | Unlimited <- cm = WalletUnlimited (Just amt)
-  | amt >= 1        = WalletBalanceGood ob amt
-  | amt < 0         = WalletBalanceOverdue ob amt
-  | otherwise       = WalletBalanceLow ob amt
-
--- | For internal service to check balance, not for end users
-serviceBalanceCheck :: BotId -> ChatId -> DB ServiceBalanceCheck
-serviceBalanceCheck bid cid = do
-  findWalletAssociatedToBotChat bid cid >>= \case
-    Just (cm, Just wid) -> do
-      mWalletRecord <- get wid
-      case mWalletRecord of
-        Just w@(walletOverdueBehavior -> Just ob) -> return $ determineOverdue cm (Just ob) w.walletBalance
-        Just w                                    -> do
-          defOb <- selectFirst [] []
-          return $ determineOverdue cm ((walletOverdueBehavior . entityVal =<< defOb) <|> Just def) w.walletBalance
-        Nothing -> return NoWalletAssociated -- impossible
-    Just (Unlimited, Nothing) -> return $ WalletUnlimited Nothing
-    _                         -> return NoWalletAssociated

@@ -19,6 +19,7 @@ import GHC.Generics
 import MeowBot.CQCode
 import MeowBot.CommandRule
 import MeowBot.CronTab.CronMeowAction
+import MeowBot.CostModel.Types
 import MeowBot.Data
 import MeowBot.Data.Book
 import MeowBot.Data.IgnoreMatchType
@@ -29,12 +30,11 @@ import qualified Data.Set as S
 instance Default Day where
   def = ModifiedJulianDay 0
 
-data CostModel = Free | Subscription | PayAsYouGo
-  deriving (Show, Eq, Ord, Read)
-  deriving (PersistField, PersistFieldSql) via (PersistUseShow CostModel)
-
 newtype OwnerId = OwnerId { ownerChatId :: ChatId }
   deriving newtype (Show, Eq, PersistField, PersistFieldSql)
+
+deriving via (PersistUseShow ChatModel) instance PersistField    ChatModel
+deriving via (PersistUseShow ChatModel) instance PersistFieldSql ChatModel
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
 
@@ -68,13 +68,6 @@ Wallet
   created         UTCTime
   UniqueOwnerId   ownerId
 
-WalletOverdue
-  walletId        WalletId
-  overdueBehavior OverdueBehavior Maybe
-  overdueNotified Bool            Maybe
-  lastNotified    UTCTime         Maybe
-  UniqueWalletId  walletId
-
 WalletOverdueDefault
   overdueBehavior OverdueBehavior Maybe
 
@@ -90,17 +83,40 @@ Transaction
   handlerId   UserId    Maybe
   description Text      Maybe
 
+-- | For tracing each api's price, and potentially exclude user's self-brought apiKeys
+-- if an apiKey is not found in the db, it is not priced, no charges.
+ApiKeyInfo
+  apiKey               Text
+  chatModel            ChatModel
+  priced               Bool      -- ^ True for our apiKey, False for user apiKeys
+  UniqueApiKeyInfo     apiKey
+
+-- | For tracing each api's price, potentially covering time-varying costs
+ApiPriceInfo
+  chatModel            ChatModel
+  inputTokenPrice      Double    Maybe
+  inputTokenPriceCache Double    Maybe
+  outputTokenPrice     Double    Maybe
+  validFrom            UTCTime   Maybe
+  validUntil           UTCTime   Maybe
+  inserted             UTCTime
+  description          Text      Maybe
+
 -- | These records are issued by the system automatically
 ApiCostRecord
-  botId       BotId
-  chatId      ChatId
-  walletId    WalletId  Maybe
-  nominalCost Double    Maybe -- client cost, Nothing means free to user
-  actualCost  Double          -- actual cost to us, so the difference is our profit/loss
-  time        UTCTime
-  coveredBySubscription Bool Maybe
-  apiKey      Text      Maybe
-  description Text      Maybe
+  botId        BotId
+  chatId       ChatId
+  walletId     WalletId  Maybe
+  nominalCost  Double    Maybe -- client cost, Nothing means free to user
+  actualCost   Double    Maybe -- actual cost to us, so the difference is our profit/loss
+  inputTokens  Int
+  outputTokens Int
+  cacheHitRate Double    Maybe
+  chatModel    ChatModel Maybe
+  time         UTCTime
+  coveredBySubscription  Bool Maybe
+  apiKey       Text      Maybe
+  description  Text      Maybe
 
 SubscriptionCostRecord
   botId       BotId
@@ -169,8 +185,6 @@ BotSetting -- Overlappable by BotSettingPerChat
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
-  costModel               CostModel            Maybe
-  billingWalletId         WalletId             Maybe
   deriving Generic
   deriving Default
 
@@ -202,8 +216,6 @@ BotSettingPerChat -- Overlapping BotSetting
   enableSetEssence        Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
-  costModel               CostModel            Maybe
-  billingWalletId         WalletId             Maybe
   deriving Generic
   deriving Default
 
