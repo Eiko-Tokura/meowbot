@@ -63,7 +63,7 @@ tokenCost TokenPrice {..} TokenConsumption {..} =
   in costInputTokens + costOutputTokens
 
 meowBotCacheHitRate :: Double
-meowBotCacheHitRate = 0.1
+meowBotCacheHitRate = 0.27
 
 modelPrice :: ChatModel -> UTCTime -> Maybe TokenPrice
 modelPrice (DeepSeek DeepSeekChat) t = Just $ deepSeekTokenPrice t

@@ -155,13 +155,12 @@ insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ 
       apiKeyInfo <- MaybeT . getBy $ UniqueApiKeyInfo apikey
       MaybeT $ pure $ guard apiKeyInfo.entityVal.apiKeyInfoPriced
       modelPrice <- MaybeT $ findApiPriceInfoByKey utcTime apikey
-      costModel  <- MaybeT $ pure mCostModel
-      return (modelPrice, costModel, mWalletId, apikey)
+      return (modelPrice, mWalletId, apikey)
     let pricingModel  = def
     case mTuple of
-      Just (modelPrice, costModel, mWalletId, apikey) -> do
+      Just (modelPrice, mWalletId, apikey) -> do
         let estimateCost  = tokenCost modelPrice consumption
-            apiCostRecord = generateCostRecord model (Just apikey) utcTime pricingModel (Just costModel) botId chatId mWalletId consumption (Just estimateCost)
+            apiCostRecord = generateCostRecord model (Just apikey) utcTime pricingModel mCostModel botId chatId mWalletId consumption (Just estimateCost)
         lift $ insert_ apiCostRecord
         case (mWalletId, apiCostRecord.apiCostRecordNominalCost) of
             (Just wid, Just nominalCost) | nominalCost > 0 -> lift $ update wid [ WalletBalance -=. nominalCost ]

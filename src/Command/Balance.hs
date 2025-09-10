@@ -87,8 +87,8 @@ balanceAction mBotName scid (AOwn oid mcm bid cid) = do
         (Nothing, Nothing) -> do -- insert new record with default cost model
           insert_ $ BotCostModelPerChat mBotName bid cid def (Just wid) utcTime
     let msg = T.unwords $
-                [tshow oid, "with walletId", tshow wid, "now owns bot", tshow bid, "in chat", tshow cid]
-                <> [ "(An new empty wallet is created)" | newWallet ]
+                [toText oid, "with walletId", toText wid, "now owns bot", toText bid, "in chat", toText cid]
+                <> [ "(A new empty wallet was created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
 balanceAction mBotName scid (AOwnBot oid mcm bid) = do
@@ -111,8 +111,8 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
         (Nothing, Nothing) -> do -- insert new record with default cost model
           insert_ $ BotCostModel mBotName bid def (Just wid) utcTime
     let msg = T.unwords $
-                [ tshow oid, "with walletId", tshow wid, "now owns bot", tshow bid]
-                <> [ "(An new empty wallet is created)" | newWallet ]
+                [ toText oid, "with walletId", toText wid, "now owns bot", toText bid]
+                <> [ "(A new empty wallet was created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
 balanceAction _ scid (AAddOwnedBy uid amt oid) = do
@@ -121,8 +121,8 @@ balanceAction _ scid (AAddOwnedBy uid amt oid) = do
     runDB $ do -- runDB is atomic
       insert $ Transaction wid amt utcTime (Just uid) Nothing
       update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
-    let msg = T.unwords $ [tshow amt, "is added to the wallet owned by", tshow oid, "with walletId", tshow wid]
-                        <> [ "(An new empty wallet is created)" | newWallet ]
+    let msg = T.unwords $ [toText amt, "is added to the wallet owned by", toText oid, "with walletId", toText wid]
+                        <> [ "(A new empty wallet was created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
 balanceAction _ scid (AAddTo uid amt wid) = do
@@ -133,21 +133,21 @@ balanceAction _ scid (AAddTo uid amt wid) = do
       runDB $ do -- ^ runDB is atomic
         insert $ Transaction wid amt utcTime (Just uid) Nothing
         update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
-      let msg = T.unwords [tshow amt, "is added to the wallet owned by", tshow walletOwnerId, "with walletId", tshow wid]
+      let msg = T.unwords [toText amt, "is added to the wallet owned by", toText walletOwnerId, "with walletId", toText wid]
       return $ Just [baSendToChatId scid msg]
-    Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> tshow wid <> " does not exist."]
+    Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
 
 balanceAction _ scid (ABalanceCheck oid) = do
   mWallet <- runDB $ getBy $ UniqueOwnerId oid
   case mWallet of
     Just (Entity wid Wallet {walletBalance}) -> do
       owns <- runDB $ walletOwns wid
-      let balanceMsg = T.unwords ["Wallet with id", tshow wid, "owned by", tshow oid, "has balance:", tshow walletBalance]
+      let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText oid, "has balance:", toText walletBalance]
           ownsMsg = T.intercalate "\n" $ ["Associated with"]
-                    <> [ "bot" <> tshow bid                            | bid        <- fst owns ]
-                    <> [ "bot" <> tshow bid <> " in chat" <> tshow cid | (bid, cid) <- snd owns ]
+                    <> [ "bot" <> toText bid                            | bid        <- fst owns ]
+                    <> [ "bot" <> toText bid <> " in chat" <> toText cid | (bid, cid) <- snd owns ]
       return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
-    Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> tshow oid]
+    Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
 balanceAction _ scid _ = return $ Just [baSendToChatId scid "This feature is not implemented yet."]
 
@@ -190,7 +190,7 @@ balanceParser = headCommand "" >> asum
     (   AddOwnedBy <$> (float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
     <|> AddTo      <$> (float <* spaces <* string "to" <* spaces) <*> walletIdP
     )
-  , string "balance check" >> spaces >> BalanceCheck <$> optMaybe (fmap OwnerId chatIdP)
+  , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
   ]
   <* many spaceOrEnter
   <* end

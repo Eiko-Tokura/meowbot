@@ -461,3 +461,6 @@ cronTabDisplayTextWithCid cid enCron = let
 
 instance Default Text where
   def = ""
+
+instance ToText WalletId Text where toText = toText . keyToInt
+instance ToText BotId    Text where toText (BotId i) = toText i
