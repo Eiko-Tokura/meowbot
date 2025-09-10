@@ -127,9 +127,12 @@ ApiCostRecord
   apiKey       Text      Maybe
   description  Text      Maybe
 
+-- | This record computes every time a subscription is charged
+-- subscription is first pay then use, so this record is created
+-- and the record will be used to determine whether we are in subscription period
 SubscriptionCostRecord
-  botId       BotId
-  chatId      ChatId
+  referToCostModelId        BotCostModelId        Maybe -- which cost model is used
+  referToCostModelPerChatId BotCostModelPerChatId Maybe -- which cost model is used for this subscription
   walletId    WalletId
   monthlyCost Double
   actualCost  Double          -- actual cost to us, so the difference is our profit/loss

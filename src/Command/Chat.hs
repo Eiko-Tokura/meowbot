@@ -130,7 +130,6 @@ commandChat = BotCommand Chat $ botT $ do
       appendCQHelp t = t <> "\n\n---\n\n" <> T.intercalate "\n"
         [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person who is replied to will be notified."
         , "You can include '[CQ:at,qq=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
-        , "Current utc time is " <> toText utcTime
         ]
       msys = ChatSetting
         ( API.SystemMessage . appendNoteListing . appendCQHelp <$> asum
