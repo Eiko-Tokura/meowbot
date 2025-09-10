@@ -13,7 +13,6 @@ import MeowBot
 import MeowBot.Data.Parser
 import MeowBot.GetInfo
 import MeowBot.CostModel
-import MeowBot.CostModel.Types
 import Utils.RunDB
 import qualified Data.Text as T
 
@@ -121,7 +120,7 @@ balanceAction _ scid (AAddOwnedBy uid amt oid) = do
     utcTime <- liftIO getCurrentTime
     runDB $ do -- runDB is atomic
       insert $ Transaction wid amt utcTime (Just uid) Nothing
-      updateWhere [WalletId ==. wid] [WalletBalance +=. amt]
+      update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
     let msg = T.unwords $ [tshow amt, "is added to the wallet owned by", tshow oid, "with walletId", tshow wid]
                         <> [ "(An new empty wallet is created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
@@ -133,7 +132,7 @@ balanceAction _ scid (AAddTo uid amt wid) = do
       utcTime <- liftIO getCurrentTime
       runDB $ do -- ^ runDB is atomic
         insert $ Transaction wid amt utcTime (Just uid) Nothing
-        updateWhere [WalletId ==. wid] [WalletBalance +=. amt]
+        update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
       let msg = T.unwords [tshow amt, "is added to the wallet owned by", tshow walletOwnerId, "with walletId", tshow wid]
       return $ Just [baSendToChatId scid msg]
     Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> tshow wid <> " does not exist."]

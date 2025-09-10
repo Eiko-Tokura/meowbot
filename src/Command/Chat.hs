@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell, RecordWildCards, OrPatterns #-}
 module Command.Chat where
 
 import Command
@@ -38,6 +38,7 @@ import Data.PersistModel
 import Data.Proxy
 import Data.HList
 import Data.Coerce
+import MeowBot.CostModel
 import MeowBot.CQCode
 import Utils.RunDB
 import Utils.Maybe
@@ -301,66 +302,76 @@ commandChat = BotCommand Chat $ botT $ do
   determineIfReply oneOffActive atReply mentionReply activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
   $(logInfo) "Replying"
 
-  ioeResponse <- lift . embedMeowToolEnv . toIO $
-    case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
-      Nothing ->
-        statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
-      Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-        statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
+  needAction <- lift . runDB $ serviceBalanceActionCheck botid cid
+  breakAction <- case needAction of
+    Nothing -> return $ Right []
+    Just (DoNothing notis, winfo) -> do
+      lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+    Just (DisableService notis, winfo) -> do
+      lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+  case breakAction of
+    Left disableAndNofity -> return disableAndNofity
+    Right extraAction -> do
+      ioeResponse <- lift . embedMeowToolEnv . toIO $
+        case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
+          Nothing ->
+            statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
+          Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
+            statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
 
-  logger <- askLoggerIO
+      logger <- askLoggerIO
 
-  asyncAction <- liftIO $ do
-    async $ do
-      (eNewMsg, newStatus) <- ioeResponse
-      case eNewMsg of
-        Left err -> do -- responded with error message
-          flip runLoggingT logger $ $(logError) $ "Error: " <> err
-          return $ do
-            markMeow cid MeowIdle -- ^ update status to idle
-            logBotStatistics cid (StatTokens newStatus)
-            pure [] -- ^ do nothing
-        Right newMsgs' -> do -- responded with new messages
-          let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix cqFilter)) newMsgs'
-          return $ do
-            markMeow cid MeowIdle -- ^ update status to idle
-            logBotStatistics cid (StatTokens newStatus)
-            mergeChatStatus maxMessageInState cid newMsgs newStatus
-            let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
-                  (\case
-                    AssistantMessage -- Case 1 : assistant returned pure tool call
-                      { pureToolCall = Just True
-                      , content      = c
-                      , thinking     = mt
-                      } -> [t | displayThinking, Just t <- [mt]] <> [c | displayToolMessage]
-                    AssistantMessage -- Case 2 : assistant returned a message with tool call
-                      { content  = c
-                      , thinking = mt
-                      , withToolCall = Just (_, rest)
-                      } -> [t | displayThinking, Just t <- [mt]]
-                        <> [if displayToolMessage then c else rest "(Casting Spell...)"]
-                    AssistantMessage -- Case 3 : assistant returned a message with no tool call
-                      { content  = c
-                      , thinking = mt
-                      } -> [t | displayThinking, Just t <- [mt]] <> [c]
-                    ToolMessage
-                      { content = c
-                      } -> [c | displayToolMessage]
-                    m   -> [content m]
-                  ) newMsgs
-            meowAsyncSplitSendToChatIdFull cid mMid []
-              ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
-              2_000_000 splitedMessageToSend
+      asyncAction <- liftIO $ do
+        async $ do
+          (eNewMsg, newStatus) <- ioeResponse
+          case eNewMsg of
+            Left err -> do -- responded with error message
+              flip runLoggingT logger $ $(logError) $ "Error: " <> err
+              return $ do
+                markMeow cid MeowIdle -- ^ update status to idle
+                logBotStatistics cid (StatTokens newStatus)
+                pure [] -- ^ do nothing
+            Right newMsgs' -> do -- responded with new messages
+              let newMsgs = map (mapMessage (MP.filterOutputTags ["role", "msg_id", "username", "nickname", "user_id"] . MP.cqcodeFix cqFilter)) newMsgs'
+              return $ do
+                markMeow cid MeowIdle -- ^ update status to idle
+                logBotStatistics cid (StatTokens newStatus)
+                mergeChatStatus maxMessageInState cid newMsgs newStatus
+                let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
+                      (\case
+                        AssistantMessage -- Case 1 : assistant returned pure tool call
+                          { pureToolCall = Just True
+                          , content      = c
+                          , thinking     = mt
+                          } -> [t | displayThinking, Just t <- [mt]] <> [c | displayToolMessage]
+                        AssistantMessage -- Case 2 : assistant returned a message with tool call
+                          { content  = c
+                          , thinking = mt
+                          , withToolCall = Just (_, rest)
+                          } -> [t | displayThinking, Just t <- [mt]]
+                            <> [if displayToolMessage then c else rest "(Casting Spell...)"]
+                        AssistantMessage -- Case 3 : assistant returned a message with no tool call
+                          { content  = c
+                          , thinking = mt
+                          } -> [t | displayThinking, Just t <- [mt]] <> [c]
+                        ToolMessage
+                          { content = c
+                          } -> [c | displayToolMessage]
+                        m   -> [content m]
+                      ) newMsgs
+                meowAsyncSplitSendToChatIdFull cid mMid []
+                  ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
+                  2_000_000 splitedMessageToSend
 
-  -- update busy status
-  lift $ markMeow cid MeowBusy
-  -- record the reply time
-  lift $ updateCurrentChatState (recordReplyTime utcTime) <$> getTypeWithDef newChatState
+      -- update busy status
+      lift $ markMeow cid MeowBusy
+      -- record the reply time
+      lift $ updateCurrentChatState (recordReplyTime utcTime) <$> getTypeWithDef newChatState
 
-  return [BAAsync asyncAction] -- Async (Meow [BotAction])
-  -- if you need to send multiple messages, you can use
-  -- Async (Meow [send_msg_1, BAAsync (Async (Meow [send_msg_2]))])
-  -- m a -> Async (m
+      return $ extraAction <> [BAAsync asyncAction] -- Async (Meow [BotAction])
+      -- if you need to send multiple messages, you can use
+      -- Async (Meow [send_msg_1, BAAsync (Async (Meow [send_msg_2]))])
+      -- m a -> Async (m
 
 markMeow :: ChatId -> MeowStatus -> Meow ()
 markMeow cid meowStat = do

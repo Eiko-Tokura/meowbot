@@ -1,10 +1,13 @@
-module MeowBot.CostModel where
+module MeowBot.CostModel
+  ( module MeowBot.CostModel.Types
+  , module MeowBot.CostModel
+  ) where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Default
+import Data.Maybe (fromMaybe)
 import Data.PersistModel
 import Data.Time (UTCTime)
 import External.ChatAPI.Cost
@@ -12,6 +15,7 @@ import External.ChatAPI.Models
 import MeowBot
 import MeowBot.CostModel.Types
 import Utils.RunDB
+import qualified Data.Text as T
 
 type Amount = Double
 
@@ -73,21 +77,44 @@ findWalletAssociatedToBotChat bid cid = do
         Nothing ->
           return Nothing
 
+type WalletInfo = Entity Wallet
 data ServiceBalanceCheck
   = NoCostModelAssigned
   | HasCostModelButNoWalletAssociated
-  | WalletBalanceGood    (Maybe OverdueBehavior) Amount
-  | WalletBalanceLow     (Maybe OverdueBehavior) Amount
-  | WalletBalanceOverdue (Maybe OverdueBehavior) Amount
-  | WalletUnlimited      (Maybe Amount)
+  | WalletBalanceGood    WalletInfo
+  | WalletBalanceLow     WalletInfo
+  | WalletBalanceOverdue WalletInfo
+  | WalletUnlimited      (Maybe WalletInfo)
   deriving (Show, Eq)
 
-determineOverdue :: CostModel -> Maybe OverdueBehavior -> Amount -> ServiceBalanceCheck
-determineOverdue cm ob amt
-  | Unlimited <- cm = WalletUnlimited (Just amt)
-  | amt >= 1        = WalletBalanceGood ob amt
-  | amt < 0         = WalletBalanceOverdue ob amt
-  | otherwise       = WalletBalanceLow ob amt
+determineOverdue :: CostModel -> WalletInfo -> ServiceBalanceCheck
+determineOverdue cm w@(walletBalance . entityVal -> amt)
+  | Unlimited <- cm = WalletUnlimited (Just w)
+  | amt >= 1        = WalletBalanceGood w
+  | amt < 0         = WalletBalanceOverdue w
+  | otherwise       = WalletBalanceLow w
+
+overdueBehaviorNeedAction :: ServiceBalanceCheck -> Maybe (OverdueBehavior, WalletInfo)
+overdueBehaviorNeedAction NoCostModelAssigned                                                      = Nothing
+overdueBehaviorNeedAction (WalletUnlimited _)                                                      = Nothing
+overdueBehaviorNeedAction (WalletBalanceGood _)                                                    = Nothing
+overdueBehaviorNeedAction (WalletBalanceLow w@(walletOverdueBehavior . entityVal -> Just act))     = Just (onNotis inAdvanceNoti act, w)
+overdueBehaviorNeedAction (WalletBalanceLow _)                                                     = Nothing
+overdueBehaviorNeedAction (WalletBalanceOverdue w@(walletOverdueBehavior . entityVal -> Just act)) = Just (onNotis overdueNoti act, w)
+overdueBehaviorNeedAction (WalletBalanceOverdue _)                                                 = Nothing
+overdueBehaviorNeedAction HasCostModelButNoWalletAssociated                                        = Nothing
+
+overdueNoti :: [OverdueNotification] -> [OverdueNotification]
+overdueNoti = filter (\case
+  NotifyBillOwner -> True
+  NotifyChatId _  -> True
+  _ -> False)
+
+inAdvanceNoti :: [OverdueNotification] -> [OverdueNotification]
+inAdvanceNoti = filter (\case
+  NotifyBillOwnerInAdvance -> True
+  NotifyChatIdInAdvance _  -> True
+  _ -> False)
 
 -- | For internal service to check balance, not for end users
 serviceBalanceCheck :: BotId -> ChatId -> DB ServiceBalanceCheck
@@ -96,14 +123,19 @@ serviceBalanceCheck bid cid = do
     Just (cm, Just wid) -> do
       mWalletRecord <- get wid
       case mWalletRecord of
-        Just w@(walletOverdueBehavior -> Just ob) -> return $ determineOverdue cm (Just ob) w.walletBalance
-        Just w                                    -> do
+        Just w@(walletOverdueBehavior -> Just _) -> return $ determineOverdue cm (Entity wid w)
+        Just w                                   -> do
           defOb <- selectFirst [] []
-          return $ determineOverdue cm ((walletOverdueBehavior . entityVal =<< defOb) <|> Just def) w.walletBalance
+          return $ determineOverdue cm (Entity wid w
+            { walletOverdueBehavior = (walletOverdueDefaultOverdueBehavior <=< fmap entityVal) defOb })
         Nothing -> return HasCostModelButNoWalletAssociated -- impossible
     Just (Unlimited, Nothing) -> return $ WalletUnlimited Nothing
     Just (_, Nothing)         -> return HasCostModelButNoWalletAssociated
     _                         -> return NoCostModelAssigned
+
+-- | For internal service to check balance, not for end users
+serviceBalanceActionCheck :: BotId -> ChatId -> DB (Maybe (OverdueBehavior, WalletInfo))
+serviceBalanceActionCheck bid cid = overdueBehaviorNeedAction <$> serviceBalanceCheck bid cid
 
 -- | behavior:
 -- for an actual cost to be attached:
@@ -156,3 +188,80 @@ findApiPriceInfo time model = do
     <$> (apiPriceInfoInputTokenPrice . entityVal =<< mInfo)
     <*> (apiPriceInfoInputTokenPriceCache . entityVal <$> mInfo)
     <*> (apiPriceInfoOutputTokenPrice . entityVal =<< mInfo)
+
+checkSendNotis :: BotName -> BotId -> ChatId -> OverdueNotification -> WalletInfo -> Meow [BotAction]
+checkSendNotis botname botid cid noti winfo = case noti of
+  NotifyChatId notifyCid -> do
+    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
+        text = T.unwords
+          [ "Note: The bot"
+          , toText botname
+          , "with id"
+          , toText botid
+          , "in chat"
+          , toText cid
+          , "has insufficient balance:"
+          , toText winfo.entityVal.walletBalance
+          ]
+    if notified
+    then do
+      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      return [baSendToChatId notifyCid text]
+    else return []
+  NotifyChatIdInAdvance notifyCid -> do
+    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
+        text = T.unwords
+          [ "Note: The bot"
+          , toText botname
+          , "with id"
+          , toText botid
+          , "in chat"
+          , toText cid
+          , "has low balance:"
+          , toText winfo.entityVal.walletBalance
+          ]
+    if not notified
+    then do
+      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      return [baSendToChatId notifyCid text]
+    else return []
+  NotifyBillOwner          -> do
+    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
+        text = T.unwords
+          [ "Note: The bot you ("
+          , toText ownerCid
+          , ") own"
+          , toText botname
+          , "with id"
+          , toText botid
+          , "in chat"
+          , toText cid
+          , "has insufficient balance:"
+          , toText winfo.entityVal.walletBalance
+          ]
+        ownerCid = ownerChatId winfo.entityVal.walletOwnerId
+    if notified
+    then do
+      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      return [baSendToChatId ownerCid text]
+    else return []
+  NotifyBillOwnerInAdvance -> do
+    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
+        text = T.unwords
+          [ "Note: The bot you ("
+          , toText ownerCid
+          , ") own"
+          , toText botname
+          , "with id"
+          , toText botid
+          , "in chat"
+          , toText cid
+          , "has low balance:"
+          , toText winfo.entityVal.walletBalance
+          ]
+        ownerCid = ownerChatId winfo.entityVal.walletOwnerId
+    if not notified
+    then do
+      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      return [baSendToChatId ownerCid text]
+    else return []

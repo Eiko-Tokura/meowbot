@@ -10,6 +10,7 @@ import qualified Data.Text as T
 import External.ChatAPI hiding (SystemMessage)
 import qualified External.ChatAPI as API
 -- import External.ChatAPI.Tool
+import MeowBot.CostModel
 import MeowBot.Parser (Parser, Chars)
 import MeowBot.BotStatistics
 import Parser.Definition (IsStream)
@@ -111,9 +112,19 @@ commandCat = BotCommand Cat $ botT $ do
       lChatModelMsg <- if activeChat
         then pureMaybe Nothing  -- disable cat command when active chat, we will use chat command instead
         else pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
+
+      needAction <- lift . runDB $ serviceBalanceActionCheck botid cid
+      breakAction <- case needAction of
+        Nothing -> return $ Right []
+        Just (DoNothing notis, winfo) -> do
+          lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+        Just (DisableService notis, winfo) -> do
+          lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+
       logger <- askLoggerIO
+
       let addManager md cs = ChatParams md cs man timeout
-      let rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
+          rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
           params = fst . head $ rlChatModelMsg   -- take the last message model
           md = either chatMarkDown chatMarkDown (bimap ($ addManager) ($ addManager) params)  -- whether to use markdown
           ioEChatResponse = case params of
@@ -135,9 +146,13 @@ commandCat = BotCommand Cat $ botT $ do
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
                   fmap (second Just) . flip runLoggingT logger $ do
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
-      asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
-      $(logDebug) $ "created async: " <> T.pack (show asyncAction)
-      return $ pure $ BAAsync asyncAction
+
+      case breakAction of
+        Left disableAndNotify -> return disableAndNotify
+        Right extraNotify -> do
+          asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
+          $(logDebug) $ "created async: " <> T.pack (show asyncAction)
+          return $ extraNotify <> [BAAsync asyncAction]
 
 type UseMarkdown = Bool
 type DisplayThinking = Bool

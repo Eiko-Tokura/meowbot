@@ -47,6 +47,7 @@ BotIgnore
   private   Bool            Maybe  -- nothing for no requirement
   group     Bool            Maybe
 
+-- /* Start Of PersistModels For CostModel and Billing */
 -- | wallet owner can choose to own multiple bots or (bot, chat) pairs
 -- [ownerId] own <chatId> -- this will give (bot, chat) pair wallet
 -- [ownerId] own bot [botId] -- this will own all chats of the bot
@@ -67,6 +68,8 @@ Wallet
   lastNotified    UTCTime         Maybe
   created         UTCTime
   UniqueOwnerId   ownerId
+  deriving Show
+  deriving Eq
 
 WalletOverdueDefault
   overdueBehavior OverdueBehavior Maybe
@@ -145,6 +148,8 @@ BotCostModelPerChat
   costModel   CostModel
   walletId    WalletId             Maybe
   inserted    UTCTime
+
+-- /* End Of PersistModels For CostModel and Billing */
 
 BotCronJob
   botName          String         Maybe
