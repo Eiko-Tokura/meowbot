@@ -164,11 +164,11 @@ balanceCommandToAction _   (_, uid) (AddTo amt wid)                     = Just $
 balanceCommandToAction _   (oid, _) (BalanceCheck oid')                 = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
 balanceCommandToAction _   _        (TotalBalance mbid)                 = Just $ ATotalBalance mbid
 
-checkPrivilegeBalance :: IsAdmin -> (ChatId, UserId) -> BalanceCommand -> Bool
-checkPrivilegeBalance True  _  _                                 = True
-checkPrivilegeBalance False _ (Own Nothing _ Nothing)            = True
-checkPrivilegeBalance False _ (OwnBot Nothing _ Nothing)         = True
-checkPrivilegeBalance False (cid, uid) (BalanceCheck (Just oid)) = cid == coerce oid || PrivateChat uid == coerce oid
+checkPrivilegeBalance :: IsSuperUser -> (ChatId, UserId) -> BalanceCommand -> Bool
+checkPrivilegeBalance (IsSuperUser True ) _  _                                 = True
+checkPrivilegeBalance (IsSuperUser False) _ (Own Nothing _ Nothing)            = True
+checkPrivilegeBalance (IsSuperUser False) _ (OwnBot Nothing _ Nothing)         = True
+checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid)) = cid == coerce oid || PrivateChat uid == coerce oid
 checkPrivilegeBalance _ _ _                                      = False
 
 ownerIdP = fmap OwnerId chatIdP
@@ -217,8 +217,8 @@ commandBalance = BotCommand Balance $ botT $ do
   botid           <- query
   BotName botName <- query
   catSetCommand   <- MaybeT $ (`runParser` msg) <$> commandParserTransformByBotName balanceParser
-  isadmin         <- lift $ isAdmin uid
-  let privilege = checkPrivilegeBalance isadmin (cid, uid) catSetCommand
+  isSuper         <- lift $ isSuperUser uid
+  let privilege = checkPrivilegeBalance isSuper (cid, uid) catSetCommand
       mAction   = balanceCommandToAction botid (cid, uid)  catSetCommand
   case (mAction, privilege) of
     (Nothing, _)        -> return [baSendToChatId cid "Invalid command or parameters."]

@@ -48,11 +48,17 @@ BotIgnore
   group     Bool            Maybe
 
 -- /* Start Of PersistModels For CostModel and Billing */
+-- | Super users can manage apiKeys, wallets, transactions, cost models, bot settings, etc.
+-- this is higher level than individual bot admins
+SuperUser
+  userId    UserId
+  UniqueSuperUser userId
+
 -- | wallet owner can choose to own multiple bots or (bot, chat) pairs
 -- [ownerId] own <chatId> -- this will give (bot, chat) pair wallet
 -- [ownerId] own bot [botId] -- this will own all chats of the bot
 -- 
--- (only admin can issue [ownerId] own ...)
+-- (only SuperUser can issue [ownerId] own ...)
 --
 -- should never be deleted, must be immutable
 -- if we want to delete, we should add a column "deleted :: Bool" instead

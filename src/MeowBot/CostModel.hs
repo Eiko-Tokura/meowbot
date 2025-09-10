@@ -164,7 +164,7 @@ insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ 
             apiCostRecord = generateCostRecord model (Just apikey) utcTime pricingModel (Just costModel) botId chatId mWalletId consumption (Just estimateCost)
         lift $ insert_ apiCostRecord
         case (mWalletId, apiCostRecord.apiCostRecordNominalCost) of
-            (Just wid, Just nominalCost) | nominalCost > 0 -> lift $ update wid [ WalletBalance -=. estimateCost ]
+            (Just wid, Just nominalCost) | nominalCost > 0 -> lift $ update wid [ WalletBalance -=. nominalCost ]
             _                                              -> pure ()
       Nothing -> do
         let apiCostRecord = generateCostRecord model apiKey utcTime pricingModel mCostModel botId chatId mWalletId consumption Nothing
@@ -190,10 +190,11 @@ findApiPriceInfo time model = do
     <*> (apiPriceInfoOutputTokenPrice . entityVal =<< mInfo)
 
 checkSendNotis :: BotName -> BotId -> ChatId -> OverdueNotification -> WalletInfo -> Meow [BotAction]
-checkSendNotis botname botid cid noti winfo = case noti of
+checkSendNotis botname botid cid noti winfo =
+  let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
+  in case noti of
   NotifyChatId notifyCid -> do
-    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
-        text = T.unwords
+    let text = T.unwords
           [ "Note: The bot"
           , toText botname
           , "with id"
@@ -203,14 +204,13 @@ checkSendNotis botname botid cid noti winfo = case noti of
           , "has insufficient balance:"
           , toText winfo.entityVal.walletBalance
           ]
-    if notified
+    if not notified
     then do
       runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId notifyCid text]
     else return []
   NotifyChatIdInAdvance notifyCid -> do
-    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
-        text = T.unwords
+    let text = T.unwords
           [ "Note: The bot"
           , toText botname
           , "with id"
@@ -226,8 +226,7 @@ checkSendNotis botname botid cid noti winfo = case noti of
       return [baSendToChatId notifyCid text]
     else return []
   NotifyBillOwner          -> do
-    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
-        text = T.unwords
+    let text = T.unwords
           [ "Note: The bot you ("
           , toText ownerCid
           , ") own"
@@ -240,14 +239,13 @@ checkSendNotis botname botid cid noti winfo = case noti of
           , toText winfo.entityVal.walletBalance
           ]
         ownerCid = ownerChatId winfo.entityVal.walletOwnerId
-    if notified
+    if not notified
     then do
       runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId ownerCid text]
     else return []
   NotifyBillOwnerInAdvance -> do
-    let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
-        text = T.unwords
+    let text = T.unwords
           [ "Note: The bot you ("
           , toText ownerCid
           , ") own"
