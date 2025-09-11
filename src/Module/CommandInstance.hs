@@ -8,6 +8,8 @@ import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
+import Data.Time
+import Data.UpdateMaybe
 import Data.Aeson
 import Data.Maybe
 import MeowBot.Action
@@ -32,6 +34,7 @@ import Command.Retract
 import Command.Study
 import Command.Poll
 import Command.Hangman
+import Command.Updater
 -- import Command.Haskell
 
 import Module.Command
@@ -55,6 +58,7 @@ instance
   , HasSystemRead (TVar (Maybe ReceCQMessage)) r -- ^ other modules can use
   , HasSystemRead (TVar (Maybe SentCQMessage)) r -- ^ other modules can use
   , HasSystemRead (TVar (Maybe BL.ByteString)) r -- ^ other modules can use
+  , HasSystemRead (TVar [ (Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) ) ]) r -- ^ the channel to put query operations
   , HasSystemRead Connection r                   -- ^ the connection to the server
   )
   => MeowModule r AllData CommandModule where
@@ -93,7 +97,22 @@ instance
 
   moduleEventHandler _ (CommandEvent msg) = do
     -- | When received any raw message, put into the tvar so other modules can be notified of the message
-    askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . (`writeTVar` (Just msg))
+    askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . (`writeTVar` Just msg)
+
+    time <- liftIO getCurrentTime
+    tvarQueryList <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )])
+    liftIO . atomically $ removeOutdatedQuery time tvarQueryList
+    queriesList <- liftIO $ readTVarIO tvarQueryList
+    let firstQuery = listToMaybe $ mapMaybe (\(qid, WithTime _ parser) -> (qid, ) <$> parser msg) queriesList
+
+    tmeow <- readSystem <$> asks snd
+    case firstQuery of
+      Just (qid, meowAction) -> do
+        liftIO . atomically $ do
+          modifyTVar tvarQueryList (filter ((/= qid) . fst))
+          modifyTVar tmeow (<> [meowAction])
+      Nothing -> return ()
+
     botMods <- gets (botModules . botConfig . snd)
     --mode <- gets (botConfig . snd)
     let gcmdids = canUseGroupCommands   botMods
@@ -112,9 +131,9 @@ instance
         $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
         case eventType cqmsg of
           LifeCycle -> do
-            $(logDebug) $ "LifeCycle event."
+            $(logDebug) "LifeCycle event."
             updateSelfInfo cqmsg
-            $(logDebug) $ "self info updated."
+            $(logDebug) "self info updated."
           HeartBeat -> return ()
           Response -> do
             change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
@@ -123,14 +142,14 @@ instance
           PrivateMessage -> do
             updateStates nameBot cqmsg
             tmeow   <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> [botCommandsWithIgnore cqmsg pcmds])
+            liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds])
           GroupMessage -> do
             updateStates nameBot cqmsg
             tmeow   <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> [botCommandsWithIgnore cqmsg gcmds])
+            liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds])
           RequestEvent -> do
             tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow $ (<> [botHandleRequestEvent cqmsg nameBot])
+            liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
           _ -> return ()
         where
           updateStates name cqm = do
@@ -141,3 +160,9 @@ instance
     -- | creating a new async to receive the next message
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
+
+removeOutdatedQuery :: UTCTime -> TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )] -> STM ()
+removeOutdatedQuery time tvar = do
+  lst <- readTVar tvar
+  let lst' = filter (\(_, WithTime t _) -> diffUTCTime time t < 60) lst
+  writeTVar tvar lst'

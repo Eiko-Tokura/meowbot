@@ -9,7 +9,9 @@ import Utils.Persist
 
 import Language.Haskell.TH
 
-data CommandId = Aokana | Balance | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman -- | Haskell
+-- | When adding new commands, add at the last to preserve Enum
+-- do not change the names of existing commands because they are used in the database
+data CommandId = Aokana | Balance | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman | Updater -- | Haskell
   deriving (Show, Eq, Ord, Read, Enum, Bounded)
 
 -- | show each command id into string, and prepend "command" to each. return a list of these functions

@@ -19,6 +19,7 @@ import Module.ConnectionManager
 import Module.StatusMonitor
 import Module.CronTabTick
 
+import Data.UpdateMaybe
 import Data.HList
 import Data.Kind
 
@@ -48,21 +49,19 @@ import Data.Kind
 -- 5. Define a MonadMeow class where you can run Meow in the monad, and derive a funcition that supports
 --    ModuleT r s l (MeowT r mods m) a -> SystemT r s mods m a
 
-newtype MeowData = MeowData (CList MeowDataClass
+type MeowReads =
   [ Connection
   , TVar [Meow [BotAction]]
   , TVar (Maybe SentCQMessage)
   , TVar (Maybe ReceCQMessage)
   , TVar (Maybe BL.ByteString)
-  ])
+  , TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )]
+  ]
 
-instance HasSystemRead c (CList MeowDataClass
-  [ Connection
-  , TVar [Meow [BotAction]]
-  , TVar (Maybe SentCQMessage)
-  , TVar (Maybe ReceCQMessage)
-  , TVar (Maybe BL.ByteString)
-  ]) => HasSystemRead c MeowData where
+newtype MeowData = MeowData (CList MeowDataClass
+  MeowReads)
+
+instance HasSystemRead c (CList MeowDataClass MeowReads) => HasSystemRead c MeowData where
   readSystem (MeowData clist) = readSystem clist
   {-# INLINE readSystem #-}
 
@@ -151,11 +150,13 @@ data BotAction
       MessageId  -- ^ MessageId, the message to delete (retract)
   | BAActionAPI
       ActionAPI  -- ^ General actionAPI, the action to perform
+  | BAQueryAPI
+      [BL.ByteString -> Maybe (Meow [BotAction])] -- ^ run queries
   | BAAsync
       (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.
   | BAPureAsync
       (Async [BotAction])        -- ^ the action to run asynchronously, which is pure and will not further read or modify the data.
-  | BASimpleAction (Meow ()) -- ^ a simple action that can be run immediately, without blocking the main thread.
+  | BASimpleAction (Meow ()) -- ^ a simple action that can be run immediately, do not put anything that blocks the main thread.
 
 instance Show (Async (Meow [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)

@@ -6,23 +6,24 @@ import MeowBot.BotStructure
 
 import Data.Maybe (fromMaybe, listToMaybe)
 
-import Control.Monad.IO.Class
-import Control.Monad.Trans.ReaderState
-import Control.Monad
 import Control.Concurrent.STM
+import Control.Monad
+import Control.Monad.IO.Class
 import Control.Monad.Logger
+import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
+import Data.Additional
 import Data.Bifunctor
 import Data.Coerce
-import Data.Additional
 import Data.Time.Clock
+import Data.UpdateMaybe
+import Debug.Trace
 import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
-import qualified MeowBot.Parser as MP
-import Debug.Trace
-import System.General
 import Module
+import System.General
 import Utils.List
+import qualified MeowBot.Parser as MP
 
 forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
 
@@ -32,7 +33,7 @@ updateSelfInfo cqmsg = do
   mselfInfo <- queries (selfInfo . otherdata)
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> change $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo $ coerce sid } }
+    (Nothing, Just sid) -> change $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo (coerce sid) NothingYet } }
     _ -> return ()
 
 -- | if savedData changed, save it to file

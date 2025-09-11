@@ -65,6 +65,8 @@ common extensions
       UndecidableInstances
       ViewPatterns
       OverloadedRecordDot
+      OrPatterns
+      ParallelListComp
       DuplicateRecordFields
       RecordWildCards
 
@@ -181,6 +183,7 @@ library meowbot-lib
                    , Command.SetSysMessage
                    , Command.Study
                    , Command.User
+                   , Command.Updater
                    , Control.Monad.Effect
                    , Control.Monad.ExceptionReturn
                    , Control.Monad.IOe
@@ -196,6 +199,7 @@ library meowbot-lib
                    , Data.Maybe.Union
                    , Data.PersistModel
                    , Data.Template
+                   , Data.UpdateMaybe
                    , External.ChatAPI
                    , External.ChatAPI.Cost
                    , External.ChatAPI.Models
@@ -267,6 +271,7 @@ library meowbot-lib
     -- Other library packages from which modules are imported.
     --  build-depends:    base ^>=4.16.4.0
     build-depends: base >=4.7 && <5
+                 , api
                  , aeson
                  , async
                  , base64-bytestring

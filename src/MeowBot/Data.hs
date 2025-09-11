@@ -160,6 +160,7 @@ data RequestGroupSubType = RequestGroupAdd | RequestGroupInvite
 -- Query API
 data QueryType
   = QueryGetStatus
+  | QueryGroupList
   | QueryGroupMemberInfo
   | QueryGroupInfo
   | QueryGetForwardMessage
@@ -174,7 +175,8 @@ newtype ForwardMessageId = ForwardMessageId { unForwardMessageId :: Int }
   deriving newtype (NFData)
 
 data QueryAPI (q :: QueryType) where
-  GetStatus          :: QueryAPI 'QueryGetStatus
+  GetStatus    :: QueryAPI 'QueryGetStatus
+  GetGroupList :: { queryGroupListNoCache :: Maybe Bool } -> QueryAPI 'QueryGroupList
   GetGroupMemberInfo ::
     { queryGroupMemberGroupId :: GroupId
     , queryGroupMemberUserId  :: UserId
@@ -201,6 +203,8 @@ data Sex = SexMale | SexFemale | SexUnknown
 data QueryAPIResponse (q :: QueryType) where
   GetStatusResponse ::
     { getStatusOnline :: Bool, getStatusGood :: Bool } -> QueryAPIResponse 'QueryGetStatus
+  GetGroupListResponse ::
+    { getGroupList :: [GroupId] } -> QueryAPIResponse 'QueryGroupList
   GetGroupMemberInfoResponse ::
     { getGroupMemberInfoGroupId         :: GroupId
     , getGroupMemberInfoUserId          :: UserId
@@ -246,6 +250,13 @@ deriving instance Show (QueryAPIResponse q)
 instance ToJSON (ActionForm (QueryAPI q)) where
   toJSON (ActionForm GetStatus mecho) = object
     [ "action" .= ("get_status" :: Text)
+    , "echo"   .= mecho
+    ]
+  toJSON (ActionForm (GetGroupList nocache) mecho) = object
+    [ "action" .= ("get_group_list" :: Text)
+    , "params" .= object
+        [ "no_cache" .= nocache
+        ]
     , "echo"   .= mecho
     ]
   toJSON (ActionForm (GetGroupMemberInfo gid uid nocache) mecho) = object
@@ -349,6 +360,11 @@ instance FromJSON (QueryAPIResponse 'QueryGroupInfo) where
       , getGroupInfoMemberCount    = membercount
       , getGroupInfoMaxMemberCount = maxmembercount
       }
+
+instance FromJSON (QueryAPIResponse 'QueryGroupList) where
+  parseJSON = withObject "QueryAPIResponse" $ \o -> do
+    dataObj <- o .: "data" -- ^ response is a JSON Array
+    return $ GetGroupListResponse { getGroupList = GroupId <$> dataObj }
 
 -------------------------------------------------------------------------------------------
 -- Action API

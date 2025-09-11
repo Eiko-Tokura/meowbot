@@ -13,7 +13,7 @@ module MeowBot.BotStructure
   , BotModules(..), BotConfig(..), OverrideSettings(..)
   , GroupId(..), UserId(..), ChatId(..)
   --, BotAction(..)
-  , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..)
+  , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
   , UserGroup(..), GroupGroup(..)
   , MetaMessageItem(..)
   --, gIncreaseAbsoluteId, increaseAbsoluteId
@@ -35,25 +35,23 @@ module MeowBot.BotStructure
   , AdditionalData(..)
   ) where
 
-import MeowBot.CommandRule
-import MeowBot.Data
-import Control.Parallel.Strategies
+import Command.Aokana.Scripts
 import Control.Monad.IOe
 import Control.Monad.Readable
 import Control.Monad.Trans.ReaderState
-import Command.Aokana.Scripts
+import Control.Parallel.Strategies
 import Data.Additional
-import Data.Maybe
+import Data.Additional.Saved
 import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
-import Data.Additional.Saved
+import Data.Map.Strict (Map)
+import Data.Maybe
 import Data.Ord (comparing, Down(..))
-import MeowBot.Parser (ChatSetting(..))
+import Data.UpdateMaybe
+import MeowBot.CommandRule
+import MeowBot.Data
 import MeowBot.Data.Book
-import MeowBot.Parser (Tree(..))
---import Database.Persist -- implement proper database later
-
--- newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
+import MeowBot.Parser ( ChatSetting(..), Tree(..) )
 
 data BotConfig = BotConfig
   { botModules       :: BotModules
@@ -72,8 +70,12 @@ data AllData = AllData
   } deriving Show
 
 data SelfInfo = SelfInfo
-  { selfId :: UserId
-  , selfInGroups :: [GroupId]
+  { selfId       :: UserId
+  , selfInGroups :: UMaybeTime (Map GroupId (UMaybeTime GroupInfo))
+  } deriving Show
+
+data GroupInfo = GroupInfo
+  { selfRole         :: Role
   } deriving Show
 
 data OtherData = OtherData -- In the future one can add course data.. etc
@@ -144,7 +146,7 @@ getFirstTree _                              = Node emptyCQMessage []
 -- | Get n most recent chat messages as a list of CQMessage
 getNewMsgN :: Int -> WholeChat -> [CQMessage]
 getNewMsgN _ [] = []
-getNewMsgN n (headWholeChat:_) = take n $ snd $ snd (headWholeChat)
+getNewMsgN n (headWholeChat:_) = take n $ snd $ snd headWholeChat
 
 getNewMsgChatIdN :: Int -> WholeChat -> Maybe (ChatId, [CQMessage])
 getNewMsgChatIdN _ [] = Nothing
@@ -167,7 +169,7 @@ getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat
 
 -- | get the timeline of the most recent chat, i.e. sort the chat room of the most recent message by time.
 getTimeLine :: WholeChat -> [CQMessage]
-getTimeLine ((_, (_, timeline)):_) = sortOn (Down . time) $ timeline
+getTimeLine ((_, (_, timeline)):_) = sortOn (Down . time) timeline
 getTimeLine [] = []
 
 -- | Get the timeline of a chat id.

@@ -12,6 +12,7 @@ module Command
   , commandParserTransformByBotName
   ) where
 
+import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -19,7 +20,9 @@ import Data.Aeson
 import Data.Bifunctor
 import Data.HList
 import Data.Maybe (fromMaybe)
+import Data.Time
 import Data.PersistModel
+import Data.UpdateMaybe
 import MeowBot.API
 import MeowBot.BotStructure
 import MeowBot.CommandRule
@@ -28,9 +31,11 @@ import MeowBot.Update
 import Module.Async
 import Module.AsyncInstance
 import Network.WebSockets (Connection, sendTextData)
+import Module
 import System.General
 import System.Meow
 import Utils.RunDB
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified MeowBot.Parser as MP
@@ -57,13 +62,23 @@ doBotAction :: Connection -> BotAction -> Meow ()
 doBotAction conn (BASendPrivate uid txt) = query >>= MeowT . lift . sendPrivate conn uid txt . Just . pack . show . message_number
 doBotAction conn (BASendGroup gid txt)   = query >>= MeowT . lift . sendGroup   conn gid txt . Just . pack . show . message_number
 doBotAction conn (BARetractMsg mid)      = MeowT . lift $ deleteMsg conn mid
-doBotAction conn (BAActionAPI af)           = query >>= MeowT . lift . actionAPI conn . ActionForm af . Just . pack . show . message_number
-doBotAction _    (BAAsync act)      = do
+doBotAction conn (BAActionAPI af)        = query >>= MeowT . lift . actionAPI conn . ActionForm af . Just . pack . show . message_number
+doBotAction _    (BAAsync act)           = do
   $(logDebug) "BAAsync put into set"
   modify . first $ modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet)
 --change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
-doBotAction conn (BAPureAsync pAct) = doBotAction conn (BAAsync $ return <$> pAct)
-doBotAction _    (BASimpleAction meow) = meow
+doBotAction conn (BAPureAsync pAct)      = doBotAction conn (BAAsync $ return <$> pAct)
+doBotAction _    (BASimpleAction meow)   = meow
+doBotAction _    (BAQueryAPI contMaybes)  = do
+  tvarQueries <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) ) ])
+  utcTime <- liftIO getCurrentTime
+  liftIO . atomically $ do
+    list <- readTVar tvarQueries
+    let qid' = maximum (0 : map fst list) + 1
+    modifyTVar' tvarQueries (<> [ (qid, WithTime utcTime contMaybe)
+                                | contMaybe <- contMaybes
+                                | qid <- [qid'..]
+                                ])
 
 -- | Low-level functions to send private messages
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
