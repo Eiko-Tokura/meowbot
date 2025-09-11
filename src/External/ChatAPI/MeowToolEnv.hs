@@ -1,14 +1,17 @@
 module External.ChatAPI.MeowToolEnv where
 
 import Control.Applicative
+import Control.Monad.Trans.Maybe
 import Control.Monad
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger
 import Control.Monad.Reader
 import Control.Monad.Trans.ReaderState
+import Data.Maybe
 import Data.HList
 import Database.Persist.Sql hiding (In)
 import MeowBot.BotStructure
+import MeowBot.GetSelfInfo ( isSelfAdminInGroup )
 import Module.LogDatabase
 import System
 import System.Meow
@@ -46,6 +49,15 @@ overrideMeowToolEnv override = local
       , localStates_otherdata
       )
   )
+
+meowGroupAdmin :: MeowToolEnv r mods Bool
+meowGroupAdmin = fmap (fromMaybe False) . runMaybeT $ do
+    gid  <- MaybeT getGid
+    self <- MaybeT meowGetSelfInfo
+    MaybeT $ pure $ isSelfAdminInGroup self gid
+
+meowGetSelfInfo :: MeowToolEnv r mods (Maybe SelfInfo)
+meowGetSelfInfo = asks (selfInfo . snd . snd)
 
 getBotName :: MeowToolEnv r mods (Maybe String)
 getBotName = asks (maybeBotName . nameOfBot . botModules . snd . fst . fst)

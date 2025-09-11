@@ -255,7 +255,7 @@ instance
   data ToolError SetEssenceMessage = EssenceError Text deriving Show
   enabledByDefault _ _ = False
   toolEnabled _        = computeSettingFromDB botSettingEnableSetEssence botSettingPerChatEnableSetEssence
-  toolUsable _         = isGroupChat
+  toolUsable _         = meowGroupAdmin
 
   toolName _ _ = "set_essence"
   toolDescription _ _ = "Set a message as essence. 当群友发表了非常棒的见解你认为可以为全群员收藏时使用. The message will be pinned to a Highlight list."
@@ -284,7 +284,7 @@ instance
   data ToolError SetGroupBanTool = BanError Text deriving Show
   enabledByDefault _ _ = False
   toolEnabled _        = computeSettingFromDB botSettingEnableSetGroupBan botSettingPerChatEnableSetGroupBan
-  toolUsable _         = isGroupChat
+  toolUsable _         = meowGroupAdmin
 
   toolName _ _ = "ban"
   toolDescription _ _ = "disallow a user (non-admin) to send message in the current chat. Use with extra caution."
