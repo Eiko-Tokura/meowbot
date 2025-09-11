@@ -12,8 +12,11 @@ import Data.Char
 -- | The rule is:
 -- a English character including space and punctuation ~ 0.25 token
 -- any non-ASCII character ~ 1 token
+--
+-- used to be `div` 4
+-- it seems by practice that it is off by a bit, so we use *2 `div` 9 and it matches much better
 estimateTokens :: Text -> Int
-estimateTokens text = T.foldl' estimate 0 text `div` 4
+estimateTokens text = T.foldl' estimate 0 text * 2 `div` 9
   where
     estimate !acc c
       |    isAsciiLower c

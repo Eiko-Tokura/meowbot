@@ -45,7 +45,7 @@ parseArgs = many (do
       commandParser = do
         liftR1 just "--command"
         addE ("--command needs exactly one commandId argument, " ++ commandIdHint) (CommandFlag <$> readE commandIdHint nonFlag)
-      debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage ]
+      debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage, just "--debug-other" >> DebugOther <$> getItem ]
       proxyParser = do
         liftR1 just "--proxy"
         ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
@@ -66,8 +66,9 @@ main :: IO () --runLoggingConcurrent (myLogger "meowbot.log")
 main = do
   args <- getArgs
   runLoggingConcurrent (myLogger True
-      (  [DebugCQMessage | "--debug-cqmsg" `elem` args]
-      <> [DebugJson | "--debug-json" `elem` args]
+      (  [DebugCQMessage   | "--debug-cqmsg" `elem` args]
+      <> [DebugJson        | "--debug-json"  `elem` args]
+      <> [DebugOther "owo" | "--debug-other" `elem` args]
       )
       ["meowbot.log"]) $ do
     $(logDebug) $ pack $ "Arguments: " ++ show args

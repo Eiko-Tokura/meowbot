@@ -19,6 +19,7 @@ import Data.Time.Clock
 -- it will both print to the console and write to a file.
 myLogger :: Bool -> [DebugFlag] -> [FilePath] -> Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 myLogger _ [] fps (Loc fn pkg mod locS locE) src LevelDebug msg = return ()
+myLogger _ [DebugOther _] fps (Loc fn pkg mod locS locE) src LevelDebug msg = return ()
 myLogger time _  fps (Loc fn pkg mod locS locE) src LevelDebug msg = do
   timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
   let log = fromLogStr $ "[DEBUG] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
@@ -42,7 +43,7 @@ myLogger time _ fps (Loc fn pkg mod locS locE) src LevelError msg = do
 myLogger time [] fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = return ()
 myLogger time _ fps (Loc fn pkg mod locS locE) src (LevelOther lv) msg = do
   timeStr <- if time then (<> " ") . toLogStr . show <$> getCurrentTime else return ""
-  let log = fromLogStr $ "[OTHER] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
+  let log = fromLogStr $ "[" <> toLogStr lv <> "] " <> timeStr <> toLogStr mod <> " : " <> toLogStr src <> " " <> msg <> "\n"
   mapM_ (`B.appendFile` log) fps
   B.putStr log
 {-# INLINE myLogger #-}

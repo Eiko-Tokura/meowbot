@@ -35,7 +35,7 @@ commandUpdater = BotCommand Updater $ botT $ do
         let nextStep :: QueryAPIResponse 'QueryGroupList -> Meow [BotAction]
             nextStep (GetGroupListResponse ginfos) = botT $ do
               let gids = map groupBasicInfoGroupId ginfos
-              $logDebug $ toText botid <> " Fetched group list: " <> toText gids
+              $(logOther "UPDATER") $ toText botid <> " Fetched group list: " <> toText gids
               utcTime <- liftIO getCurrentTime
               s@SelfInfo {selfInGroups} <- MaybeT $ queries selfInfo
               let s' = s  { selfInGroups = updateUMaybeTime utcTime
@@ -46,7 +46,7 @@ commandUpdater = BotCommand Updater $ botT $ do
               change $ \od -> od { selfInfo = Just s' }
               return []
         return $ pure $ BAQueryAPI [fmap nextStep . parseResponse]
-        
+
   withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
     utcTime <- liftIO getCurrentTime
 
@@ -54,7 +54,7 @@ commandUpdater = BotCommand Updater $ botT $ do
         updateNeeded = filter (needUpdate anHour utcTime . snd) groupList
         nextStepFor :: GroupId -> QueryAPIResponse 'QueryGroupMemberInfo -> Meow [BotAction]
         nextStepFor gid resp = botT $ do
-          $logDebug $ toText botid <> " Fetched group member info for group " <> toText gid <> ": " <> toText resp
+          $(logOther "UPDATER") $ toText botid <> " Fetched group member info for group " <> toText gid <> ": " <> toText resp
           utcTime' <- liftIO getCurrentTime
           s@SelfInfo {selfInGroups} <- MaybeT $ queries selfInfo
           let s' = s { selfInGroups
@@ -67,6 +67,12 @@ commandUpdater = BotCommand Updater $ botT $ do
                      }
           change $ \od -> od { selfInfo = Just s' }
           return []
+
+    -- | Mark all needed updates as Updating
+    change $ \od -> od { selfInfo = Just s { selfInGroups
+                                              = updateUMaybeTimeWithoutTime selfInGroups
+                                              $ \m -> foldr (Map.update (Just . toUpdating) . fst) m updateNeeded
+                                           } }
 
     parsers <- queryAPI conn `mapM` [GetGroupMemberInfo gid selfId False | gid <- fst <$> updateNeeded]
     return $ pure $ BAQueryAPI [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]

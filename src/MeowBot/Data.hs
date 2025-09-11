@@ -67,7 +67,7 @@ type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
 
 type RunningMode     = [DebugFlag]
-data DebugFlag       = DebugJson | DebugCQMessage deriving (Eq, Show)
+data DebugFlag       = DebugJson | DebugCQMessage | DebugOther String deriving (Eq, Show)
 data RunningFlag     = RunClient String Int | RunServer String Int deriving (Eq, Show)
 data IdentityFlag    = UseName String | UseId BotId | UseSysMsg String deriving (Eq, Show)
 data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
