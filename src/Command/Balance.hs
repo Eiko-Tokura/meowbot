@@ -4,36 +4,38 @@ module Command.Balance where
 import Command
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NE
-import GHC.Exts
-import Data.Function ((&))
 import Data.Default
+import Data.Function ((&))
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.PersistModel
 import Data.Time.Clock
+import GHC.Exts
 import MeowBot
+import MeowBot.CostModel
 import MeowBot.Data.Parser
 import MeowBot.GetInfo
-import MeowBot.CostModel
 import Utils.RunDB
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 
+data ItSelf = ItSelf deriving (Show, Eq)
 data BalanceCommand
   = Own        (Maybe OwnerId) ChatId        (Maybe CostModel) -- ^ a owner of a wallet decides to own a (bot, chat) pair
   | OwnBot     (Maybe OwnerId) (Maybe BotId) (Maybe CostModel) -- ^ a owner of a wallet decides to own a bot
-  -- | OwnBotChat OwnerId (Maybe CostModel)      BotId ChatId  -- ^ admin makes OwnerId own a (bot, chat) pair
-  | AddOwnedBy Amount        OwnerId                           -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
-  | AddTo      Amount        WalletId                          -- ^ admin adds amount to the wallet with WalletId (can be negative)
-  | BalanceCheck (Maybe OwnerId)                               -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
+  | OwnBotChat OwnerId BotId   (Either ItSelf ChatId) (Maybe CostModel) -- ^ admin makes OwnerId own a (bot, chat) pair with optional cost model
+  -- | UnOwn      BotId (Maybe ChatId)                   -- ^ admin removes ownership of a bot or (bot, chat) pair
+  | AddOwnedBy Amount        OwnerId   (Maybe Text)                 -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
+  | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
+  | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
   | TotalBalance (Maybe BotId) -- for admin only
   deriving (Show, Eq)
 
 data BalanceAction
   = AOwn    OwnerId (Maybe CostModel) BotId ChatId
   | AOwnBot OwnerId (Maybe CostModel) BotId
-  | AAddOwnedBy UserId Amount OwnerId
-  | AAddTo      UserId Amount WalletId
+  | AAddOwnedBy UserId Amount OwnerId  (Maybe Text)
+  | AAddTo      UserId Amount WalletId (Maybe Text)
   | ABalanceCheck OwnerId
   | ATotalBalance (Maybe BotId)
 
@@ -112,8 +114,8 @@ balanceAction mBotName scid (AOwn oid mcm bid cid) = do
         (Nothing, Nothing) -> do -- insert new record with default cost model
           insert_ $ BotCostModelPerChat mBotName bid cid def (Just wid) utcTime
     let msg = T.unwords $
-                [toText oid, "with walletId", toText wid, "now owns bot", toText bid, "in chat", toText cid]
-                <> [ "(A new empty wallet was created)" | newWallet ]
+                [toText oid, "with walletId", toText wid, "now owns bot", toText bid, "in", toText cid]
+                <> [ "(empty wallet created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
 balanceAction mBotName scid (AOwnBot oid mcm bid) = do
@@ -137,26 +139,26 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
           insert_ $ BotCostModel mBotName bid def (Just wid) utcTime
     let msg = T.unwords $
                 [ toText oid, "with walletId", toText wid, "now owns bot", toText bid]
-                <> [ "(A new empty wallet was created)" | newWallet ]
+                <> [ "(empty wallet created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
-balanceAction _ scid (AAddOwnedBy uid amt oid) = do
+balanceAction _ scid (AAddOwnedBy uid amt oid mDesc) = do
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
     utcTime <- liftIO getCurrentTime
     runDB $ do -- runDB is atomic
-      insert $ Transaction wid amt utcTime (Just uid) Nothing
+      insert $ Transaction wid amt utcTime (Just uid) mDesc
       update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
     let msg = T.unwords $ [toText amt, "is added to the wallet owned by", toText oid, "with walletId", toText wid]
-                        <> [ "(A new empty wallet was created)" | newWallet ]
+                        <> [ "(empty wallet created)" | newWallet ]
     return $ Just [baSendToChatId scid msg]
 
-balanceAction _ scid (AAddTo uid amt wid) = do
+balanceAction _ scid (AAddTo uid amt wid mDesc) = do
   mWallet <- runDB $ get wid
   case mWallet of
     Just Wallet { walletOwnerId } -> do
       utcTime <- liftIO getCurrentTime
       runDB $ do -- ^ runDB is atomic
-        insert $ Transaction wid amt utcTime (Just uid) Nothing
+        insert $ Transaction wid amt utcTime (Just uid) mDesc
         update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
       let msg = T.unwords [toText amt, "is added to the wallet owned by", toText walletOwnerId, "with walletId", toText wid]
       return $ Just [baSendToChatId scid msg]
@@ -179,32 +181,37 @@ balanceAction _ scid (ABalanceCheck oid) = do
 balanceAction _ scid _ = return $ Just [baSendToChatId scid "This feature is not implemented yet."]
 
 balanceCommandToAction :: BotId -> (ChatId, UserId) -> BalanceCommand -> Maybe BalanceAction
-balanceCommandToAction bid (oid, _) (Own Nothing cid Nothing)           = Just $ AOwn (OwnerId oid) Nothing bid cid
-balanceCommandToAction _   (oid, _) (OwnBot Nothing (Just bid) Nothing) = Just $ AOwnBot (OwnerId oid) Nothing bid
-balanceCommandToAction _   (_, _)   (Own Nothing _ (Just _))            = Nothing
-balanceCommandToAction _   (_, _)   (OwnBot Nothing (Just _) (Just _))  = Nothing
-balanceCommandToAction bid _        (Own (Just oid) cid mcm)            = Just $ AOwn oid mcm bid cid
-balanceCommandToAction bid _        (OwnBot (Just oid) mbid mcm)        = Just $ AOwnBot oid mcm (fromMaybe bid mbid)
-balanceCommandToAction bid (oid, _) (OwnBot Nothing Nothing mcm)        = Just $ AOwnBot (OwnerId oid) mcm bid
-balanceCommandToAction _   (_, uid) (AddOwnedBy amt oid)                = Just $ AAddOwnedBy uid amt oid
-balanceCommandToAction _   (_, uid) (AddTo amt wid)                     = Just $ AAddTo uid amt wid
-balanceCommandToAction _   (oid, _) (BalanceCheck oid')                 = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
-balanceCommandToAction _   _        (TotalBalance mbid)                 = Just $ ATotalBalance mbid
+balanceCommandToAction _   _        (OwnBotChat oid bid (Right cid) mcm)   = Just $ AOwn oid mcm bid cid
+balanceCommandToAction _   _        (OwnBotChat oid bid (Left ItSelf) mcm) = Just $ AOwn oid mcm bid (ownerChatId oid)
+balanceCommandToAction bid (oid, _) (Own Nothing cid Nothing)              = Just $ AOwn (OwnerId oid) Nothing bid cid
+balanceCommandToAction _   (oid, _) (OwnBot Nothing (Just bid) Nothing)    = Just $ AOwnBot (OwnerId oid) Nothing bid
+balanceCommandToAction _   (_, _)   (Own Nothing _ (Just _))               = Nothing
+balanceCommandToAction _   (_, _)   (OwnBot Nothing (Just _) (Just _))     = Nothing
+balanceCommandToAction bid _        (Own (Just oid) cid mcm)               = Just $ AOwn oid mcm bid cid
+balanceCommandToAction bid _        (OwnBot (Just oid) mbid mcm)           = Just $ AOwnBot oid mcm (fromMaybe bid mbid)
+balanceCommandToAction bid (oid, _) (OwnBot Nothing Nothing mcm)           = Just $ AOwnBot (OwnerId oid) mcm bid
+balanceCommandToAction _   (_, uid) (AddOwnedBy amt oid mdesc)             = Just $ AAddOwnedBy uid amt oid mdesc
+balanceCommandToAction _   (_, uid) (AddTo amt wid mdesc)                  = Just $ AAddTo uid amt wid mdesc
+balanceCommandToAction _   (oid, _) (BalanceCheck oid')                    = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
+balanceCommandToAction _   _        (TotalBalance mbid)                    = Just $ ATotalBalance mbid
 
 checkPrivilegeBalance :: IsSuperUser -> (ChatId, UserId) -> BalanceCommand -> Bool
 checkPrivilegeBalance (IsSuperUser True ) _  _                                 = True
 checkPrivilegeBalance (IsSuperUser False) _ (Own Nothing _ Nothing)            = True
 checkPrivilegeBalance (IsSuperUser False) _ (OwnBot Nothing _ Nothing)         = True
+checkPrivilegeBalance (IsSuperUser False) _ (BalanceCheck Nothing)             = True
 checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid)) = cid == coerce oid || PrivateChat uid == coerce oid
-checkPrivilegeBalance _ _ _                                      = False
+checkPrivilegeBalance _ _ _                                                    = False
 
 ownerIdP = fmap OwnerId chatIdP
+selfP = ItSelf <$ (asum . map string) ["self", "itself", "ItSelf"]
 
 costModelP :: Parser T.Text Char CostModel
 costModelP = asum
   [ (asum . map string) ["unlimited", "Unlimited"]       >> return Unlimited
   , (asum . map string) ["subscription", "Subscription"] >> return Subscription
   , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return PayAsYouGo
+  , (asum . map string) ["costonly", "CostOnly"]         >> return CostOnly
   ]
 
 balanceParser :: Parser T.Text Char (NonEmpty BalanceCommand)
@@ -218,7 +225,6 @@ balanceParser = headCommand "" >> asum
       >> just '{'
       >> many spaceOrEnter
       >> NE.some1 (innerBalanceParser <* many spaceOrEnter <* just ';' <* many spaceOrEnter)
-      <* many spaceOrEnter
       <* just '}'
       <* many spaceOrEnter
       <* end
@@ -229,9 +235,10 @@ balanceParser = headCommand "" >> asum
       , string "own" >> spaces >> string "bot" >> OwnBot Nothing <$> optMaybe (spaces >> botIdP) <*> pure Nothing
       , Own    <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces) <*> chatIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , OwnBot <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0) <*> optMaybe botIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
+      , OwnBotChat <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0 <*> botIdP <*> (spaces >> string "in" >> spaces >> (Right <$> chatIdP <|> Left <$> selfP)) <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , string "add" >> spaces >>
-        (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
-        <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP
+        (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
+        <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
       ]
@@ -245,6 +252,8 @@ unitTestsBalanceParser =
         , (":user 123 own group 456 using subscription", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) (Just Subscription))
         , (":user 123 own group 456", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) Nothing)
         , (":group 123 own bot 789 using unlimited", Just $ pure $ OwnBot (Just $ OwnerId (GroupChat 123)) (Just 789) (Just Unlimited))
+        , (":group 123 own bot 1 in group 123 using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Right $ GroupChat 123) (Just PayAsYouGo))
+        , (":group 123 own bot 1 in itself using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Left ItSelf) (Just PayAsYouGo))
         , (":{own bot; user 123 own group 12345 using subscription;}"
           , Just $ OwnBot Nothing Nothing Nothing :| [Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 12345) (Just Subscription)]
           )
@@ -280,11 +289,12 @@ concatOutput m = do
   if null outputs
   then return Nothing
   else
-    let toGroup = [ (output, typeOutput output) | output <- outputs ]
-        grouped = [ concatSend output
-                  | (output, typeOutput) <- toGroup
-                  , then group by typeOutput using groupWith
+    let grouped = [ concatSend output
+                  | output <- outputs
+                  , let outputType = typeOutput output
+                  , then group by outputType using groupWith
                   ] & catMaybes
+
         typeOutput (BASendGroup gid _)   = Just $ Right gid
         typeOutput (BASendPrivate uid _) = Just $ Left uid
         typeOutput _                     = Nothing
