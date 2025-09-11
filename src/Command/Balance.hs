@@ -268,9 +268,10 @@ commandBalance = BotCommand Balance $ botT $ do
   let privilege = all (checkPrivilegeBalance isSuper (cid, uid)) parsedCommands
       mActions  = balanceCommandToAction botid (cid, uid) `mapM` parsedCommands
   case (mActions, privilege) of
-    (Nothing, _)         -> return [baSendToChatId cid "Invalid command or parameters."]
-    (Just actions, True) -> MaybeT $ concatOutput $ balanceAction botName cid `mapM` actions
-    (Just _, False)      -> return [baSendToChatId cid "Operation not permitted."]
+    (Nothing, _)                -> return [baSendToChatId cid "Invalid command or parameters."]
+    (Just (action :| []), True) -> MaybeT $ balanceAction botName cid action
+    (Just actions, True)        -> MaybeT $ concatOutput $ balanceAction botName cid `mapM` actions
+    (Just _, False)             -> return [baSendToChatId cid "Operation not permitted."]
 
 concatOutput :: Monad m => m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
 concatOutput m = do
