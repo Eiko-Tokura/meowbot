@@ -94,11 +94,15 @@ determineOverdue cm w@(walletBalance . entityVal -> amt)
   | amt < 0         = WalletBalanceOverdue w
   | otherwise       = WalletBalanceLow w
 
+-- | Migration note:
+-- After the entire system being tracked,
+-- the NoCostModelAssigned and HasCostModelButNoWalletAssociated states should respond to DisableService
+-- but for now, we keep the old behavior of doing nothing
 overdueBehaviorNeedAction :: ServiceBalanceCheck -> Maybe (OverdueBehavior, WalletInfo)
 overdueBehaviorNeedAction NoCostModelAssigned                                                      = Nothing
 overdueBehaviorNeedAction (WalletUnlimited _)                                                      = Nothing
 overdueBehaviorNeedAction (WalletBalanceGood _)                                                    = Nothing
-overdueBehaviorNeedAction (WalletBalanceLow w@(walletOverdueBehavior . entityVal -> Just act))     = Just (onNotis inAdvanceNoti act, w)
+overdueBehaviorNeedAction (WalletBalanceLow w@(walletOverdueBehavior . entityVal -> Just act))     = Just (toDoNothing $ onNotis inAdvanceNoti act, w)
 overdueBehaviorNeedAction (WalletBalanceLow _)                                                     = Nothing
 overdueBehaviorNeedAction (WalletBalanceOverdue w@(walletOverdueBehavior . entityVal -> Just act)) = Just (onNotis overdueNoti act, w)
 overdueBehaviorNeedAction (WalletBalanceOverdue _)                                                 = Nothing
@@ -188,6 +192,8 @@ findApiPriceInfo time model = do
     <*> (apiPriceInfoInputTokenPriceCache . entityVal <$> mInfo)
     <*> (apiPriceInfoOutputTokenPrice . entityVal =<< mInfo)
 
+-- | Check and send notification if needed, returns list of actions to perform
+-- checks walletOverdueNotified, when already notified, no action is taken
 checkSendNotis :: BotName -> BotId -> ChatId -> OverdueNotification -> WalletInfo -> Meow [BotAction]
 checkSendNotis botname botid cid noti winfo =
   let notified = fromMaybe False winfo.entityVal.walletOverdueNotified

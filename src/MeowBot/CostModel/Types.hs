@@ -32,5 +32,9 @@ onNotis :: ([OverdueNotification] -> [OverdueNotification]) -> OverdueBehavior -
 onNotis f (DoNothing ns)      = DoNothing (f ns)
 onNotis f (DisableService ns) = DisableService (f ns)
 
+toDoNothing :: OverdueBehavior -> OverdueBehavior
+toDoNothing (DoNothing ns)      = DoNothing ns
+toDoNothing (DisableService ns) = DoNothing ns
+
 instance Default OverdueBehavior where
   def = DoNothing []
