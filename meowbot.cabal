@@ -61,7 +61,6 @@ common extensions
       DerivingVia
       OverloadedStrings
       TemplateHaskell
-      TransformListComp
       TypeFamilies
       UndecidableInstances
       ViewPatterns
