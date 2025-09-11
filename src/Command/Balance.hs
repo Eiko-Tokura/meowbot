@@ -1,10 +1,13 @@
-{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE ParallelListComp, TransformListComp #-}
 module Command.Balance where
 
 import Command
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Data.Coerce
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
+import GHC.Exts
+import Data.Function ((&))
 import Data.Default
 import Data.Maybe
 import Data.PersistModel
@@ -180,30 +183,50 @@ costModelP = asum
   , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return PayAsYouGo
   ]
 
-balanceParser :: Parser T.Text Char BalanceCommand
+balanceParser :: Parser T.Text Char (NonEmpty BalanceCommand)
 balanceParser = headCommand "" >> asum
-  [ string "own" >> spaces >> Own Nothing <$> chatIdP <*> pure Nothing
-  , string "own" >> spaces >> string "bot" >> OwnBot Nothing <$> optMaybe (spaces >> botIdP) <*> pure Nothing
-  , Own    <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces) <*> chatIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
-  , OwnBot <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0) <*> optMaybe botIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
-  , string "add" >> spaces >>
-    (   AddOwnedBy <$> (float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
-    <|> AddTo      <$> (float <* spaces <* string "to" <* spaces) <*> walletIdP
-    )
-  , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
-  ]
-  <* many spaceOrEnter
-  <* end
+    [ fmap pure
+      ( innerBalanceParser
+        <* many spaceOrEnter
+        <* end
+      )
+    , many spaceOrEnter
+      >> just '{'
+      >> many spaceOrEnter
+      >> NE.some1 (innerBalanceParser <* many spaceOrEnter <* just ';' <* many spaceOrEnter)
+      <* many spaceOrEnter
+      <* just '}'
+      <* many spaceOrEnter
+      <* end
+    ]
+  where
+    innerBalanceParser = asum
+      [ string "own" >> spaces >> Own Nothing <$> chatIdP <*> pure Nothing
+      , string "own" >> spaces >> string "bot" >> OwnBot Nothing <$> optMaybe (spaces >> botIdP) <*> pure Nothing
+      , Own    <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces) <*> chatIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
+      , OwnBot <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0) <*> optMaybe botIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
+      , string "add" >> spaces >>
+        (   AddOwnedBy <$> (float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
+        <|> AddTo      <$> (float <* spaces <* string "to" <* spaces) <*> walletIdP
+        )
+      , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
+      ]
 
-unitTestsBalanceParser :: [(Maybe BalanceCommand, Bool)]
+unitTestsBalanceParser :: [(Maybe (NonEmpty BalanceCommand), Bool)]
 unitTestsBalanceParser =
   let testCases =
-        [ (":own group 12345", Just $ Own Nothing (GroupChat 12345) Nothing)
-        , (":own bot", Just $ OwnBot Nothing Nothing Nothing)
-        , (":own bot 67890", Just $ OwnBot Nothing (Just 67890) Nothing)
-        , (":user 123 own group 456 using subscription", Just $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) (Just Subscription))
-        , (":user 123 own group 456", Just $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) Nothing)
-        , (":group 123 own bot 789 using unlimited", Just $ OwnBot (Just $ OwnerId (GroupChat 123)) (Just 789) (Just Unlimited))
+        [ (":own group 12345", Just $ pure $ Own Nothing (GroupChat 12345) Nothing)
+        , (":own bot", Just $ pure $ OwnBot Nothing Nothing Nothing)
+        , (":own bot 67890", Just $ pure $ OwnBot Nothing (Just 67890) Nothing)
+        , (":user 123 own group 456 using subscription", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) (Just Subscription))
+        , (":user 123 own group 456", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) Nothing)
+        , (":group 123 own bot 789 using unlimited", Just $ pure $ OwnBot (Just $ OwnerId (GroupChat 123)) (Just 789) (Just Unlimited))
+        , (":{own bot; user 123 own group 12345 using subscription;}"
+          , Just $ OwnBot Nothing Nothing Nothing :| [Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 12345) (Just Subscription)]
+          )
+        , (":{own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot;}"
+          , Just $ NE.fromList $ replicate 10 (OwnBot Nothing Nothing Nothing)
+          )
         ]
       result = runParser balanceParser . fst <$> testCases
   in  [ (mParsed, mParsed == expected)
@@ -216,11 +239,39 @@ commandBalance = BotCommand Balance $ botT $ do
   (msg, cid, uid, _mid, _sender) <- MaybeT $ getEssentialContent <$> query
   botid           <- query
   BotName botName <- query
-  catSetCommand   <- MaybeT $ (`runParser` msg) <$> commandParserTransformByBotName balanceParser
+  parsedCommands  <- MaybeT $ (`runParser` msg) <$> commandParserTransformByBotName balanceParser
   isSuper         <- lift $ isSuperUser uid
-  let privilege = checkPrivilegeBalance isSuper (cid, uid) catSetCommand
-      mAction   = balanceCommandToAction botid (cid, uid)  catSetCommand
-  case (mAction, privilege) of
-    (Nothing, _)        -> return [baSendToChatId cid "Invalid command or parameters."]
-    (Just action, True) -> MaybeT $ balanceAction botName cid action
-    (Just _, False)     -> return [baSendToChatId cid "Operation not permitted."]
+  let privilege = all (checkPrivilegeBalance isSuper (cid, uid)) parsedCommands
+      mActions  = balanceCommandToAction botid (cid, uid) `mapM` parsedCommands
+  case (mActions, privilege) of
+    (Nothing, _)         -> return [baSendToChatId cid "Invalid command or parameters."]
+    (Just actions, True) -> MaybeT $ concatOutput $ balanceAction botName cid `mapM` actions
+    (Just _, False)      -> return [baSendToChatId cid "Operation not permitted."]
+
+concatOutput :: Monad m => m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
+concatOutput m = do
+  outputsMaybe <- m
+  let outputs = concat $ catMaybes $ NE.toList outputsMaybe
+  if null outputs
+  then return Nothing
+  else
+    let toGroup = [ (output, typeOutput output) | output <- outputs ]
+        grouped = [ concatSend output
+                  | (output, typeOutput) <- toGroup
+                  , then group by typeOutput using groupWith
+                  ] & catMaybes
+        typeOutput (BASendGroup gid _)   = Just $ Right gid 
+        typeOutput (BASendPrivate uid _) = Just $ Left uid
+        typeOutput _                     = Nothing
+
+        concatSend []                              = Nothing
+        concatSend (BASendGroup gid msgs : rest)   =
+          case concatSend rest of
+            Just (BASendGroup _ msgs') -> Just $ BASendGroup gid (msgs <> "\n" <> msgs')
+            _                          -> Just $ BASendGroup gid msgs
+        concatSend (BASendPrivate uid msgs : rest) =
+          case concatSend rest of
+            Just (BASendPrivate _ msgs') -> Just $ BASendPrivate uid (msgs <> "\n" <> msgs')
+            _                            -> Just $ BASendPrivate uid msgs
+        concatSend (_          : rest)             = concatSend rest
+    in return $ Just grouped
