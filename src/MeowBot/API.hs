@@ -30,7 +30,7 @@ queryAPI
 queryAPI conn query = do
   echo <- generateUniqueEcho
   liftIO $ sendTextData conn $ encode (ActionForm query $ Just echo)
-  $(logInfo) $ "=> Query: " <> tshow query
+  $(logInfo) $ "=> Query: " <> tshow query <> " with echo: " <> echo
   return $ \received -> do
     decoded :: WithEcho (QueryAPIResponse queryType) <- decode received
     hasEcho <- maybeEcho decoded

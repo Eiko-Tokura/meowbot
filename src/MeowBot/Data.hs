@@ -18,6 +18,7 @@ module MeowBot.Data
 
   , ActionAPI(..), ActionForm(..)
   , QueryAPI(..), QueryAPIResponse(..), QueryType(..), WithEcho(..)
+  , GroupBasicInfo(..)
 
   , BotName(..)
   , BotModules(..)
@@ -176,15 +177,17 @@ newtype ForwardMessageId = ForwardMessageId { unForwardMessageId :: Int }
 
 data QueryAPI (q :: QueryType) where
   GetStatus    :: QueryAPI 'QueryGetStatus
-  GetGroupList :: { queryGroupListNoCache :: Maybe Bool } -> QueryAPI 'QueryGroupList
+  GetGroupList :: { queryGroupListNoCache :: Bool } -> QueryAPI 'QueryGroupList
+  -- ^ It seems that different to CQHTTP, nap-cat must requre the no_cache field
+  -- so we switch from Maybe Bool to Bool
   GetGroupMemberInfo ::
     { queryGroupMemberGroupId :: GroupId
     , queryGroupMemberUserId  :: UserId
-    , queryGroupMemberNoCache :: Maybe Bool
+    , queryGroupMemberNoCache :: Bool
     } -> QueryAPI 'QueryGroupMemberInfo
   GetGroupInfo ::
     { queryGroupInfoGroupId :: GroupId
-    , queryGroupInfoNoCache :: Maybe Bool
+    , queryGroupInfoNoCache :: Bool
     } -> QueryAPI 'QueryGroupMemberInfo
   GetForwardMessage :: ForwardMessageId -> QueryAPI 'QueryGetForwardMessage
 
@@ -204,7 +207,7 @@ data QueryAPIResponse (q :: QueryType) where
   GetStatusResponse ::
     { getStatusOnline :: Bool, getStatusGood :: Bool } -> QueryAPIResponse 'QueryGetStatus
   GetGroupListResponse ::
-    { getGroupList :: [GroupId] } -> QueryAPIResponse 'QueryGroupList
+    { getGroupList :: [GroupBasicInfo] } -> QueryAPIResponse 'QueryGroupList
   GetGroupMemberInfoResponse ::
     { getGroupMemberInfoGroupId         :: GroupId
     , getGroupMemberInfoUserId          :: UserId
@@ -361,10 +364,31 @@ instance FromJSON (QueryAPIResponse 'QueryGroupInfo) where
       , getGroupInfoMaxMemberCount = maxmembercount
       }
 
-instance FromJSON (QueryAPIResponse 'QueryGroupList) where
+data GroupBasicInfo = GroupBasicInfo
+  { groupBasicInfoGroupId        :: GroupId
+  , groupBasicInfoGroupName      :: Text
+  , groupBasicInfoMemberCount    :: Int
+  , groupBasicInfoMaxMemberCount :: Int
+  } deriving (Show, Eq, Read, Generic, NFData)
+
+instance FromJSON GroupBasicInfo where
+  parseJSON = withObject "GroupBasicInfo" $ \o -> do
+    gid            <- o .: "group_id"
+    gname          <- o .: "group_name"
+    membercount    <- o .: "member_count"
+    maxmembercount <- o .: "max_member_count"
+    return GroupBasicInfo
+      { groupBasicInfoGroupId        = gid
+      , groupBasicInfoGroupName      = gname
+      , groupBasicInfoMemberCount    = membercount
+      , groupBasicInfoMaxMemberCount = maxmembercount
+      }
+
+instance FromJSON (WithEcho (QueryAPIResponse 'QueryGroupList)) where
   parseJSON = withObject "QueryAPIResponse" $ \o -> do
-    dataObj <- o .: "data" -- ^ response is a JSON Array
-    return $ GetGroupListResponse { getGroupList = GroupId <$> dataObj }
+    dataObj <- o .: "data"
+    mecho  <- o .:? "echo"
+    return $ WithEcho mecho $ GetGroupListResponse { getGroupList = dataObj }
 
 -------------------------------------------------------------------------------------------
 -- Action API

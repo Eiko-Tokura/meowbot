@@ -253,7 +253,7 @@ instance
   type ToolInput SetEssenceMessage = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to set as essence"])
   type ToolOutput SetEssenceMessage = ParamToData (ObjectP0 '[StringP "result" "the result of the action"])
   data ToolError SetEssenceMessage = EssenceError Text deriving Show
-  enabledByDefault _ _ = False
+  enabledByDefault _ _ = True
   toolEnabled _        = computeSettingFromDB botSettingEnableSetEssence botSettingPerChatEnableSetEssence
   toolUsable _         = meowGroupAdmin
 
@@ -282,7 +282,7 @@ instance
     )
   type ToolOutput SetGroupBanTool = ParamToData (ObjectP0 '[StringP "result" "the result of the ban action"])
   data ToolError SetGroupBanTool = BanError Text deriving Show
-  enabledByDefault _ _ = False
+  enabledByDefault _ _ = True
   toolEnabled _        = computeSettingFromDB botSettingEnableSetGroupBan botSettingPerChatEnableSetGroupBan
   toolUsable _         = meowGroupAdmin
 

@@ -5,6 +5,7 @@ module Module.CommandInstance where
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Monad
 import Control.Monad.Logger
 import Control.Monad.Trans.ReaderState
 import Control.Parallel.Strategies
@@ -99,20 +100,6 @@ instance
     -- | When received any raw message, put into the tvar so other modules can be notified of the message
     askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . (`writeTVar` Just msg)
 
-    time <- liftIO getCurrentTime
-    tvarQueryList <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )])
-    liftIO . atomically $ removeOutdatedQuery time tvarQueryList
-    queriesList <- liftIO $ readTVarIO tvarQueryList
-    let firstQuery = listToMaybe $ mapMaybe (\(qid, WithTime _ parser) -> (qid, ) <$> parser msg) queriesList
-
-    tmeow <- readSystem <$> asks snd
-    case firstQuery of
-      Just (qid, meowAction) -> do
-        liftIO . atomically $ do
-          modifyTVar tvarQueryList (filter ((/= qid) . fst))
-          modifyTVar tmeow (<> [meowAction])
-      Nothing -> return ()
-
     botMods <- gets (botModules . botConfig . snd)
     --mode <- gets (botConfig . snd)
     let gcmdids = canUseGroupCommands   botMods
@@ -122,41 +109,62 @@ instance
         nameBot = fromMaybe "喵喵" $ maybeBotName $ nameOfBot botMods
         -- mods    = botMods
         eCQmsg  = eitherDecode msg :: Either String CQMessage
+
+    when (DebugJson `elem` botMods.botInstance.botDebugFlags) $
+      $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
+
+    --------- Queries ----------------------
+    time <- liftIO getCurrentTime
+    tvarQueryList <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )])
+    liftIO . atomically $ removeOutdatedQuery time tvarQueryList
+    queriesList <- liftIO $ readTVarIO tvarQueryList
+    let firstQuery = listToMaybe $ mapMaybe (\(qid, WithTime _ parser) -> (qid, ) <$> parser msg) queriesList
+
     conn <- readSystem <$> asks snd
-    --case traceModeWith DebugCQMessage mode (((nameBot ++ "debug: ") ++) . show) eCQmsg of
-    case eCQmsg of
-      Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
-      Right cqmsg -> do
-        askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
-        $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
-        case eventType cqmsg of
-          LifeCycle -> do
-            $(logDebug) "LifeCycle event."
-            updateSelfInfo cqmsg
-            $(logDebug) "self info updated."
-          HeartBeat -> return ()
-          Response -> do
-            change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
-            updateSavedAdditionalData
-            $(logInfo) $ pack nameBot <> " <- response."
-          PrivateMessage -> do
-            updateStates nameBot cqmsg
-            tmeow   <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds])
-          GroupMessage -> do
-            updateStates nameBot cqmsg
-            tmeow   <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds])
-          RequestEvent -> do
-            tmeow <- readSystem <$> asks snd
-            liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
-          _ -> return ()
-        where
-          updateStates name cqm = do
-            cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> increaseAbsoluteId
-            change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
-            updateSavedAdditionalData
-            $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
+    tmeow <- readSystem <$> asks snd
+    case firstQuery of
+      Just (qid, meowAction) -> do
+        $logInfo $ pack nameBot <> " <- (query " <> pack (show qid) <> ") Received response."
+        liftIO . atomically $ do
+          modifyTVar tvarQueryList (filter ((/= qid) . fst))
+          modifyTVar tmeow (<> [meowAction])
+      Nothing -> do
+    ------------Command---------------------
+        case eCQmsg of
+          Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
+          Right cqmsg -> do
+            askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
+            $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
+            case eventType cqmsg of
+              LifeCycle -> do
+                $(logDebug) "LifeCycle event."
+                updateSelfInfo cqmsg
+                $(logDebug) "self info updated."
+              HeartBeat -> return ()
+              Response -> do
+                change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
+                updateSavedAdditionalData
+                $(logInfo) $ pack nameBot <> " <- response."
+              PrivateMessage -> do
+                updateStates nameBot cqmsg
+                tmeow   <- readSystem <$> asks snd
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds])
+              GroupMessage -> do
+                updateStates nameBot cqmsg
+                tmeow   <- readSystem <$> asks snd
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds])
+              RequestEvent -> do
+                tmeow <- readSystem <$> asks snd
+                liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
+              _ -> return ()
+            where
+              updateStates name cqm = do
+                cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> increaseAbsoluteId
+                change $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
+                updateSavedAdditionalData
+                $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
+
+    -------Next Async-------------------
     -- | creating a new async to receive the next message
     asyncNew <- liftIO $ async $ receiveData conn
     modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
