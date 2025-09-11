@@ -294,7 +294,7 @@ commandBookMan = BotCommand BookMan $ botT $ do
   bquery <- pureMaybe $ MP.runParser bookParser msg
   other_data <- lift $ query @OtherData
   case bquery of
-    Upload bookname pdf -> do
+    Upload _bookname _pdf -> do
       return [ baSendToChatId cid $ T.pack "not supported yet o.o" ]
       --let bookinfo = BookInfo Nothing Nothing [] "uploader"
       --book <- lift . lift $ runExceptT $ makeBook bookname bookinfo pdf

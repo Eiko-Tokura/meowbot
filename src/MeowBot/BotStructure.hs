@@ -73,6 +73,7 @@ data AllData = AllData
 
 data SelfInfo = SelfInfo
   { selfId :: UserId
+  , selfInGroups :: [GroupId]
   } deriving Show
 
 data OtherData = OtherData -- In the future one can add course data.. etc

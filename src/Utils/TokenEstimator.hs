@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 -- | This module provides a function that estimates the number of tokens in a given text.
 module Utils.TokenEstimator
   ( estimateTokens

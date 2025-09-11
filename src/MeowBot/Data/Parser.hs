@@ -5,7 +5,6 @@ module MeowBot.Data.Parser
 
 import MeowBot.Data
 import MeowBot.Parser
-import Data.Text (Text)
 import Data.PersistModel
 import Utils.Persist
 
@@ -19,4 +18,4 @@ botIdP :: Parser Text Char BotId
 botIdP = BotId <$> int
 
 walletIdP :: Parser Text Char WalletId
-walletIdP = intToKey <$> int
+walletIdP = intToKey @_ @Int <$> int

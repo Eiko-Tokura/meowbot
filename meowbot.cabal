@@ -153,7 +153,7 @@ library meowbot-lib
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
     if flag(deploy)
-      ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8
+      ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -Wno-unused-imports
     else
       ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O0 -threaded -j8
     -- -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=512 -finfo-table-map -fdistinct-constructor-tables -j8

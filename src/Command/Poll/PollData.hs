@@ -1,13 +1,12 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, TypeApplications, DerivingVia, DeriveAnyClass #-}
+{-# LANGUAGE DerivingVia, DeriveAnyClass #-}
 module Command.Poll.PollData where
 
 import qualified Data.Set as S
 import qualified Data.Map as M
-import Data.Typeable
 import Data.Additional
 import MeowBot.Data
 
-newtype PollId = PollId Int deriving (Show, Read, Num, Real, Enum, Integral, Eq, Ord, Typeable) via Int
+newtype PollId = PollId Int deriving (Show, Read, Num, Real, Enum, Integral, Eq, Ord) via Int
 
 instance IsAdditionalData PollId -- ^ this data need to be attached to a message
 
@@ -17,7 +16,7 @@ data PollData = PollData
   , pollTitle   :: Text
   , pollOptions :: M.Map Int Text
   , pollVotes   :: M.Map UserId (S.Set Int)
-  } deriving (Show, Read, Eq, Typeable, IsAdditionalData)
+  } deriving (Show, Read, Eq, IsAdditionalData)
 
 pollStatistics :: PollData -> [(Int, Text, Int)]
 pollStatistics poll =

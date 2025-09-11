@@ -8,7 +8,6 @@ import qualified Data.Set as S
 import MeowBot.Parser
 import qualified Data.Text as T
 import Text.Printf
-import Data.Typeable
 import Data.Additional
 import Data.Additional.Default
 import Command
@@ -22,7 +21,7 @@ import MeowBot
 import Utils.RunDB
 import qualified Data.Map as M
 
-data HangmanUnit = HangmanUnit deriving (Show, Eq, Read, Typeable)
+data HangmanUnit = HangmanUnit deriving (Show, Eq, Read)
 
 instance IsAdditionalData HangmanUnit
 
