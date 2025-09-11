@@ -309,7 +309,9 @@ commandChat = BotCommand Chat $ botT $ do
     Just (DisableService notis, winfo) -> do
       lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
   case breakAction of
-    Left disableAndNofity -> return disableAndNofity
+    Left disableAndNofity -> do
+      $logInfo "Service disabled due to insufficient balance"
+      return disableAndNofity
     Right extraAction -> do
       ioeResponse <- lift . embedMeowToolEnv . toIO $
         case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of

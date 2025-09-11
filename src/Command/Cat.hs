@@ -148,7 +148,9 @@ commandCat = BotCommand Cat $ botT $ do
                   messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
       case breakAction of
-        Left disableAndNotify -> return disableAndNotify
+        Left disableAndNotify -> do
+          $logInfo "Service disabled due to insufficient balance"
+          return disableAndNotify
         Right extraNotify -> do
           asyncAction <- liftIO $ actionSendMessages displayThinking md (msg, cid, uid, mid, sender) (return ()) ioEChatResponse
           $(logDebug) $ "created async: " <> T.pack (show asyncAction)
