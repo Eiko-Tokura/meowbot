@@ -3,6 +3,20 @@ module MeowBot.CostModel.Types where
 import Utils.Persist
 import Data.Default
 import MeowBot.Data
+import Text.Printf
+
+newtype Amount = Amount { unAmount :: Double }
+  deriving newtype (Show, Eq, Ord, Num, Fractional, PersistField, PersistFieldSql)
+
+newtype ActualCost = ActualCost { unActualCost :: Double }
+  deriving newtype (Show, Eq, Ord, Num, Fractional, PersistField, PersistFieldSql)
+
+-- | displayed as decimals instead of scientific notation
+instance ToText Amount Text where
+  toText (Amount a)     = pack $ printf "%.3f" a
+
+instance ToText ActualCost Text where
+  toText (ActualCost a) = pack $ printf "%.8f" a
 
 data CostModel
   = Unlimited    -- ^ no cost attached at all

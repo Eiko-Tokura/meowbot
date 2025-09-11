@@ -171,7 +171,7 @@ balanceAction _ scid (ABalanceCheck oid) = do
           ownsMsg = T.intercalate "\n" $ ["Associated with"]
                     <>  [ "bot" <> toText bid <> " " <> toText cm
                         | (bid, cm)      <- fst owns ]
-                    <>  [ "bot" <> toText bid <> " in chat" <> toText cid <> " " <> toText cm
+                    <>  [ "bot" <> toText bid <> " in " <> toText cid <> " " <> toText cm
                         | (bid, cid, cm) <- snd owns ]
       return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
@@ -230,8 +230,8 @@ balanceParser = headCommand "" >> asum
       , Own    <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces) <*> chatIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , OwnBot <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0) <*> optMaybe botIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , string "add" >> spaces >>
-        (   AddOwnedBy <$> (float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
-        <|> AddTo      <$> (float <* spaces <* string "to" <* spaces) <*> walletIdP
+        (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP
+        <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
       ]

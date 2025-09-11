@@ -6,6 +6,7 @@ module MeowBot.CostModel
 import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
+import Data.Coerce
 import Data.Default
 import Data.Maybe (fromMaybe)
 import Data.PersistModel
@@ -16,8 +17,6 @@ import MeowBot
 import MeowBot.CostModel.Types
 import Utils.RunDB
 import qualified Data.Text as T
-
-type Amount = Double
 
 data PricingModel = PricingModel
   { payAsYouGoFeeRate      :: Double
@@ -30,13 +29,13 @@ instance Default PricingModel where
     , monthlySubscriptionFee = 10.0 -- 10 per month for subscription
     }
 
-generateNominalCost :: PricingModel -> CostModel -> Double -> Maybe Double
+generateNominalCost :: PricingModel -> CostModel -> ActualCost -> Maybe Amount
 generateNominalCost _  Unlimited    _     = Nothing
 generateNominalCost _  Subscription _     = Nothing
-generateNominalCost pm PayAsYouGo   usage = Just $ usage / (1 - pm.payAsYouGoFeeRate)
-generateNominalCost _  CostOnly     usage = Just usage
+generateNominalCost pm PayAsYouGo   usage = Just $ coerce usage / (1 - coerce pm.payAsYouGoFeeRate)
+generateNominalCost _  CostOnly     usage = Just $ coerce usage
 
-generateCostRecord :: Maybe ChatModel -> Maybe Text -> UTCTime -> PricingModel -> Maybe CostModel -> BotId -> ChatId -> Maybe WalletId -> TokenConsumption -> Maybe TokenCost -> ApiCostRecord
+generateCostRecord :: Maybe ChatModel -> Maybe Text -> UTCTime -> PricingModel -> Maybe CostModel -> BotId -> ChatId -> Maybe WalletId -> TokenConsumption -> Maybe ActualCost -> ApiCostRecord
 generateCostRecord chatModel apiKey time pm mcm bid cid wid consumption mActualCost =
   let mNominalCost = do
         cm <- mcm
@@ -163,7 +162,7 @@ insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ 
     let pricingModel  = def
     case mTuple of
       Just (modelPrice, mWalletId, apikey) -> do
-        let estimateCost  = tokenCost modelPrice consumption
+        let estimateCost  = ActualCost $ tokenCost modelPrice consumption
             apiCostRecord = generateCostRecord model (Just apikey) utcTime pricingModel mCostModel botId chatId mWalletId consumption (Just estimateCost)
         lift $ insert_ apiCostRecord
         case (mWalletId, apiCostRecord.apiCostRecordNominalCost) of

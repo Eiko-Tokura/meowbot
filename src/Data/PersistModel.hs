@@ -67,7 +67,7 @@ SuperUser
 -- this is to make the whole history of balance changes traceable
 Wallet
   ownerId         OwnerId
-  balance         Double
+  balance         Amount
   description     Text            Maybe
   overdueBehavior OverdueBehavior Maybe
   overdueNotified Bool            Maybe
@@ -87,7 +87,7 @@ WalletOverdueDefault
 --
 Transaction
   walletId    WalletId
-  amount      Double    -- actual amount
+  amount      Amount    -- actual amount
   time        UTCTime
   handlerId   UserId    Maybe
   description Text      Maybe
@@ -115,9 +115,9 @@ ApiPriceInfo
 ApiCostRecord
   botId        BotId
   chatId       ChatId
-  walletId     WalletId  Maybe
-  nominalCost  Double    Maybe -- client cost, Nothing means free to user
-  actualCost   Double    Maybe -- actual cost to us, so the difference is our profit/loss
+  walletId     WalletId    Maybe
+  nominalCost  Amount      Maybe -- client cost, Nothing means free to user
+  actualCost   ActualCost  Maybe -- actual cost to us, so the difference is our profit/loss
   inputTokens  Int
   outputTokens Int
   cacheHitRate Double    Maybe
@@ -134,8 +134,8 @@ SubscriptionCostRecord
   referToCostModelId        BotCostModelId        Maybe -- which cost model is used
   referToCostModelPerChatId BotCostModelPerChatId Maybe -- which cost model is used for this subscription
   walletId    WalletId
-  monthlyCost Double
-  actualCost  Double          -- actual cost to us, so the difference is our profit/loss
+  monthlyCost Amount             -- cost to user, should be positive
+  actualCost  ActualCost         -- actual cost to us, so the difference is our profit/loss
   time        UTCTime
   description Text      Maybe
 
