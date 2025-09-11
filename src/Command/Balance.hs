@@ -54,16 +54,38 @@ withCreateWalletIfNotExists oid action = do
 -- | Determine which bots and (bot, chat) pairs are owned by the wallet
 --
 -- the convention is the same as bot_settings: chat-specific ownership overrides bot-wide ownership
-walletOwns :: WalletId -> DB ([BotId], [(BotId, ChatId)])
+walletOwns :: WalletId -> DB ([(BotId, CostModel)], [(BotId, ChatId, CostModel)])
 walletOwns wid = do
-  ownsBot     <- selectList [BotCostModelWalletId ==. Just wid] []
+  ownsBot     <- selectList [BotCostModelWalletId        ==. Just wid] []
   ownsBotChat <- selectList [BotCostModelPerChatWalletId ==. Just wid] []
   return
-    ( map (botCostModelBotId . entityVal) ownsBot
-    , [ (botCostModelPerChatBotId, botCostModelPerChatChatId)
-      | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
+    ( [ ( botCostModelBotId     $ head' botCM
+        , botCostModelCostModel $ head' botCM
+        )
+      | botCM <- entityVal <$> ownsBot
+      , then sortWith by Down $ botCostModelInserted botCM
+      , then group by botCostModelBotId botCM using groupWith
+        -- ^ stable sort to keep the latest inserted record first in each group
+      , then take 1
+      ]
+    ,
+      [ ( botCostModelPerChatBotId      $ head' bcm
+        , botCostModelPerChatChatId     $ head' bcm
+        , botCostModelPerChatCostModel  $ head' bcm
+        )
+      | bcm <- entityVal <$> ownsBotChat
+      , then sortWith by Down $ botCostModelPerChatInserted bcm
+      , then group by (botCostModelPerChatBotId bcm, botCostModelPerChatChatId bcm) using groupWith
+        -- ^ stable sort to keep the latest inserted record first in each group
+      , then take 1
       ]
     )
+    where head' []    = error "walletOwns.head': impossible happened, a group should not be empty"
+          head' (x:_) = x
+
+-- [ (botCostModelPerChatBotId, botCostModelPerChatChatId)
+-- | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
+-- ]
 
 balanceAction
   :: Maybe String  -- ^ bot name for logging purpose, optional
@@ -147,8 +169,10 @@ balanceAction _ scid (ABalanceCheck oid) = do
       owns <- runDB $ walletOwns wid
       let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText oid, "has balance:", toText walletBalance]
           ownsMsg = T.intercalate "\n" $ ["Associated with"]
-                    <> [ "bot" <> toText bid                            | bid        <- fst owns ]
-                    <> [ "bot" <> toText bid <> " in chat" <> toText cid | (bid, cid) <- snd owns ]
+                    <>  [ "bot" <> toText bid <> " " <> toText cm
+                        | (bid, cm)      <- fst owns ]
+                    <>  [ "bot" <> toText bid <> " in chat" <> toText cid <> " " <> toText cm
+                        | (bid, cid, cm) <- snd owns ]
       return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
@@ -260,7 +284,7 @@ concatOutput m = do
                   | (output, typeOutput) <- toGroup
                   , then group by typeOutput using groupWith
                   ] & catMaybes
-        typeOutput (BASendGroup gid _)   = Just $ Right gid 
+        typeOutput (BASendGroup gid _)   = Just $ Right gid
         typeOutput (BASendPrivate uid _) = Just $ Left uid
         typeOutput _                     = Nothing
 
