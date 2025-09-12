@@ -6,6 +6,15 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Text (Text)
 import Database.Persist.Sql (PersistField, PersistFieldSql)
 
+hourlySchedule :: CronSchedule
+hourlySchedule = CronSchedule
+  { cronMinute     = FieldRanges (FixedValue (Minute 0) :| [])
+  , cronHour       = FieldAny
+  , cronDayOfMonth = FieldAny
+  , cronMonth      = FieldAny
+  , cronDayOfWeek  = FieldAny
+  }
+
 newtype CronText = CronText { unCronText :: Text }
   deriving (PersistField, PersistFieldSql, Show, Eq, Ord) via Text
 

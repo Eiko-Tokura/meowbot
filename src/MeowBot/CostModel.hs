@@ -1,3 +1,4 @@
+{-# LANGUAGE TransformListComp #-}
 module MeowBot.CostModel
   ( module MeowBot.CostModel.Types
   , module MeowBot.CostModel
@@ -7,7 +8,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Coerce
-import Data.Default
 import Data.Maybe (fromMaybe)
 import Data.PersistModel
 import Data.Time (UTCTime)
@@ -16,30 +16,23 @@ import External.ChatAPI.Models
 import MeowBot
 import MeowBot.CostModel.Types
 import Utils.RunDB
+import Utils.ListComp
 import qualified Data.Text as T
 
-data PricingModel = PricingModel
-  { payAsYouGoFeeRate      :: Double
-  , monthlySubscriptionFee :: Double
-  } deriving Show
+actualCostToAmount :: ActualCost -> PayAsYouGoFeeRate -> Amount
+actualCostToAmount (ActualCost ac) (PayAsYouGoFeeRate fr) = Amount $ ac / (1 - fr)
 
-instance Default PricingModel where
-  def = PricingModel
-    { payAsYouGoFeeRate      = 1/3  -- 33.3% fee on pay-as-you-go usage
-    , monthlySubscriptionFee = 10.0 -- 10 per month for subscription
-    }
+generateNominalCost :: CostModel -> ActualCost -> Maybe Amount
+generateNominalCost Unlimited               _     = Nothing
+generateNominalCost Subscription{}          _     = Nothing
+generateNominalCost (PayAsYouGo feeRate _)  usage = Just $ actualCostToAmount usage feeRate
+generateNominalCost (CostOnly _)            usage = Just $ coerce usage
 
-generateNominalCost :: PricingModel -> CostModel -> ActualCost -> Maybe Amount
-generateNominalCost _  Unlimited    _     = Nothing
-generateNominalCost _  Subscription _     = Nothing
-generateNominalCost pm PayAsYouGo   usage = Just $ coerce usage / (1 - coerce pm.payAsYouGoFeeRate)
-generateNominalCost _  CostOnly     usage = Just $ coerce usage
-
-generateCostRecord :: Maybe ChatModel -> Maybe Text -> UTCTime -> PricingModel -> Maybe CostModel -> BotId -> ChatId -> Maybe WalletId -> TokenConsumption -> Maybe ActualCost -> ApiCostRecord
-generateCostRecord chatModel apiKey time pm mcm bid cid wid consumption mActualCost =
+generateCostRecord :: Maybe ChatModel -> Maybe Text -> UTCTime -> Maybe CostModel -> BotId -> ChatId -> Maybe WalletId -> TokenConsumption -> Maybe ActualCost -> ApiCostRecord
+generateCostRecord chatModel apiKey time mcm bid cid wid consumption mActualCost =
   let mNominalCost = do
         cm <- mcm
-        generateNominalCost pm cm =<< mActualCost
+        generateNominalCost cm =<< mActualCost
   in ApiCostRecord
         { apiCostRecordBotId        = bid
         , apiCostRecordChatId       = cid
@@ -52,8 +45,8 @@ generateCostRecord chatModel apiKey time pm mcm bid cid wid consumption mActualC
         , apiCostRecordChatModel    = chatModel
         , apiCostRecordTime         = time
         , apiCostRecordCoveredBySubscription = case mcm of
-            Just Subscription -> Just True
-            _                 -> Just False
+            Just Subscription{} -> Just True
+            _                   -> Just False
         , apiCostRecordApiKey       = apiKey
         , apiCostRecordDescription  = Nothing
         }
@@ -62,7 +55,7 @@ generateCostRecord chatModel apiKey time pm mcm bid cid wid consumption mActualC
 -- first finds chat-specific ownership, then global ownership, otherwise Nothing
 --
 -- can be wrapped in runDB as atomic if needed
-findWalletAssociatedToBotChat :: BotId -> ChatId -> DB (Maybe (CostModel, Maybe WalletId))
+findWalletAssociatedToBotChat :: BotId -> ChatId -> DB (Maybe (CostModel, WalletId))
 findWalletAssociatedToBotChat bid cid = do
   mBotChatRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]
   case mBotChatRecord of
@@ -79,7 +72,6 @@ findWalletAssociatedToBotChat bid cid = do
 type WalletInfo = Entity Wallet
 data ServiceBalanceCheck
   = NoCostModelAssigned
-  | HasCostModelButNoWalletAssociated
   | WalletBalanceGood    WalletInfo
   | WalletBalanceLow     WalletInfo
   | WalletBalanceOverdue WalletInfo
@@ -89,9 +81,10 @@ data ServiceBalanceCheck
 determineOverdue :: CostModel -> WalletInfo -> ServiceBalanceCheck
 determineOverdue cm w@(walletBalance . entityVal -> amt)
   | Unlimited <- cm = WalletUnlimited (Just w)
-  | amt >= 1        = WalletBalanceGood w
+  | amt >= low      = WalletBalanceGood w
   | amt < 0         = WalletBalanceOverdue w
   | otherwise       = WalletBalanceLow w
+  where low = fromMaybe 1 w.entityVal.walletLowThreshold
 
 -- | Migration note:
 -- After the entire system being tracked,
@@ -105,7 +98,6 @@ overdueBehaviorNeedAction (WalletBalanceLow w@(walletOverdueBehavior . entityVal
 overdueBehaviorNeedAction (WalletBalanceLow _)                                                     = Nothing
 overdueBehaviorNeedAction (WalletBalanceOverdue w@(walletOverdueBehavior . entityVal -> Just act)) = Just (onNotis overdueNoti act, w)
 overdueBehaviorNeedAction (WalletBalanceOverdue _)                                                 = Nothing
-overdueBehaviorNeedAction HasCostModelButNoWalletAssociated                                        = Nothing
 
 overdueNoti :: [OverdueNotification] -> [OverdueNotification]
 overdueNoti = filter (\case
@@ -123,7 +115,8 @@ inAdvanceNoti = filter (\case
 serviceBalanceCheck :: BotId -> ChatId -> DB ServiceBalanceCheck
 serviceBalanceCheck bid cid = do
   findWalletAssociatedToBotChat bid cid >>= \case
-    Just (cm, Just wid) -> do
+    Just (Unlimited, _) -> return $ WalletUnlimited Nothing
+    Just (cm, wid) -> do
       mWalletRecord <- get wid
       case mWalletRecord of
         Just w@(walletOverdueBehavior -> Just _) -> return $ determineOverdue cm (Entity wid w)
@@ -131,14 +124,23 @@ serviceBalanceCheck bid cid = do
           defOb <- selectFirst [] []
           return $ determineOverdue cm (Entity wid w
             { walletOverdueBehavior = (walletOverdueDefaultOverdueBehavior <=< fmap entityVal) defOb })
-        Nothing -> return HasCostModelButNoWalletAssociated -- impossible
-    Just (Unlimited, Nothing) -> return $ WalletUnlimited Nothing
-    Just (_, Nothing)         -> return HasCostModelButNoWalletAssociated
-    _                         -> return NoCostModelAssigned
+        Nothing -> return NoCostModelAssigned -- impossible
+    _           -> return NoCostModelAssigned
 
 -- | For internal service to check balance, not for end users
 serviceBalanceActionCheck :: BotId -> ChatId -> DB (Maybe (OverdueBehavior, WalletInfo))
 serviceBalanceActionCheck bid cid = overdueBehaviorNeedAction <$> serviceBalanceCheck bid cid
+
+getBotPerChatCostModel :: BotId -> DB [Entity BotCostModelPerChat]
+getBotPerChatCostModel botId = do
+  list <- selectList [BotCostModelPerChatBotId ==. botId] [Desc BotCostModelPerChatInserted]
+  return  [ head' entity
+          | entity@(Entity _ modelPerChat) <- list
+          , then group by botCostModelPerChatChatId modelPerChat using groupWith
+          ]
+
+getBotCostModel :: BotId -> DB (Maybe (Entity BotCostModel))
+getBotCostModel botId = selectFirst [BotCostModelBotId ==. botId] [Desc BotCostModelInserted]
 
 -- | behavior:
 -- for an actual cost to be attached:
@@ -152,24 +154,23 @@ insertApiCostRecord :: UTCTime -> BotId -> ChatId -> Maybe ChatModel -> Maybe Te
 insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ do
     cmPair <- lift $ findWalletAssociatedToBotChat botId chatId
     let mCostModel = fst <$> cmPair
-        mWalletId  = snd =<< cmPair
+        mWalletId  = snd <$> cmPair
     mTuple <- lift . runMaybeT $ do
       apikey     <- MaybeT (pure apiKey)
       apiKeyInfo <- MaybeT . getBy $ UniqueApiKeyInfo apikey
       MaybeT $ pure $ guard apiKeyInfo.entityVal.apiKeyInfoPriced
       modelPrice <- MaybeT $ findApiPriceInfoByKey utcTime apikey
       return (modelPrice, mWalletId, apikey)
-    let pricingModel  = def
     case mTuple of
       Just (modelPrice, mWalletId, apikey) -> do
         let estimateCost  = ActualCost $ tokenCost modelPrice consumption
-            apiCostRecord = generateCostRecord model (Just apikey) utcTime pricingModel mCostModel botId chatId mWalletId consumption (Just estimateCost)
+            apiCostRecord = generateCostRecord model (Just apikey) utcTime mCostModel botId chatId mWalletId consumption (Just estimateCost)
         lift $ insert_ apiCostRecord
         case (mWalletId, apiCostRecord.apiCostRecordNominalCost) of
             (Just wid, Just nominalCost) | nominalCost > 0 -> lift $ update wid [ WalletBalance -=. nominalCost ]
             _                                              -> pure ()
       Nothing -> do
-        let apiCostRecord = generateCostRecord model apiKey utcTime pricingModel mCostModel botId chatId mWalletId consumption Nothing
+        let apiCostRecord = generateCostRecord model apiKey utcTime mCostModel botId chatId mWalletId consumption Nothing
         lift $ insert_ apiCostRecord
 
 findApiPriceInfoByKey :: UTCTime -> Text -> DB (Maybe TokenPrice)

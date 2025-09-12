@@ -220,6 +220,7 @@ library meowbot-lib
                    , MeowBot.CostModel
                    , MeowBot.CostModel.Types
                    , MeowBot.CronTab
+                   , MeowBot.CronTab.PeriodicCost
                    , MeowBot.CronTab.CronMeowAction
                    , MeowBot.CQCode
                    , MeowBot.CQMessage.Convert
@@ -233,6 +234,7 @@ library meowbot-lib
                    , MeowBot.Data.IgnoreMatchType
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
+                   , MeowBot.Prelude
                    , MeowBot.Update
                    , Module
                    , Module.Async
@@ -255,6 +257,7 @@ library meowbot-lib
                    , Utils.Base64
                    , Utils.ByteString
                    , Utils.List
+                   , Utils.ListComp
                    , Utils.Logging
                    , Utils.Maybe
                    , Utils.Persist

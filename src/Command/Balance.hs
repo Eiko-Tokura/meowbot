@@ -2,20 +2,17 @@
 module Command.Balance where
 
 import Command
-import Control.Monad.Trans
-import Control.Monad.Trans.Maybe
 import Data.Default
-import Data.Function ((&))
-import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.PersistModel
 import Data.Time.Clock
 import GHC.Exts
 import MeowBot
+import MeowBot.Prelude
 import MeowBot.CostModel
 import MeowBot.Data.Parser
 import MeowBot.GetInfo
-import Utils.RunDB
+import Utils.ListComp
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 
@@ -39,9 +36,6 @@ data BalanceAction
   | ABalanceCheck OwnerId
   | ATotalBalance (Maybe BotId)
 
-newEmptyWallet :: UTCTime -> OwnerId -> Wallet
-newEmptyWallet utcTime oid = Wallet oid 0 Nothing Nothing Nothing Nothing utcTime
-
 type NewWalletCreated = Bool
 withCreateWalletIfNotExists :: OwnerId -> (NewWalletCreated -> WalletId -> Meow a) -> Meow a
 withCreateWalletIfNotExists oid action = do
@@ -58,8 +52,8 @@ withCreateWalletIfNotExists oid action = do
 -- the convention is the same as bot_settings: chat-specific ownership overrides bot-wide ownership
 walletOwns :: WalletId -> DB ([(BotId, CostModel)], [(BotId, ChatId, CostModel)])
 walletOwns wid = do
-  ownsBot     <- selectList [BotCostModelWalletId        ==. Just wid] []
-  ownsBotChat <- selectList [BotCostModelPerChatWalletId ==. Just wid] []
+  ownsBot     <- selectList [BotCostModelWalletId        ==. wid] []
+  ownsBotChat <- selectList [BotCostModelPerChatWalletId ==. wid] []
   return
     ( [ ( botCostModelBotId     $ head' botCM
         , botCostModelCostModel $ head' botCM
@@ -82,8 +76,6 @@ walletOwns wid = do
       , then take 1
       ]
     )
-    where head' []    = error "walletOwns.head': impossible happened, a group should not be empty"
-          head' (x:_) = x
 
 -- [ (botCostModelPerChatBotId, botCostModelPerChatChatId)
 -- | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
@@ -102,17 +94,17 @@ balanceAction mBotName scid (AOwn oid mcm bid cid) = do
       case (mLastRecord, mcm) of
         (Just (Entity _ bcm), Just cm) -> insert_ bcm
           { botCostModelPerChatCostModel = cm
-          , botCostModelPerChatWalletId  = Just wid
+          , botCostModelPerChatWalletId  = wid
           , botCostModelPerChatInserted  = utcTime
           } -- specified new cost model
         (Just (Entity _ bcm), Nothing) -> insert_ bcm
-          { botCostModelPerChatWalletId  = Just wid
+          { botCostModelPerChatWalletId  = wid
           , botCostModelPerChatInserted  = utcTime
           } -- keep the old cost model
         (Nothing, Just cm) -> do -- insert new record with specified cost model
-          insert_ $ BotCostModelPerChat mBotName bid cid cm (Just wid) utcTime
+          insert_ $ BotCostModelPerChat mBotName bid cid cm wid utcTime
         (Nothing, Nothing) -> do -- insert new record with default cost model
-          insert_ $ BotCostModelPerChat mBotName bid cid def (Just wid) utcTime
+          insert_ $ BotCostModelPerChat mBotName bid cid def wid utcTime
     let msg = T.unwords $
                 [toText oid, "with walletId", toText wid, "now owns bot", toText bid, "in", toText cid]
                 <> [ "(empty wallet created)" | newWallet ]
@@ -126,17 +118,17 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
       case (mLastRecord, mcm) of
         (Just (Entity _ bcm), Just cm) -> insert_ bcm
           { botCostModelCostModel = cm
-          , botCostModelWalletId  = Just wid
+          , botCostModelWalletId  = wid
           , botCostModelInserted  = utcTime
           } -- specified new cost model
         (Just (Entity _ bcm), Nothing) -> insert_ bcm
-          { botCostModelWalletId  = Just wid
+          { botCostModelWalletId  = wid
           , botCostModelInserted  = utcTime
           } -- keep the old cost model
         (Nothing, Just cm) -> do -- insert new record with specified cost model
-          insert_ $ BotCostModel mBotName bid cm (Just wid) utcTime
+          insert_ $ BotCostModel mBotName bid cm wid utcTime
         (Nothing, Nothing) -> do -- insert new record with default cost model
-          insert_ $ BotCostModel mBotName bid def (Just wid) utcTime
+          insert_ $ BotCostModel mBotName bid def wid utcTime
     let msg = T.unwords $
                 [ toText oid, "with walletId", toText wid, "now owns bot", toText bid]
                 <> [ "(empty wallet created)" | newWallet ]
@@ -206,12 +198,25 @@ checkPrivilegeBalance _ _ _                                                    =
 ownerIdP = fmap OwnerId chatIdP
 selfP = ItSelf <$ (asum . map string) ["self", "itself", "ItSelf"]
 
+feeRateP :: Parser T.Text Char PayAsYouGoFeeRate
+feeRateP = PayAsYouGoFeeRate <$> (string "rate=" >> float)
+
+dailyCostP :: Parser T.Text Char DailyBasicCost
+dailyCostP = DailyBasicCost <$> (string "daily=" >> float)
+
 costModelP :: Parser T.Text Char CostModel
 costModelP = asum
-  [ (asum . map string) ["unlimited", "Unlimited"]       >> return Unlimited
-  , (asum . map string) ["subscription", "Subscription"] >> return Subscription
-  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return PayAsYouGo
-  , (asum . map string) ["costonly", "CostOnly"]         >> return CostOnly
+  [ (asum . map string) ["unlimited", "Unlimited"]       >> return  Unlimited 
+
+  , (asum . map string) ["subscription", "Subscription"] >> return ( Subscription (monthlySubscriptionFee def) )
+
+  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> PayAsYouGo <$> (spaces >> feeRateP) <*> optMaybe (spaces >> dailyCostP)
+  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return ( PayAsYouGo (payAsYouGoFeeRate def) Nothing )
+
+  , (asum . map string) ["chino", "Chino"]               >> return  chinoCostModel
+
+  , (asum . map string) ["costonly", "CostOnly"]         >> CostOnly . Just <$> (spaces >> dailyCostP)
+  , (asum . map string) ["costonly", "CostOnly"]         >> return ( CostOnly Nothing )
   ]
 
 balanceParser :: Parser T.Text Char (NonEmpty BalanceCommand)
@@ -249,13 +254,13 @@ unitTestsBalanceParser =
         [ (":own group 12345", Just $ pure $ Own Nothing (GroupChat 12345) Nothing)
         , (":own bot", Just $ pure $ OwnBot Nothing Nothing Nothing)
         , (":own bot 67890", Just $ pure $ OwnBot Nothing (Just 67890) Nothing)
-        , (":user 123 own group 456 using subscription", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) (Just Subscription))
+        , (":user 123 own group 456 using subscription", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) (Just $ Subscription def))
         , (":user 123 own group 456", Just $ pure $ Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 456) Nothing)
         , (":group 123 own bot 789 using unlimited", Just $ pure $ OwnBot (Just $ OwnerId (GroupChat 123)) (Just 789) (Just Unlimited))
-        , (":group 123 own bot 1 in group 123 using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Right $ GroupChat 123) (Just PayAsYouGo))
-        , (":group 123 own bot 1 in itself using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Left ItSelf) (Just PayAsYouGo))
+        , (":group 123 own bot 1 in group 123 using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Right $ GroupChat 123) (Just $ PayAsYouGo def def))
+        , (":group 123 own bot 1 in itself using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Left ItSelf) (Just $ PayAsYouGo def def))
         , (":{own bot; user 123 own group 12345 using subscription;}"
-          , Just $ OwnBot Nothing Nothing Nothing :| [Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 12345) (Just Subscription)]
+          , Just $ OwnBot Nothing Nothing Nothing :| [Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 12345) (Just $ Subscription def)]
           )
         , (":{own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot; own bot;}"
           , Just $ NE.fromList $ replicate 10 (OwnBot Nothing Nothing Nothing)

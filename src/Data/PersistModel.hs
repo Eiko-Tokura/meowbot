@@ -26,6 +26,7 @@ import MeowBot.Data.IgnoreMatchType
 import Utils.Persist
 
 import qualified Data.Set as S
+import MeowBot.Affinity
 
 instance Default Day where
   def = ModifiedJulianDay 0
@@ -37,6 +38,13 @@ deriving via (PersistUseShow ChatModel) instance PersistField    ChatModel
 deriving via (PersistUseShow ChatModel) instance PersistFieldSql ChatModel
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"] [persistLowerCase|
+BotUserMeta
+  botId              BotId
+  botName            String    Maybe
+  userId             UserId
+  affinity           Affinity
+  favoriteItemNumber Int       Maybe
+  UniqueBotUserMetaBotIdUserId botId userId
 
 BotIgnore
   botId     BotId
@@ -51,7 +59,7 @@ BotIgnore
 -- | Super users can manage apiKeys, wallets, transactions, cost models, bot settings, etc.
 -- this is higher level than individual bot admins
 SuperUser
-  userId    UserId
+  userId          UserId
   UniqueSuperUser userId
 
 -- | wallet owner can choose to own multiple bots or (bot, chat) pairs
@@ -72,6 +80,7 @@ Wallet
   overdueBehavior OverdueBehavior Maybe
   overdueNotified Bool            Maybe
   lastNotified    UTCTime         Maybe
+  lowThreshold    Amount          Maybe
   created         UTCTime
   UniqueOwnerId   ownerId
   deriving Show
@@ -139,13 +148,21 @@ SubscriptionCostRecord
   time        UTCTime
   description Text      Maybe
 
+PeriodicCostRecord
+  referToCostModelId        BotCostModelId        Maybe -- which cost model is used
+  referToCostModelPerChatId BotCostModelPerChatId Maybe -- which cost model is used for this periodic cost
+  walletId    WalletId
+  cost        Amount             -- cost to user, should be positive
+  time        UTCTime
+  description Text      Maybe
+
 -- | Meant to persist whole history of cost model / owner changes
 -- should not be deleted, must be immutable
 BotCostModel
   botName     String               Maybe
   botId       BotId
   costModel   CostModel
-  walletId    WalletId             Maybe
+  walletId    WalletId
   inserted    UTCTime
 
 -- | Meant to persist whole history of cost model / owner changes
@@ -155,7 +172,7 @@ BotCostModelPerChat
   botId       BotId
   chatId      ChatId
   costModel   CostModel
-  walletId    WalletId             Maybe
+  walletId    WalletId
   inserted    UTCTime
 
 -- /* End Of PersistModels For CostModel and Billing */
@@ -361,6 +378,18 @@ HangmanRanking
   playcount      Int
   deriving Show
 |]
+
+newEmptyWallet :: UTCTime -> OwnerId -> Wallet
+newEmptyWallet utcTime oid = Wallet
+  { walletOwnerId         = oid
+  , walletBalance         = 0
+  , walletDescription     = Nothing
+  , walletOverdueBehavior = Nothing
+  , walletOverdueNotified = Nothing
+  , walletLastNotified    = Nothing
+  , walletLowThreshold    = Nothing
+  , walletCreated         = utcTime
+  }
 
 botSettingPerChatSystemAPIKey :: BotSettingPerChat -> Maybe APIKey
 botSettingPerChatSystemAPIKey bspc = case

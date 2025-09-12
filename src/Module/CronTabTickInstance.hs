@@ -12,6 +12,7 @@ import Control.Monad.Trans.ReaderState
 import Data.Time
 import MeowBot.BotStructure
 import MeowBot.CronTab
+import MeowBot.CronTab.PeriodicCost
 import Module
 import Module.CronTabTick
 import System.Meow
@@ -54,21 +55,19 @@ instance
     newTick <- liftIO $ newCronTabTick (Just tick)
     modifyModuleState p $ \_ -> CronTabTickModuleL newTick
     meowList <- asks (readSystem . snd)
-    liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick])
+    liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick, periodicCostHandleCronTabTick tick])
 
 -- | generate a new tick thread
 -- it will return if a new minute has reached
 newCronTabTick :: Maybe CronTabTick -> IO (Async CronTabTick)
 newCronTabTick Nothing = do
-  async $ do
-    now <- getCurrentTime
-    return $ CronTabTick now
+  async $ CronTabTick <$> getCurrentTime
 newCronTabTick (Just (CronTabTick tickTime0)) = do
   async $ do
     let waitUntilNewMinute = do
           threadDelay 1_000_000 -- 1 second
           now <- getCurrentTime
-          let diff = diffUTCTime now (floorToMinute $ tickTime0)
+          let diff = diffUTCTime now (floorToMinute tickTime0)
           if diff >= 60
           then return $ CronTabTick now
           else waitUntilNewMinute
