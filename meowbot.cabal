@@ -213,6 +213,7 @@ library meowbot-lib
                    , External.ProxyWS
                    , MeowBot
                    , MeowBot.Action
+                   , MeowBot.Affinity
                    , MeowBot.API
                    , MeowBot.Async
                    , MeowBot.BotStructure

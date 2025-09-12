@@ -25,8 +25,12 @@ checkAndUpdatePeriodicCost botId now = do
   let listCosts = [ (p, Left  bcm)  | Just (p, bcm) <- [mBotCostModel] ] ++
                   [ (p, Right bcmc) | (p, bcmc) <- lBotCostModelPerChat ]
   _inserted <- forM listCosts $ \(p, bcm) -> do
-    mLastRecord <- runDB $ findLastCostRecord (either (Left . entityKey) (Right . entityKey) bcm)
-    let needAction = periodicLogic Daily now (fmap periodicCostRecordTime mLastRecord)
+    let bcm'  = either (Left . entityKey) (Right . entityKey) bcm
+    let bcm'' = either (Left . entityVal) (Right . entityVal) bcm
+    mLastRecord <- runDB $ findLastCostRecord bcm'
+    receivedMessageToday <- runDB $ receivedMessageToday bcm'' (utctDay now)
+    let needAction =  receivedMessageToday > 0
+                   && periodicLogic Daily now (fmap periodicCostRecordTime mLastRecord)
     when needAction $ do
       res <- runDB $ insertNewCostRecord p bcm now
       case res of
@@ -91,3 +95,17 @@ type NeedAction = Bool
 periodicLogic :: Period -> UTCTime -> Maybe LastCost -> NeedAction
 periodicLogic Daily _ Nothing = True
 periodicLogic Daily now (Just lastTime) = utctDay lastTime /= utctDay now
+
+receivedMessageToday :: Either BotCostModel BotCostModelPerChat -> Day -> DB Int
+receivedMessageToday (Right bcmpc) day = do
+  mBotStat <- getBy $ UniqueBotStatisticsPerApiKeyPerChatPerDay
+    "STATISTICS"
+    bcmpc.botCostModelPerChatBotId
+    bcmpc.botCostModelPerChatChatId day
+  return $ maybe 0 (botStatisticsPerApiKeyPerChatPerDayTotalMessageRecv . entityVal) mBotStat
+receivedMessageToday (Left bcm) day = do
+  botStats <- selectList
+    [ BotStatisticsPerApiKeyPerChatPerDayBotId ==. bcm.botCostModelBotId
+    , BotStatisticsPerApiKeyPerChatPerDayDay   ==. day
+    ] []
+  return $ sum $ map (botStatisticsPerApiKeyPerChatPerDayTotalMessageRecv . entityVal) botStats

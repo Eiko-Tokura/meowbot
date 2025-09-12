@@ -7,6 +7,7 @@ module Command
   , doBotAction
   , botCommandsToMeow
   , botCommandsWithIgnore
+  , botMessageCounter
   , botT
   , restrictNumber
   , commandParserTransformByBotName
@@ -25,6 +26,7 @@ import Data.PersistModel
 import Data.UpdateMaybe
 import MeowBot.API
 import MeowBot.BotStructure
+import MeowBot.BotStatistics
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
 import MeowBot.Update
@@ -147,6 +149,16 @@ doBotCommands conn commands = globalizeMeow $ do
 -- | Extract the bot actions from a list of bot commands, checking the permissions
 botCommandsToMeow :: [BotCommand] -> [Meow [BotAction]]
 botCommandsToMeow = fmap permissionCheck
+
+botMessageCounter :: forall a. CQMessage -> Meow [a]
+botMessageCounter cqmsg = do
+  let mCid = case eventType cqmsg of
+        PrivateMessage -> PrivateChat <$> userId cqmsg
+        GroupMessage   -> GroupChat <$> groupId cqmsg
+        _              -> Nothing
+  case mCid of
+    Nothing -> return []
+    Just cid -> logBotStatistics cid StatRecv >> return []
 
 botCommandsWithIgnore :: CQMessage -> [BotCommand] -> Meow [BotAction]
 botCommandsWithIgnore cqmsg bcs = do

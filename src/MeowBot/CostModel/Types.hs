@@ -54,6 +54,12 @@ data CostModel
   deriving (Show, Read, Eq)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CostModel)
 
+instance ToText CostModel Text where
+  toText Unlimited             = "Unlimited"
+  toText (Subscription fee)    = "Subscription (" <> toText fee <> " per month)"
+  toText (PayAsYouGo _ mDaily) = "PayAsYouGo"     <> maybe "" (\d -> " +" <> toText d <> "/day") mDaily
+  toText (CostOnly mDaily)     = "CostOnly"       <> maybe "no daily cost" (\d -> toText d <> " daily cost") mDaily
+
 chinoCostModel :: CostModel
 chinoCostModel = PayAsYouGo (payAsYouGoFeeRate def) (Just $ dailyBasicCost def)
 

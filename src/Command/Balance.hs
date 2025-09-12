@@ -64,7 +64,6 @@ walletOwns wid = do
       , then sortWith by Down $ botCostModelInserted botCM
       , then group by botCostModelBotId botCM using groupWith
         -- ^ stable sort to keep the latest inserted record first in each group
-      , then take 1
       ]
     ,
       [ ( botCostModelPerChatBotId      $ head' bcm
@@ -75,13 +74,8 @@ walletOwns wid = do
       , then sortWith by Down $ botCostModelPerChatInserted bcm
       , then group by (botCostModelPerChatBotId bcm, botCostModelPerChatChatId bcm) using groupWith
         -- ^ stable sort to keep the latest inserted record first in each group
-      , then take 1
       ]
     )
-
--- [ (botCostModelPerChatBotId, botCostModelPerChatChatId)
--- | Entity _ BotCostModelPerChat { botCostModelPerChatBotId, botCostModelPerChatChatId } <- ownsBotChat
--- ]
 
 balanceAction
   :: Maybe String  -- ^ bot name for logging purpose, optional

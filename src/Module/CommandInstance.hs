@@ -148,11 +148,11 @@ instance
               PrivateMessage -> do
                 updateStates nameBot cqmsg
                 tmeow   <- readSystem <$> asks snd
-                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds])
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds, botMessageCounter cqmsg])
               GroupMessage -> do
                 updateStates nameBot cqmsg
                 tmeow   <- readSystem <$> asks snd
-                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds])
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds, botMessageCounter cqmsg])
               RequestEvent -> do
                 tmeow <- readSystem <$> asks snd
                 liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
