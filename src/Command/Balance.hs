@@ -25,6 +25,7 @@ data BalanceCommand
   | AddOwnedBy Amount        OwnerId   (Maybe Text)                 -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
   | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
   | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
+  | BalanceCheckInChat (Maybe ChatId)                    -- ^ a different semantics, finds back the ownerId and check balance, for normal user
   | TotalBalance (Maybe BotId) -- for admin only
   deriving (Show, Eq)
 
@@ -34,6 +35,7 @@ data BalanceAction
   | AAddOwnedBy UserId Amount OwnerId  (Maybe Text)
   | AAddTo      UserId Amount WalletId (Maybe Text)
   | ABalanceCheck OwnerId
+  | ABalanceCheckInChat ChatId
   | ATotalBalance (Maybe BotId)
 
 type NewWalletCreated = Bool
@@ -170,7 +172,26 @@ balanceAction _ scid (ABalanceCheck oid) = do
       return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
-balanceAction _ scid _ = return $ Just [baSendToChatId scid "This feature is not implemented yet."]
+balanceAction _ scid (ABalanceCheckInChat cid) = do
+  botid <- query
+  mCmWid <- runDB $ findWalletAssociatedToBotChat botid cid
+  case mCmWid of
+    Just (_, wid) -> do
+      mWallet <- runDB $ get wid
+      case mWallet of
+        Just Wallet { walletOwnerId, walletBalance } -> do
+          owns <- runDB $ walletOwns wid
+          let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText walletOwnerId, "has balance:", toText walletBalance]
+              ownsMsg = T.intercalate "\n" $ ["Associated with"]
+                        <>  [ "bot" <> toText bid <> " " <> toText cm
+                            | (bid, cm)      <- fst owns ]
+                        <>  [ "bot" <> toText bid <> " in " <> toText cid' <> " " <> toText cm
+                            | (bid, cid', cm) <- snd owns ]
+          return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
+        Nothing -> return $ Just [baSendToChatId scid $ "Something wrong: " <> toText cid <> " links to wallet with id " <> toText wid <> ", but it is not found."]
+    Nothing -> return $ Just [baSendToChatId scid $ "No cost/wallet is associated with " <> toText cid <> "."]
+
+balanceAction _ scid (ATotalBalance _) = return $ Just [baSendToChatId scid "This feature is not implemented yet."]
 
 balanceCommandToAction :: BotId -> (ChatId, UserId) -> BalanceCommand -> Maybe BalanceAction
 balanceCommandToAction _   _        (OwnBotChat oid bid (Right cid) mcm)   = Just $ AOwn oid mcm bid cid
@@ -185,15 +206,19 @@ balanceCommandToAction bid (oid, _) (OwnBot Nothing Nothing mcm)           = Jus
 balanceCommandToAction _   (_, uid) (AddOwnedBy amt oid mdesc)             = Just $ AAddOwnedBy uid amt oid mdesc
 balanceCommandToAction _   (_, uid) (AddTo amt wid mdesc)                  = Just $ AAddTo uid amt wid mdesc
 balanceCommandToAction _   (oid, _) (BalanceCheck oid')                    = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
+balanceCommandToAction _   (cid, _) (BalanceCheckInChat Nothing)           = Just $ ABalanceCheckInChat cid
+balanceCommandToAction _   (_, _)   (BalanceCheckInChat (Just cid))        = Just $ ABalanceCheckInChat cid
 balanceCommandToAction _   _        (TotalBalance mbid)                    = Just $ ATotalBalance mbid
 
 checkPrivilegeBalance :: IsSuperUser -> (ChatId, UserId) -> BalanceCommand -> Bool
-checkPrivilegeBalance (IsSuperUser True ) _  _                                 = True
-checkPrivilegeBalance (IsSuperUser False) _ (Own Nothing _ Nothing)            = True
-checkPrivilegeBalance (IsSuperUser False) _ (OwnBot Nothing _ Nothing)         = True
-checkPrivilegeBalance (IsSuperUser False) _ (BalanceCheck Nothing)             = True
-checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid)) = cid == coerce oid || PrivateChat uid == coerce oid
-checkPrivilegeBalance _ _ _                                                    = False
+checkPrivilegeBalance (IsSuperUser True ) _  _                                        = True
+checkPrivilegeBalance (IsSuperUser False) _ (Own Nothing _ Nothing)                   = True
+checkPrivilegeBalance (IsSuperUser False) _ (OwnBot Nothing _ Nothing)                = True
+checkPrivilegeBalance (IsSuperUser False) _ (BalanceCheck Nothing)                    = True
+checkPrivilegeBalance (IsSuperUser False) (_, _) (BalanceCheckInChat Nothing)         = True
+checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheckInChat (Just cid')) = cid == cid'       || PrivateChat uid == cid'
+checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid))        = cid == coerce oid || PrivateChat uid == coerce oid
+checkPrivilegeBalance _ _ _                                                           = False
 
 ownerIdP = fmap OwnerId chatIdP
 selfP = ItSelf <$ (asum . map string) ["self", "itself", "ItSelf"]
@@ -245,7 +270,8 @@ balanceParser = headCommand "" >> asum
         (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
         <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
         )
-      , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> fmap OwnerId chatIdP)
+      , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
+      , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
       ]
 
 unitTestsBalanceParser :: [(Maybe (NonEmpty BalanceCommand), Bool)]

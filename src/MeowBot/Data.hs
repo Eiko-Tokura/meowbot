@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveAnyClass, OverloadedStrings, DerivingVia, TypeApplications #-}
+{-# LANGUAGE DeriveAnyClass, OverloadedStrings, DerivingVia #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module MeowBot.Data
   ( module MeowBot.MetaMessage
@@ -65,6 +65,10 @@ type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
 
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
+
+instance ToText BotName Text where
+  toText (BotName Nothing)  = "喵喵"
+  toText (BotName (Just n)) = pack n
 
 type RunningMode     = [DebugFlag]
 data DebugFlag       = DebugJson | DebugCQMessage | DebugOther String deriving (Eq, Show)
