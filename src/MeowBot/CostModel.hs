@@ -82,7 +82,7 @@ determineOverdue :: CostModel -> WalletInfo -> ServiceBalanceCheck
 determineOverdue cm w@(walletBalance . entityVal -> amt)
   | Unlimited <- cm = WalletUnlimited (Just w)
   | amt >= low      = WalletBalanceGood w
-  | amt < 0         = WalletBalanceOverdue w
+  | amt <= 0        = WalletBalanceOverdue w
   | otherwise       = WalletBalanceLow w
   where low = fromMaybe 1 w.entityVal.walletLowThreshold
 

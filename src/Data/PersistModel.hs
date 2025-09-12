@@ -164,6 +164,7 @@ BotCostModel
   costModel   CostModel
   walletId    WalletId
   inserted    UTCTime
+  deriving Show
 
 -- | Meant to persist whole history of cost model / owner changes
 -- should not be deleted, must be immutable
@@ -174,6 +175,7 @@ BotCostModelPerChat
   costModel   CostModel
   walletId    WalletId
   inserted    UTCTime
+  deriving Show
 
 -- /* End Of PersistModels For CostModel and Billing */
 
