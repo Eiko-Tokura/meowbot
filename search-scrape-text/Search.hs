@@ -2,8 +2,7 @@
 module Search where
 
 import Control.Exception
-import Data.Bifunctor
-import Data.Text (Text, unpack, pack)
+import Data.Text (Text, pack)
 import GHC.Generics
 import System.Process
 import Data.Aeson (ToJSON)

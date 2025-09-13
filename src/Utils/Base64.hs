@@ -9,7 +9,7 @@ import GHC.Generics
 import Control.Exception
 
 newtype Base64 = Base64 { runBase64 :: ByteString }
-  deriving (Eq, Ord, Show, Read, Generic, NFData)
+  deriving newtype (Eq, Ord, Show, Read, Generic, NFData)
 
 rawByteStringToBase64 :: ByteString -> Base64
 rawByteStringToBase64 = Base64 . encode
