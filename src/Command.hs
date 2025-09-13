@@ -14,6 +14,8 @@ module Command
   , concatOutput
   ) where
 
+import Control.Concurrent
+import Control.Concurrent.Async
 import Control.Monad.Logger
 import Control.Monad.State
 import Data.Aeson
@@ -36,10 +38,10 @@ import System.General
 import System.Meow
 import Utils.ListComp
 import qualified Data.ByteString.Lazy as BL
-import qualified Data.List.NonEmpty as NE
-import qualified Data.Set as S
-import qualified Data.Text as T
-import qualified MeowBot.Parser as MP
+import qualified Data.List.NonEmpty   as NE
+import qualified Data.Set             as S
+import qualified Data.Text            as T
+import qualified MeowBot.Parser       as MP
 
 commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
@@ -70,16 +72,23 @@ doBotAction _    (BAAsync act)           = do
 --change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct)      = doBotAction conn (BAAsync $ return <$> pAct)
 doBotAction _    (BASimpleAction meow)   = meow
-doBotAction _    (BAQueryAPI contMaybes)  = do
+doBotAction _    (BAQueryAPI contMaybes) = do
   tvarQueries <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) ) ])
   utcTime <- liftIO getCurrentTime
   liftIO . atomically $ do
     list <- readTVar tvarQueries
     let qid' = maximum (0 : map fst list) + 1
-    modifyTVar' tvarQueries (<> [ (qid, WithTime utcTime contMaybe)
-                                | contMaybe <- contMaybes
-                                | qid <- [qid'..]
-                                ])
+    modifyTVar tvarQueries (<> [ (qid, WithTime utcTime contMaybe)
+                               | contMaybe <- contMaybes
+                               | qid <- [qid'..]
+                               ])
+doBotAction conn (BADelayedAction ms meow) = do
+  waitMeow <- liftIO $ async $ do
+    threadDelay (ms * 1000) -- milliseconds to microseconds
+    return meow
+  doBotAction conn (BAAsync waitMeow)
+doBotAction conn (BADelayedPureAction ms acts) = doBotAction conn (BADelayedAction ms (return acts))
+doBotAction conn (BADelayedPureAction1 ms act) = doBotAction conn (BADelayedPureAction ms [act])
 
 -- | Low-level functions to send private messages
 sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
@@ -173,10 +182,10 @@ botCommandsWithIgnore cqmsg bcs = do
 updateSavedDataDB :: Meow ()
 updateSavedDataDB = do
   botid <- query
-  inUserGroups   <- map entityVal <$> runDB (selectList [InUserGroupBotId ==. botid] [])
-  inGroupGroups  <- map entityVal <$> runDB (selectList [InGroupGroupBotId ==. botid] [])
+  inUserGroups   <- map entityVal <$> runDB (selectList [InUserGroupBotId   ==. botid] [])
+  inGroupGroups  <- map entityVal <$> runDB (selectList [InGroupGroupBotId  ==. botid] [])
   commandRulesDB <- map entityVal <$> runDB (selectList [CommandRuleDBBotId ==. botid] [])
-  let  
+  let
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
       commandRules         = [commandRuleDBCommandRule c | c <- commandRulesDB]
@@ -189,7 +198,7 @@ updateSavedDataDB = do
 
 -- | Concating the output of a command, grouping by the type of output (private/group) and mergeing the messages within each group using the first argument as intercalate text (default to "\n")
 --
--- Warning: Drops BotAction that are not BASendGroup or BASendPrivate
+-- Warning: Drops BotAction items that are not BASendGroup or BASendPrivate
 concatOutput :: Monad m => Maybe Text -> m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
 concatOutput intercalateText m = do
   outputsMaybe <- m
