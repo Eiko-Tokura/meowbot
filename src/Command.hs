@@ -20,20 +20,21 @@ import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.Bifunctor
 import Data.HList
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
-import Data.Time
 import Data.PersistModel
+import Data.Time
 import Data.UpdateMaybe
 import MeowBot.API
-import MeowBot.BotStructure
 import MeowBot.BotStatistics
+import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
 import MeowBot.Update
+import Module
 import Module.Async
 import Module.AsyncInstance
 import Network.WebSockets (Connection, sendTextData)
-import Module
 import System.General
 import System.Meow
 import Utils.RunDB
@@ -188,3 +189,31 @@ updateSavedDataDB = do
                         }
                      }
 
+concatOutput :: Monad m => m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
+concatOutput m = do
+  outputsMaybe <- m
+  let outputs = concat $ catMaybes $ NE.toList outputsMaybe
+  if null outputs
+  then return Nothing
+  else
+    let grouped = [ concatSend output
+                  | output <- outputs
+                  , let outputType = typeOutput output
+                  , then group by outputType using groupWith
+                  ] & catMaybes
+
+        typeOutput (BASendGroup gid _)   = Just $ Right gid
+        typeOutput (BASendPrivate uid _) = Just $ Left uid
+        typeOutput _                     = Nothing
+
+        concatSend []                              = Nothing
+        concatSend (BASendGroup gid msgs : rest)   =
+          case concatSend rest of
+            Just (BASendGroup _ msgs') -> Just $ BASendGroup gid (msgs <> "\n" <> msgs')
+            _                          -> Just $ BASendGroup gid msgs
+        concatSend (BASendPrivate uid msgs : rest) =
+          case concatSend rest of
+            Just (BASendPrivate _ msgs') -> Just $ BASendPrivate uid (msgs <> "\n" <> msgs')
+            _                            -> Just $ BASendPrivate uid msgs
+        concatSend (_          : rest)             = concatSend rest
+    in return $ Just grouped

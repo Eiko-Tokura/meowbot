@@ -22,10 +22,11 @@ data BalanceCommand
   | OwnBot     (Maybe OwnerId) (Maybe BotId) (Maybe CostModel) -- ^ a owner of a wallet decides to own a bot
   | OwnBotChat OwnerId BotId   (Either ItSelf ChatId) (Maybe CostModel) -- ^ admin makes OwnerId own a (bot, chat) pair with optional cost model
   -- | UnOwn      BotId (Maybe ChatId)                   -- ^ admin removes ownership of a bot or (bot, chat) pair
-  | AddOwnedBy Amount        OwnerId   (Maybe Text)                 -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
+  | AddOwnedBy Amount        OwnerId   (Maybe Text)      -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
   | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
   | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
   | BalanceCheckInChat (Maybe ChatId)                    -- ^ a different semantics, finds back the ownerId and check balance, for normal user
+  | ChangeOwner  WalletId OwnerId               -- ^ admin changes the owner of a wallet
   | TotalBalance (Maybe BotId) -- for admin only
   deriving (Show, Eq)
 
@@ -36,6 +37,7 @@ data BalanceAction
   | AAddTo      UserId Amount WalletId (Maybe Text)
   | ABalanceCheck OwnerId
   | ABalanceCheckInChat ChatId
+  | AChangeOwner WalletId OwnerId
   | ATotalBalance (Maybe BotId)
 
 type NewWalletCreated = Bool
@@ -185,6 +187,14 @@ balanceAction _ scid (ABalanceCheckInChat cid) = do
         Nothing -> return $ Just [baSendToChatId scid $ "Something wrong: " <> toText cid <> " links to wallet with id " <> toText wid <> ", but it is not found."]
     Nothing -> return $ Just [baSendToChatId scid $ "No cost/wallet is associated with " <> toText cid <> "."]
 
+balanceAction _ scid (AChangeOwner wid oid) = do
+  mWallet <- runDB $ get wid
+  case mWallet of
+    Just _ -> do
+      runDB $ update wid [WalletOwnerId =. oid, WalletOverdueNotified =. Nothing]
+      return $ Just [baSendToChatId scid $ T.unwords ["Wallet with id", toText wid, "is now owned by", toText oid]]
+    Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
+
 balanceAction _ scid (ATotalBalance _) = return $ Just [baSendToChatId scid "This feature is not implemented yet."]
 
 balanceCommandToAction :: BotId -> (ChatId, UserId) -> BalanceCommand -> Maybe BalanceAction
@@ -202,6 +212,7 @@ balanceCommandToAction _   (_, uid) (AddTo amt wid mdesc)                  = Jus
 balanceCommandToAction _   (oid, _) (BalanceCheck oid')                    = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
 balanceCommandToAction _   (cid, _) (BalanceCheckInChat Nothing)           = Just $ ABalanceCheckInChat cid
 balanceCommandToAction _   (_, _)   (BalanceCheckInChat (Just cid))        = Just $ ABalanceCheckInChat cid
+balanceCommandToAction _   _        (ChangeOwner wid oid)                  = Just $ AChangeOwner wid oid
 balanceCommandToAction _   _        (TotalBalance mbid)                    = Just $ ATotalBalance mbid
 
 checkPrivilegeBalance :: IsSuperUser -> (ChatId, UserId) -> BalanceCommand -> Bool
@@ -229,8 +240,8 @@ costModelP = asum
 
   , (asum . map string) ["subscription", "Subscription"] >> return ( Subscription (monthlySubscriptionFee def) )
 
-  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> PayAsYouGo <$> (spaces >> feeRateP) <*> optMaybe (spaces >> dailyCostP)
-  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return ( PayAsYouGo (payAsYouGoFeeRate def) Nothing )
+  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> PayAsYouGo <$> fmap (fromMaybe def) (optMaybe (spaces >> feeRateP)) <*> optMaybe (spaces >> dailyCostP)
+  , (asum . map string) ["payasyougo", "PayAsYouGo"]     >> return ( PayAsYouGo def Nothing )
 
   , (asum . map string) ["chino", "Chino"]               >> return  chinoCostModel
 
@@ -266,6 +277,7 @@ balanceParser = headCommand "" >> asum
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
       , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
+      , string "change owner of wallet" >> spaces >> ChangeOwner <$> walletIdP <*> (spaces >> string "to" >> spaces >> ownerIdP)
       ]
 
 unitTestsBalanceParser :: [(Maybe (NonEmpty BalanceCommand), Bool)]
@@ -306,32 +318,3 @@ commandBalance = BotCommand Balance $ botT $ do
     (Just (action :| []), True) -> MaybeT $ balanceAction botName cid action
     (Just actions, True)        -> MaybeT $ concatOutput $ balanceAction botName cid `mapM` actions
     (Just _, False)             -> return [baSendToChatId cid "Operation not permitted."]
-
-concatOutput :: Monad m => m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
-concatOutput m = do
-  outputsMaybe <- m
-  let outputs = concat $ catMaybes $ NE.toList outputsMaybe
-  if null outputs
-  then return Nothing
-  else
-    let grouped = [ concatSend output
-                  | output <- outputs
-                  , let outputType = typeOutput output
-                  , then group by outputType using groupWith
-                  ] & catMaybes
-
-        typeOutput (BASendGroup gid _)   = Just $ Right gid
-        typeOutput (BASendPrivate uid _) = Just $ Left uid
-        typeOutput _                     = Nothing
-
-        concatSend []                              = Nothing
-        concatSend (BASendGroup gid msgs : rest)   =
-          case concatSend rest of
-            Just (BASendGroup _ msgs') -> Just $ BASendGroup gid (msgs <> "\n" <> msgs')
-            _                          -> Just $ BASendGroup gid msgs
-        concatSend (BASendPrivate uid msgs : rest) =
-          case concatSend rest of
-            Just (BASendPrivate _ msgs') -> Just $ BASendPrivate uid (msgs <> "\n" <> msgs')
-            _                            -> Just $ BASendPrivate uid msgs
-        concatSend (_          : rest)             = concatSend rest
-    in return $ Just grouped
