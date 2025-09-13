@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, ImpredicativeTypes #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, ImpredicativeTypes, TransformListComp #-}
 module Command
   ( BotCommand(..), CommandId(..)
   , actionAPI
@@ -11,25 +11,22 @@ module Command
   , botT
   , restrictNumber
   , commandParserTransformByBotName
+  , concatOutput
   ) where
 
-import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Monad.State
-import Control.Monad.Trans.Maybe
 import Data.Aeson
 import Data.Bifunctor
 import Data.HList
-import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (fromMaybe)
 import Data.PersistModel
-import Data.Time
 import Data.UpdateMaybe
 import MeowBot.API
 import MeowBot.BotStatistics
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
+import MeowBot.Prelude
 import MeowBot.Update
 import Module
 import Module.Async
@@ -37,8 +34,9 @@ import Module.AsyncInstance
 import Network.WebSockets (Connection, sendTextData)
 import System.General
 import System.Meow
-import Utils.RunDB
+import Utils.ListComp
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified MeowBot.Parser as MP
@@ -189,8 +187,11 @@ updateSavedDataDB = do
                         }
                      }
 
-concatOutput :: Monad m => m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
-concatOutput m = do
+-- | Concating the output of a command, grouping by the type of output (private/group) and mergeing the messages within each group using the first argument as intercalate text (default to "\n")
+--
+-- Warning: Drops BotAction that are not BASendGroup or BASendPrivate
+concatOutput :: Monad m => Maybe Text -> m (NonEmpty (Maybe [BotAction])) -> m (Maybe [BotAction])
+concatOutput intercalateText m = do
   outputsMaybe <- m
   let outputs = concat $ catMaybes $ NE.toList outputsMaybe
   if null outputs
@@ -209,11 +210,11 @@ concatOutput m = do
         concatSend []                              = Nothing
         concatSend (BASendGroup gid msgs : rest)   =
           case concatSend rest of
-            Just (BASendGroup _ msgs') -> Just $ BASendGroup gid (msgs <> "\n" <> msgs')
+            Just (BASendGroup _ msgs') -> Just $ BASendGroup gid (msgs <> fromMaybe "\n" intercalateText <> msgs')
             _                          -> Just $ BASendGroup gid msgs
         concatSend (BASendPrivate uid msgs : rest) =
           case concatSend rest of
-            Just (BASendPrivate _ msgs') -> Just $ BASendPrivate uid (msgs <> "\n" <> msgs')
+            Just (BASendPrivate _ msgs') -> Just $ BASendPrivate uid (msgs <> fromMaybe "\n" intercalateText <> msgs')
             _                            -> Just $ BASendPrivate uid msgs
         concatSend (_          : rest)             = concatSend rest
     in return $ Just grouped

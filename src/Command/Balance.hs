@@ -12,6 +12,7 @@ import MeowBot.Prelude
 import MeowBot.CostModel
 import MeowBot.Data.Parser
 import MeowBot.GetInfo
+import MeowBot.GetSelfInfo
 import Utils.ListComp
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
@@ -79,6 +80,16 @@ walletOwns wid = do
       ]
     )
 
+warningIfNotInGroup :: BotId -> ChatId -> Meow (Maybe Text)
+warningIfNotInGroup _   (PrivateChat _) = return Nothing
+warningIfNotInGroup bid (GroupChat gid) = runMaybeT $ do
+  myBid <- query
+  MaybeT $ pure $ guard (bid == myBid)
+  selfInfo  <- MaybeT getSelfInfo
+  isInGroup <- MaybeT $ return $ isSelfInGroup gid selfInfo
+  MaybeT $ pure $ guard isInGroup
+  return $ "Warning: I'm not in " <> toText gid <> "."
+
 balanceAction
   :: Maybe String  -- ^ bot name for logging purpose, optional
   -> ChatId        -- ^ source chat id to send the result message
@@ -86,6 +97,8 @@ balanceAction
   -> Meow (Maybe [BotAction])
 balanceAction mBotName scid (AOwn oid mcm bid cid) = do
   utcTime <- liftIO getCurrentTime
+  mWarnCid <- warningIfNotInGroup bid cid
+  mWarnOid <- warningIfNotInGroup bid (ownerChatId oid)
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
     runDB $ do
       mLastRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]
@@ -106,10 +119,13 @@ balanceAction mBotName scid (AOwn oid mcm bid cid) = do
     let msg = T.unwords $
                 [toText oid, "with walletId", toText wid, "now owns bot", toText bid, "in", toText cid]
                 <> [ "(empty wallet created)" | newWallet ]
+                <> maybe [] (\w -> ["\n" <> w]) mWarnCid
+                <> maybe [] (\w -> ["\n" <> w]) mWarnOid
     return $ Just [baSendToChatId scid msg]
 
 balanceAction mBotName scid (AOwnBot oid mcm bid) = do
   utcTime <- liftIO getCurrentTime
+  mWarnOid <- warningIfNotInGroup bid (ownerChatId oid)
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
     runDB $ do
       mLastRecord <- selectFirst [BotCostModelBotId ==. bid] [Desc BotCostModelInserted]
@@ -130,6 +146,7 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
     let msg = T.unwords $
                 [ toText oid, "with walletId", toText wid, "now owns bot", toText bid]
                 <> [ "(empty wallet created)" | newWallet ]
+                <> maybe [] (\w -> ["\n" <> w]) mWarnOid
     return $ Just [baSendToChatId scid msg]
 
 balanceAction _ scid (AAddOwnedBy uid amt oid mDesc) = do
@@ -165,11 +182,12 @@ balanceAction _ scid (ABalanceCheck oid) = do
                         | (bid, cm)      <- fst owns ]
                     <>  [ "bot" <> toText bid <> " in " <> toText cid <> " " <> toText cm
                         | (bid, cid, cm) <- snd owns ]
-      return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
+      return $ Just [baSendToChatId scid $ T.intercalate "\n" [balanceMsg, ownsMsg]]
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
 balanceAction _ scid (ABalanceCheckInChat cid) = do
   botid <- query
+  mWarnCid <- warningIfNotInGroup botid cid
   mCmWid <- runDB $ findWalletAssociatedToBotChat botid cid
   case mCmWid of
     Just (_, wid) -> do
@@ -183,7 +201,7 @@ balanceAction _ scid (ABalanceCheckInChat cid) = do
                             | (bid, cm)      <- fst owns ]
                         <>  [ "bot" <> toText bid <> " in " <> toText cid' <> " " <> toText cm
                             | (bid, cid', cm) <- snd owns ]
-          return $ Just [baSendToChatId scid $ T.intercalate "\n---\n" [balanceMsg, ownsMsg]]
+          return $ Just [baSendToChatId scid $ T.intercalate "\n" $ [balanceMsg, ownsMsg] <> maybe [] pure mWarnCid]
         Nothing -> return $ Just [baSendToChatId scid $ "Something wrong: " <> toText cid <> " links to wallet with id " <> toText wid <> ", but it is not found."]
     Nothing -> return $ Just [baSendToChatId scid $ "No cost/wallet is associated with " <> toText cid <> "."]
 
@@ -316,5 +334,5 @@ commandBalance = BotCommand Balance $ botT $ do
   case (mActions, privilege) of
     (Nothing, _)                -> return [baSendToChatId cid "Invalid command or parameters."]
     (Just (action :| []), True) -> MaybeT $ balanceAction botName cid action
-    (Just actions, True)        -> MaybeT $ concatOutput $ balanceAction botName cid `mapM` actions
+    (Just actions, True)        -> MaybeT $ concatOutput (Just "\n---\n") $ balanceAction botName cid `mapM` actions
     (Just _, False)             -> return [baSendToChatId cid "Operation not permitted."]

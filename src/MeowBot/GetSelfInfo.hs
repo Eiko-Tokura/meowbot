@@ -15,3 +15,8 @@ getSelfRoleInGroup selfInfo gid = do
 
 isSelfAdminInGroup :: SelfInfo -> GroupId -> Maybe Bool
 isSelfAdminInGroup gid = fmap (== RAdmin) <$> getSelfRoleInGroup gid
+
+isSelfInGroup :: GroupId -> SelfInfo -> Maybe Bool
+isSelfInGroup gid selfInfo = toMaybe $ do
+  groups <- selfInfo.selfInGroups
+  return $ M.member gid groups.unWithTime
