@@ -12,8 +12,8 @@ data Role = ROwner | RAdmin | RMember | RUnknown
 
 instance FromJSON Role where
   parseJSON = withText "Role" $ \case
-    "owner" -> return ROwner
-    "admin" -> return RAdmin
+    "owner"  -> return ROwner
+    "admin"  -> return RAdmin
     "member" -> return RMember
     _ -> return RUnknown
 
@@ -47,4 +47,3 @@ instance PersistField ChatId where
       else return $ PrivateChat (UserId (-gid))
 
 instance PersistFieldSql ChatId where sqlType _ = SqlInt64
-

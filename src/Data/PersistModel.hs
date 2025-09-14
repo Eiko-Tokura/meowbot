@@ -16,7 +16,7 @@ import Database.Persist.Sqlite
 import Database.Persist.TH
 import External.ChatAPI
 import GHC.Generics
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.CommandRule
 import MeowBot.CronTab.CronMeowAction
 import MeowBot.CostModel.Types

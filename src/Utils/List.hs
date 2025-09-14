@@ -32,5 +32,6 @@ optimalMeowTakeTailKeepAvg n = optimalMeowTakeTail (max 1 $ n - optimalCap n `di
 
 -- | Can you guess what it means? XD
 optimalCap :: Int -> Int
-optimalCap n = max 0 $ round @Double (sqrt (fromIntegral n * 2 * (1 - alpha))) - 1
+optimalCap n = max 0 $ round @Double $ (2*) $ sqrt (fromIntegral n' * 2 * (1 - alpha)) - 1
   where alpha = 0.125
+        n' = n `div` 2

@@ -1,12 +1,7 @@
 module MeowBot.Data.CQHttp.CQMessage where
 
-import Control.DeepSeq (NFData)
 import Data.Aeson
 import Data.Aeson.Types (Parser)
-import Data.Default (Default(..))
-import Database.Persist (PersistField(..))
-import Database.Persist.Sql (PersistFieldSql(..), SqlType(SqlInt64))
-import GHC.Generics (Generic)
 import MeowBot.Data.ChatId
 import MeowBot.Data.CQHttp.Notice
 import MeowBot.Prelude

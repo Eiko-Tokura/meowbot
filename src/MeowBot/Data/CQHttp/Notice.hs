@@ -2,7 +2,6 @@ module MeowBot.Data.CQHttp.Notice where
 
 import MeowBot.Prelude
 import Data.Aeson
-import Data.Additional
 
 -------------------------------------------------------------------------------------------
 -- Notifcation and Request

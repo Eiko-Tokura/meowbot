@@ -1,7 +1,7 @@
 module MeowBot.GetInfo where
 
 import MeowBot
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import Control.Monad.Trans.Maybe
 import Data.Maybe
 import MeowBot.Parser

@@ -287,7 +287,7 @@ instance
   toolUsable _         = meowGroupAdmin
 
   toolName _ _ = "ban"
-  toolDescription _ _ = "disallow a user (non-admin) to send message in the current chat. Use with extra caution."
+  toolDescription _ _ = "Ban a non-admin user in the current chat for a given period. Use with extra caution, can be used to prevent abuse or very bad behavior."
   toolHandler _ _ (IntT userId :%* IntT duration :%* ObjT0Nil) = do
     gid <- effectEWith' (const $ BanError "This tool is only valid in group chats, this is a private chat.") getGid
     banAction <- case (userId, duration) of

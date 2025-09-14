@@ -7,7 +7,7 @@ import Data.Maybe
 import Data.Aeson
 import Data.Aeson.KeyMap as KM
 import MeowBot.Data
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Parser
 
 -- string message:

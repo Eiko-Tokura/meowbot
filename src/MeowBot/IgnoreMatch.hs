@@ -4,7 +4,7 @@ import Control.Monad.Readable
 import Data.Maybe
 import Data.PersistModel
 import Database.Persist
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Data
 import MeowBot.Data.IgnoreMatchType
 import System.Meow

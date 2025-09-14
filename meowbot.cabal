@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.4.6.2
+version:             0.4.7.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -223,7 +223,6 @@ library meowbot-lib
                    , MeowBot.CronTab
                    , MeowBot.CronTab.PeriodicCost
                    , MeowBot.CronTab.CronMeowAction
-                   , MeowBot.CQCode
                    , MeowBot.CQMessage.Convert
                    , MeowBot.CommandRule
                    , MeowBot.Data
@@ -235,9 +234,11 @@ library meowbot-lib
                    , MeowBot.Data.IgnoreMatchType
                    , MeowBot.Data.ChatId
                    , MeowBot.Data.CQHttp.CQMessage
+                   , MeowBot.Data.CQHttp.CQCode
                    , MeowBot.Data.CQHttp.Query
                    , MeowBot.Data.CQHttp.Action
                    , MeowBot.Data.CQHttp.Notice
+                   , MeowBot.MeowMsg
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Prelude
@@ -282,7 +283,6 @@ library meowbot-lib
     -- Other library packages from which modules are imported.
     --  build-depends:    base ^>=4.16.4.0
     build-depends: base >=4.7 && <5
-                 , api
                  , aeson
                  , async
                  , base64-bytestring

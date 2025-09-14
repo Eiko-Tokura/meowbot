@@ -28,7 +28,7 @@ module MeowBot.Parser
 
 import Parser.Run
 import Parser.Definition
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.MetaMessage
 import External.ChatAPI (ChatSetting(..))
 import Control.DeepSeq (NFData)

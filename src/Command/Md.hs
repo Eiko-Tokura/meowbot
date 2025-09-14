@@ -6,7 +6,7 @@ import Data.Bifunctor
 import Data.FilePathFor
 import External.MarkdownImage (markdownToImage)
 import MeowBot
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Async
 import MeowBot.Parser (Parser, Chars)
 import qualified MeowBot.Parser as MP

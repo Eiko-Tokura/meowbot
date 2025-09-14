@@ -1,6 +1,5 @@
 packages:
   ./*.cabal
-  ./api/
 with-compiler: ghc-9.12.2
 tests: True
 multi-repl: True

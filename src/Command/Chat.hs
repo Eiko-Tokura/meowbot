@@ -39,7 +39,7 @@ import Data.Proxy
 import Data.HList
 import Data.Coerce
 import MeowBot.CostModel
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import Utils.RunDB
 import Utils.Maybe
 import Utils.Persist

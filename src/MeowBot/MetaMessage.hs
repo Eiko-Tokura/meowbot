@@ -2,7 +2,7 @@
 {-# LANGUAGE DerivingStrategies, DeriveAnyClass #-}
 module MeowBot.MetaMessage where
 
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import External.ChatAPI ( ChatSetting(..), Message(..), ChatStatus(..) )
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
@@ -13,11 +13,11 @@ import qualified Data.Text as T
 import Data.Either (rights)
 
 data MetaMessage = MetaMessage
-  { cqcodes :: [CQCode]
-  , mixedMessage :: [Either CQCode Text]
-  , replyTo :: Maybe Int
+  { cqcodes          :: [CQCode]
+  , mixedMessage     :: [Either CQCode Text]
+  , replyTo          :: Maybe Int
   , metaMessageItems :: [MetaMessageItem]
-  , additionalData :: [AdditionalData]
+  , additionalData   :: [AdditionalData]
   } deriving (Show, Eq, Generic, NFData)
 
 onlyMessage :: MetaMessage -> Text
@@ -34,11 +34,11 @@ data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MChatSetting ChatSe
 
 generateMetaMessage :: Text -> [AdditionalData] -> [MetaMessageItem] -> MetaMessage
 generateMetaMessage str adt items = MetaMessage
-  { cqcodes     = [cqcode | MCQCode cqcode <- items]
-  , mixedMessage = [Left cqcode | MCQCode cqcode <- items] ++ [Right str]
-  , replyTo     = listToMaybe [mid | MReplyTo mid <- items]
+  { cqcodes          = [cqcode | MCQCode cqcode <- items]
+  , mixedMessage     = [Left cqcode | MCQCode cqcode <- items] ++ [Right str]
+  , replyTo          = listToMaybe [mid | MReplyTo mid <- items]
   , metaMessageItems = items
-  , additionalData = adt
+  , additionalData   = adt
   }
 
 type MessageId = Int

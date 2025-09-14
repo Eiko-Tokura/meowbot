@@ -5,7 +5,6 @@ import Data.Aeson
 import Data.Aeson.Types (Parser)
 import MeowBot.Data.ChatId
 import MeowBot.Data.CQHttp.Action
-import MeowBot.Data.CQHttp.Notice
 import Utils.Time
 
 -------------------------------------------------------------------------------------------
@@ -41,8 +40,6 @@ data QueryAPI (q :: QueryType) where
     , queryGroupInfoNoCache :: Bool
     } -> QueryAPI 'QueryGroupMemberInfo
   GetForwardMessage :: ForwardMessageId -> QueryAPI 'QueryGetForwardMessage
-
-  -- GetMessage        :: MessageId -> QueryAPI 'QueryGetMessage
 
 data Sex = SexMale | SexFemale
   deriving (Show, Eq, Read, Generic, NFData)

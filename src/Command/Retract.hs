@@ -5,7 +5,7 @@ module Command.Retract
 
 import Command
 import MeowBot
-import MeowBot.CQCode
+import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Parser as MP
 
 import Data.Maybe
