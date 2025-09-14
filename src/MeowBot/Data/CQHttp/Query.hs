@@ -21,7 +21,7 @@ data WithEcho a = WithEcho
   , params    :: a
   } deriving (Show, Eq, Read, Generic)
 
-newtype ForwardMessageId = ForwardMessageId { unForwardMessageId :: Int }
+newtype ForwardCQMessageId = ForwardCQMessageId { unForwardCQMessageId :: Int }
   deriving (Show, Eq, Read, Generic)
   deriving newtype (NFData)
 
@@ -39,7 +39,7 @@ data QueryAPI (q :: QueryType) where
     { queryGroupInfoGroupId :: GroupId
     , queryGroupInfoNoCache :: Bool
     } -> QueryAPI 'QueryGroupMemberInfo
-  GetForwardMessage :: ForwardMessageId -> QueryAPI 'QueryGetForwardMessage
+  GetForwardMessage :: ForwardCQMessageId -> QueryAPI 'QueryGetForwardMessage
 
 data Sex = SexMale | SexFemale
   deriving (Show, Eq, Read, Generic, NFData)
@@ -79,7 +79,7 @@ data QueryAPIResponse (q :: QueryType) where
 -- GetMessageResponse ::
 --   { getMessageTime    :: UTCTime
 --   , getMessageType    :: CQEventType
---   , getMessageId      :: MessageId
+--   , getCQMessageId      :: CQMessageId
 --   , getMessageSender  :: Sender
 --   , getMessageMessage :: CQMessage
 --   }
@@ -120,7 +120,7 @@ instance ToJSON (ActionForm (QueryAPI q)) where
         ]
     , "echo"   .= mecho
     ]
-  toJSON (ActionForm (GetForwardMessage (ForwardMessageId fmid)) mecho) = object
+  toJSON (ActionForm (GetForwardMessage (ForwardCQMessageId fmid)) mecho) = object
     [ "action" .= ("get_forward_msg" :: Text)
     , "params" .= object
         [ "message_id" .= fmid

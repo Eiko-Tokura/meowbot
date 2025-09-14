@@ -347,13 +347,13 @@ ChatMessage
   botId          BotId
   time           UTCTime
   eventType      (PersistUseInt64 CQEventType)
-  messageId      MessageId     Maybe
+  messageId      CQMessageId     Maybe
   chatId         ChatId
   userId         UserId        Maybe
   absoluteId     Int
   pureContent    Text
   cqCodes        [CQCode]
-  replyTo        MessageId     Maybe
+  replyTo        CQMessageId     Maybe
   senderNickname Text          Maybe
   senderCard     Text          Maybe
   senderRole     (PersistUseInt64 Role)  Maybe

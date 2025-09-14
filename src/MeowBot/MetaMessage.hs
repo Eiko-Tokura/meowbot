@@ -29,7 +29,7 @@ instance HasAdditionalData MetaMessage where
   {-# INLINE getAdditionalData #-}
   {-# INLINE modifyAdditionalData #-}
 
-data MetaMessageItem = MCQCode CQCode | MReplyTo MessageId | MChatSetting ChatSetting | MMessage Message | MChatStatus ChatStatus
+data MetaMessageItem = MCQCode CQCode | MReplyTo CQMessageId | MChatSetting ChatSetting | MMessage Message | MChatStatus ChatStatus
   deriving (Show, Eq, Generic, NFData)
 
 generateMetaMessage :: Text -> [AdditionalData] -> [MetaMessageItem] -> MetaMessage
@@ -41,4 +41,4 @@ generateMetaMessage str adt items = MetaMessage
   , additionalData   = adt
   }
 
-type MessageId = Int
+type CQMessageId = Int

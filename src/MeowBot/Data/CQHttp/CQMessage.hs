@@ -147,7 +147,7 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderNa
         messageContent = maybe "" unpack $ message cqmsg
         surround s     = if null s then s else "(" ++ s ++ ")"
 
-type EssentialContent = (Text, ChatId, UserId, MessageId, Sender)
+type EssentialContent = (Text, ChatId, UserId, CQMessageId, Sender)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
 cqmsgToEssentialContent cqmsg =
   (,,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)

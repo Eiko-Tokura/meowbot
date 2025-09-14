@@ -104,7 +104,7 @@ sendGroup conn gid text mecho = do
   $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to delete messages
-deleteMsg :: Connection -> MessageId -> LoggingT IO ()
+deleteMsg :: Connection -> CQMessageId -> LoggingT IO ()
 deleteMsg conn mid = do
   lift . sendTextData conn $ encode (ActionForm (DeleteMessage mid) Nothing)
   $(logInfo) $ "=> Delete message: " <> tshow mid

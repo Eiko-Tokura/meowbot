@@ -52,12 +52,12 @@ sendToChatId :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) => Ess
 sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] [] str
 --([baSendToChatId cid str], insertMyResponseHistory utc cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
--- | send message to a chat id, recording the message as reply in meta message (optional in Maybe MessageId), with additional data and meta items.
+-- | send message to a chat id, recording the message as reply in meta message (optional in Maybe CQMessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
 -- will insert the message into the history.
 meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
   => ChatId            -- ^ chat id to send to
-  -> Maybe MessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> Maybe CQMessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Text              -- ^ message content
@@ -69,7 +69,7 @@ meowSendToChatIdFull cid mid adt items str = do
 
 meowAsyncSplitSendToChatIdFull
   :: ChatId            -- ^ chat id to send to
-  -> Maybe MessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> Maybe CQMessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Int               -- ^ split delay

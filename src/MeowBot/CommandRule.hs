@@ -1,8 +1,6 @@
 {-# LANGUAGE DerivingVia#-}
 module MeowBot.CommandRule where
 
-import Control.DeepSeq
-import Data.Aeson
 import Database.Persist
 import Database.Persist.Sqlite
 import Language.Haskell.TH

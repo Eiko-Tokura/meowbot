@@ -21,17 +21,17 @@ data ActionAPI
     , sendGroupAutoEscape   :: Maybe Bool
     }
   | DeleteMessage
-    { deleteMessageMessageId :: MessageId
+    { deleteMessageCQMessageId :: CQMessageId
     }
   | GetMessage
-    { getMessageMessageId    :: MessageId
+    { getMessageCQMessageId    :: CQMessageId
     }
   | SendLike
     { sendLikeUserId         :: UserId
     , sendLikeTimes          :: Int
     }
   | SetEssenceMessage
-    { setEssenceMessageMessageId :: MessageId
+    { setEssenceMessageCQMessageId :: CQMessageId
     }
   | SetGroupKick
     { setGroupKickGroupId    :: GroupId
@@ -91,8 +91,8 @@ sendCidForwardMessage (GroupChat gid) msgs   = SendGroupForwardMessage gid msgs
 sendCidForwardMessage (PrivateChat uid) msgs = SendPrivateForwardMessage uid msgs
 
 data ForwardNode
-  = NodeReferenceMessageId
-      { referenceMessageId :: !MessageId
+  = NodeReferenceCQMessageId
+      { referenceCQMessageId :: !CQMessageId
       }
   | NodeCustom
       { nodeName    :: !Text
@@ -104,7 +104,7 @@ data ForwardNode
   deriving (Show, Eq, Read, Generic)
 
 instance ToJSON ForwardNode where
-  toJSON (NodeReferenceMessageId mid) = object
+  toJSON (NodeReferenceCQMessageId mid) = object
     [ "type" .= ("node" :: Text)
     , "data" .= object
         [ "id" .= mid

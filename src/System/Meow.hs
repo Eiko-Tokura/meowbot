@@ -147,7 +147,7 @@ data BotAction
       GroupId    -- ^ the group chat to send to
       Text       -- ^ Text, the message to send
   | BARetractMsg
-      MessageId  -- ^ MessageId, the message to delete (retract)
+      CQMessageId  -- ^ CQMessageId, the message to delete (retract)
   | BAActionAPI
       ActionAPI  -- ^ General actionAPI, the action to perform
   | BAQueryAPI
