@@ -24,7 +24,6 @@ module MeowBot.Data
   , BotModules(..)
   , BotInstance(..)
   , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..), WatchDogFlag(..)
-  --, CommandValue
   , EssentialContent
 
   , module Utils.Text
@@ -47,6 +46,7 @@ import External.ProxyWS (ProxyData)
 import Data.Time (UTCTime)
 import Data.Time.Clock.POSIX
 import Utils.Text
+import Utils.Lens
 
 import Database.Persist.Sqlite
 
@@ -204,7 +204,7 @@ newtype UnixSec = UnixSec { unUnixSec :: Int }
 unixSecToUTCTime :: UnixSec -> UTCTime
 unixSecToUTCTime (UnixSec s) = posixSecondsToUTCTime $ fromIntegral s
 
-data Sex = SexMale | SexFemale | SexUnknown
+data Sex = SexMale | SexFemale
   deriving (Show, Eq, Read, Generic, NFData)
 
 data QueryAPIResponse (q :: QueryType) where
@@ -309,20 +309,20 @@ instance FromJSON (WithEcho (QueryAPIResponse 'QueryGetStatus)) where
 
 instance FromJSON (WithEcho (QueryAPIResponse 'QueryGroupMemberInfo)) where
   parseJSON = withObject "QueryAPIResponse" $ \o -> do
-    dataObj <- o .: "data"
-    gid     <- dataObj .: "group_id"
-    uid     <- dataObj .: "user_id"
-    nickname<- dataObj .:? "nickname"
-    card    <- dataObj .:? "card"
-    sexText <- dataObj .:? "sex" :: Parser (Maybe Text)
-    area    <- dataObj .:? "area"
-    age     <- dataObj .:? "age"
-    jointime<- dataObj .:? "join_time"
-    lastsent<- dataObj .:? "last_sent_time"
-    level   <- dataObj .: "level"
-    role    <- dataObj .: "role"
-    unfriendly <- dataObj .: "unfriendly"
-    title   <- dataObj .:? "title"
+    dataObj        <- o .: "data"
+    gid            <- dataObj .: "group_id"
+    uid            <- dataObj .: "user_id"
+    nickname       <- dataObj .:? "nickname"
+    card           <- dataObj .:? "card"
+    sexText        <- dataObj .:? "sex" :: Parser (Maybe Text)
+    area           <- dataObj .:? "area"
+    age            <- dataObj .:? "age"
+    jointime       <- dataObj .:? "join_time"
+    lastsent       <- dataObj .:? "last_sent_time"
+    level          <- dataObj .: "level"
+    role           <- dataObj .: "role"
+    unfriendly     <- dataObj .: "unfriendly"
+    title          <- dataObj .:? "title"
     cardchangeable <- dataObj .: "card_changeable"
     -- shutUpTimestamp <- dataObj .:? "shut_up_timestamp"
     mecho  <- o .:? "echo"
@@ -334,7 +334,7 @@ instance FromJSON (WithEcho (QueryAPIResponse 'QueryGroupMemberInfo)) where
       , getGroupMemberInfoSex            = case sexText of
           Just "male"   -> Just SexMale
           Just "female" -> Just SexFemale
-          Just "unknown"-> Just SexUnknown
+          Just "unknown"-> Nothing
           _             -> Nothing
       , getGroupMemberInfoArea           = area
       , getGroupMemberInfoAge            = age
@@ -350,13 +350,13 @@ instance FromJSON (WithEcho (QueryAPIResponse 'QueryGroupMemberInfo)) where
 
 instance FromJSON (QueryAPIResponse 'QueryGroupInfo) where
   parseJSON = withObject "QueryAPIResponse" $ \o -> do
-    dataObj <- o .: "data"
-    gid     <- dataObj .: "group_id"
-    gname   <- dataObj .:? "group_name"
-    gmemo   <- dataObj .:? "group_memo"
-    createtime <- dataObj .:? "create_time"
-    level   <- dataObj .:? "level"
-    membercount <- dataObj .:? "member_count"
+    dataObj        <- o .: "data"
+    gid            <- dataObj .: "group_id"
+    gname          <- dataObj .:? "group_name"
+    gmemo          <- dataObj .:? "group_memo"
+    createtime     <- dataObj .:? "create_time"
+    level          <- dataObj .:? "level"
+    membercount    <- dataObj .:? "member_count"
     maxmembercount <- dataObj .:? "max_member_count"
     return $ GetGroupInfoResponse
       { getGroupInfoGroupId        = gid
@@ -715,9 +715,6 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderNa
         senderCard'    = surround $ maybe "" unpack $ senderCard =<< sender cqmsg
         messageContent = maybe "" unpack $ message cqmsg
         surround s     = if null s then s else "(" ++ s ++ ")"
-        -- mcqcodes       = maybe "" (("\n"++) . show) $ mNonEmpty . cqcodes =<< metaMessage cqmsg
-        -- mNonEmpty []   = Nothing
-        -- mNonEmpty l    = Just l
 
 type EssentialContent = (Text, ChatId, UserId, MessageId, Sender)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
@@ -733,3 +730,7 @@ cqmsgToCid cqmsg = case eventType cqmsg of
   GroupMessage -> GroupChat <$> groupId cqmsg
   PrivateMessage -> PrivateChat <$> userId cqmsg
   _ -> Nothing
+
+makeLenses_ ''BotModules
+makeLenses_ ''BotInstance
+makeLenses_ ''CQMessage

@@ -2,6 +2,7 @@
 module Command.Updater where
 
 import Command
+import Control.Lens
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
@@ -21,7 +22,7 @@ commandUpdater = BotCommand Updater $ botT $ do
   s@SelfInfo {selfId, selfInGroups} <- MaybeT $ queries selfInfo
   $logDebug $ "Bot ID: " <> toText botid <> ", SelfInfo: " <> toText s
   conn <- lift askSystem
-  let updateLensSelfInGroups u = change $ \od -> od { selfInfo = Just s { selfInGroups = u } }
+  let updateLensSelfInGroups u = change $ _selfInfo ?~ s { selfInGroups = u }
 
       updateGroupListInMapWith :: Ord g => [g] -> a -> Map g a -> Map g a
       updateGroupListInMapWith gids defVal mapG
@@ -37,13 +38,12 @@ commandUpdater = BotCommand Updater $ botT $ do
               let gids = map groupBasicInfoGroupId ginfos
               $(logOther "UPDATER") $ toText botid <> " Fetched group list: " <> toText gids
               utcTime <- liftIO getCurrentTime
-              s@SelfInfo {selfInGroups} <- MaybeT $ queries selfInfo
-              let s' = s  { selfInGroups = updateUMaybeTime utcTime
-                              (updateGroupListInMapWith gids NothingYet Map.empty)
-                              (updateGroupListInMapWith gids NothingYet)
-                              selfInGroups
-                          }
-              change $ \od -> od { selfInfo = Just s' }
+              s <- MaybeT $ queries selfInfo
+              let s' = s  & _selfInGroups
+                            %~ updateUMaybeTime utcTime
+                                (updateGroupListInMapWith gids NothingYet Map.empty)
+                                (updateGroupListInMapWith gids NothingYet)
+              change $ _selfInfo ?~ s'
               return []
         return $ pure $ BAQueryAPI [fmap nextStep . parseResponse]
 
@@ -65,7 +65,7 @@ commandUpdater = BotCommand Updater $ botT $ do
                             GroupInfo
                               { selfRole = resp.getGroupMemberInfoRole }
                      }
-          change $ \od -> od { selfInfo = Just s' }
+          change $ _selfInfo ?~ s'
           return []
 
     -- | Mark all needed updates as Updating

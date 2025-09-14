@@ -7,31 +7,16 @@ module MeowBot.BotStructure
   ( module MeowBot.Data
   , module Control.Monad.Readable
   , module Control.Monad.IOe
-  --, Meow, MeowT(..), globalizeMeow
-  --, Cat, CatT
-  --, BotCommand(..)
+  , module MeowBot.BotStructure
+
   , BotModules(..), BotConfig(..), OverrideSettings(..)
   , GroupId(..), UserId(..), ChatId(..)
-  --, BotAction(..)
+
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
   , UserGroup(..), GroupGroup(..)
   , MetaMessageItem(..)
-  --, gIncreaseAbsoluteId, increaseAbsoluteId
-  --, updateAllDataByMessage, updateAllDataByResponse, insertMyResponseHistory, updateSavedAdditionalData
-  --, updateSelfInfo
 
   , CQMessage(..), ResponseData(..), CQEventType(..)
-
-  , getEssentialContent, getEssentialContentAtN, getEssentialContentChatId
-  -- , sendIOeToChatId
-  -- , sendIOeToChatIdAsync
-  -- , baSendToChatId, sendToChatId, meowSendToChatIdFull
-  , getFirstTree, getNewMsg, getNewMsgN, getNewMsgChatIdN
-  , getTimeLine, getTimeLineCid
-
-  , rseqWholeChat, rseqSavedData
-
-  --, makeHeader
   , AdditionalData(..)
   ) where
 
@@ -52,6 +37,7 @@ import MeowBot.CommandRule
 import MeowBot.Data
 import MeowBot.Data.Book
 import MeowBot.Parser ( ChatSetting(..), Tree(..) )
+import Utils.Lens
 
 data BotConfig = BotConfig
   { botModules       :: BotModules
@@ -78,6 +64,16 @@ data GroupInfo = GroupInfo
   { selfRole         :: Role
   } deriving Show
 
+-- | We will now save this data to the database, no longer in a file.
+data SavedData = SavedData
+  { chatSettings    :: [(ChatId, ChatSetting)]
+  , userGroups      :: [(UserId, UserGroup)]
+  , groupGroups     :: [(GroupId, GroupGroup)]
+  , commandRules    :: [CommandRule]
+  , books           :: [Book]
+  , savedAdditional :: [Saved AdditionalData]
+  } deriving (Show, Eq, Read)
+
 data OtherData = OtherData -- In the future one can add course data.. etc
   { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , selfInfo       :: !(Maybe SelfInfo)
@@ -89,6 +85,12 @@ data OtherData = OtherData -- In the future one can add course data.. etc
   , aokana         :: [ScriptBlock]
   } deriving Show
 
+makeLenses_ ''OtherData
+makeLenses_ ''SavedData
+makeLenses_ ''AllData
+makeLenses_ ''SelfInfo
+makeLenses_ ''GroupInfo
+
 instance {-# OVERLAPPABLE #-} Monad m => MonadReadable OtherData (ReaderStateT r (s0, AllData) m) where
   query = gets (otherdata . snd)
   {-# INLINE query #-}
@@ -96,21 +98,6 @@ instance {-# OVERLAPPABLE #-} Monad m => MonadReadable OtherData (ReaderStateT r
 instance {-# OVERLAPPABLE #-} Monad m => MonadModifiable OtherData (ReaderStateT r (s0, AllData) m) where
   change f = modify $ second $ \ad -> ad {otherdata = f $ otherdata ad}
   {-# INLINE change #-}
-
--- | We will now save this data to the database, no longer in a file.
-data SavedData = SavedData
-  { chatSettings    :: [(ChatId, ChatSetting)]
-  , userGroups      :: [(UserId, UserGroup)]
-  , groupGroups     :: [(GroupId, GroupGroup)]
-  , commandRules    :: [CommandRule]
-  , books           :: [Book]
-  , savedAdditional :: [Saved AdditionalData]
-  } deriving (Show, Eq, Read)
-
-data UserAndGroupInfo = UserAndGroupInfo
-  { userGroups :: [(UserId, UserGroup)]
-  , groupGroups :: [(GroupId, GroupGroup)]
-  } deriving (Show, Eq, Read)
 
 rseqSavedData :: Strategy SavedData
 rseqSavedData (SavedData cs ug gg cr b sa) = do

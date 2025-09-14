@@ -7,6 +7,7 @@ import MeowBot.BotStructure
 import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Concurrent.STM
+import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Logger
@@ -33,7 +34,7 @@ updateSelfInfo cqmsg = do
   mselfInfo <- queries (selfInfo . otherdata)
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> change $ \ad -> ad { otherdata = (otherdata ad) { selfInfo = Just $ SelfInfo (coerce sid) NothingYet } }
+    (Nothing, Just sid) -> change $ _otherdata . _selfInfo ?~ SelfInfo (coerce sid) NothingYet
     _ -> return ()
 
 -- | if savedData changed, save it to file
@@ -70,7 +71,7 @@ gIncreaseAbsoluteId = globalizeMeow increaseAbsoluteId
 increaseAbsoluteId :: (MonadModifiable OtherData m) => m Int
 increaseAbsoluteId = do
   change $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
-  queries (message_number)
+  queries message_number
 
 updateSavedAdditionalData :: (MonadModifiable AllData m) => m ()
 updateSavedAdditionalData = change $ \ad ->
@@ -164,7 +165,7 @@ attachRule :: CQMessage -> Maybe (CQMessage -> Bool)
 attachRule msg1 = do
   mtm <- metaMessage msg1
   repId <- MP.replyTo mtm
-  return $ maybe False (== repId) . messageId
+  return $ (Just repId ==) . messageId
 
 -- | A constraint on the monad that we can insert a message into the chat history.
 type InsertHistory r m = (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
@@ -184,7 +185,7 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ \_ -> other' { sent_messages = my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq }
+  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
   tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
@@ -199,7 +200,7 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ \_ -> other' { sent_messages = my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq }
+  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
   tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 

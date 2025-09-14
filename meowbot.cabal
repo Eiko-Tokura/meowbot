@@ -257,6 +257,7 @@ library meowbot-lib
                    , System.WatchDog
                    , Utils.Base64
                    , Utils.ByteString
+                   , Utils.Lens
                    , Utils.List
                    , Utils.ListComp
                    , Utils.Logging
