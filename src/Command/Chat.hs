@@ -259,7 +259,7 @@ commandChat = BotCommand Chat $ botT $ do
             True -> (True,) $ SM.insert cid
               cs
                 { chatStatus = (chatStatus cs)
-                  { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) -- active trigger, not append
+                  { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus cs) -- active trigger, not append
                   , chatStatusToolDepth = 0 -- ^ reset tool depth
                   , chatEstimateTokens = mempty
                   }
@@ -269,7 +269,7 @@ commandChat = BotCommand Chat $ botT $ do
             False -> (False,) $ SM.insert cid
               cs
                 { chatStatus = (chatStatus cs)
-                  { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
+                  { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
                   , chatStatusToolDepth = 0 -- ^ reset tool depth
                   , chatEstimateTokens = mempty
                   }

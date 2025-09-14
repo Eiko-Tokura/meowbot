@@ -18,3 +18,19 @@ strictTakeTail :: Int -> [a] -> [a]
 strictTakeTail n = (`using` evalList rseq) . reverse . take n . reverse
 {-# INLINE strictTakeTail #-}
 
+-- | Some really clever magic owo I came up with
+optimalMeowTakeTail :: Int -> [a] -> [a]
+optimalMeowTakeTail n xs = let len = length xs in
+  if len <= meowCap
+  then xs
+  else strictTakeTail n xs
+  where meowCap = n + optimalCap n
+
+-- | Tries to keep the average length of the list
+optimalMeowTakeTailKeepAvg :: Int -> [a] -> [a]
+optimalMeowTakeTailKeepAvg n = optimalMeowTakeTail (max 1 $ n - optimalCap n `div` 2)
+
+-- | Can you guess what it means? XD
+optimalCap :: Int -> Int
+optimalCap n = max 0 $ round @Double (sqrt (fromIntegral n * 2 * (1 - alpha))) - 1
+  where alpha = 0.125
