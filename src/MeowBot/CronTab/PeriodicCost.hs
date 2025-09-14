@@ -10,6 +10,7 @@ import MeowBot
 import MeowBot.CostModel
 import MeowBot.CronTab
 import MeowBot.Prelude
+import Utils.RunDB
 
 periodicCostHandleCronTabTick :: CronTabTick -> Meow [BotAction]
 periodicCostHandleCronTabTick (CronTabTick now) = botT $ do

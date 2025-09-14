@@ -3,7 +3,7 @@
 module MeowBot.MetaMessage where
 
 import MeowBot.CQCode
-import External.ChatAPI (ChatSetting(..))
+import External.ChatAPI ( ChatSetting(..), Message(..), ChatStatus(..) )
 import Control.DeepSeq (NFData)
 import GHC.Generics (Generic)
 import Data.Additional
@@ -11,8 +11,6 @@ import Data.Maybe
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Either (rights)
-
-import External.ChatAPI (Message(..), ChatStatus(..))
 
 data MetaMessage = MetaMessage
   { cqcodes :: [CQCode]

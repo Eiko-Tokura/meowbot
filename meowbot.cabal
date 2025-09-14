@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.4.6.1
+version:             0.4.6.2
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -233,6 +233,11 @@ library meowbot-lib
                    , MeowBot.GetSelfInfo
                    , MeowBot.IgnoreMatch
                    , MeowBot.Data.IgnoreMatchType
+                   , MeowBot.Data.ChatId
+                   , MeowBot.Data.CQHttp.CQMessage
+                   , MeowBot.Data.CQHttp.Query
+                   , MeowBot.Data.CQHttp.Action
+                   , MeowBot.Data.CQHttp.Notice
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Prelude
@@ -265,6 +270,7 @@ library meowbot-lib
                    , Utils.Persist
                    , Utils.RunDB
                    , Utils.Text
+                   , Utils.Time
                    -- , Utils.LiveEval
                    , Utils.Unit
                    , Utils.TokenEstimator

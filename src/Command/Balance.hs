@@ -14,6 +14,7 @@ import MeowBot.Data.Parser
 import MeowBot.GetInfo
 import MeowBot.GetSelfInfo
 import Utils.ListComp
+import Utils.RunDB
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 

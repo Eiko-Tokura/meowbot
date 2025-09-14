@@ -1,13 +1,13 @@
 {-# LANGUAGE DerivingVia#-}
 module MeowBot.CommandRule where
 
-import Data.Aeson
 import Control.DeepSeq
+import Data.Aeson
 import Database.Persist
 import Database.Persist.Sqlite
-import Utils.Persist
-
 import Language.Haskell.TH
+import MeowBot.Data.ChatId
+import Utils.Persist
 
 -- | When adding new commands, add at the last to preserve Enum
 -- do not change the names of existing commands because they are used in the database
@@ -20,20 +20,6 @@ makeBotCommands cmdIds = do
   let cmdNames = map (\cid -> "command" ++ show cid) cmdIds
   let cmdExps = map (VarE . mkName) cmdNames
   return $ ListE cmdExps
-
-newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
-newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
-
-instance PersistField GroupId where
-  toPersistValue (GroupId gid) = toPersistValue gid
-  fromPersistValue = fmap GroupId . fromPersistValue
-
-instance PersistField UserId where
-  toPersistValue (UserId uid) = toPersistValue uid
-  fromPersistValue = fmap UserId . fromPersistValue
-
-instance PersistFieldSql UserId where sqlType _ = SqlInt64
-instance PersistFieldSql GroupId where sqlType _ = SqlInt64
 
 data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String
   deriving (Show, Eq, Ord, Read)

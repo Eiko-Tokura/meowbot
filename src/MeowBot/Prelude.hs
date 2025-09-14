@@ -5,19 +5,29 @@ module MeowBot.Prelude
   , module Control.Monad.Trans.Maybe
   , module Data.Maybe
   , module Data.Time
-  , module Utils.RunDB
+  , module Database.Persist
   , module Utils.Text
   , (&)
+  , DB
+  , Generic, NFData
   , NonEmpty(..)
+  , makeLenses_
   ) where
 
 import Control.Concurrent.STM
+import Control.DeepSeq (NFData)
 import Control.Monad
+import Control.Monad.Reader
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.Function ((&))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Time
-import Utils.RunDB
+import Database.Persist
+import Database.Persist.Sql
+import GHC.Generics (Generic)
+import Utils.Lens
 import Utils.Text
+
+type DB = ReaderT SqlBackend IO
