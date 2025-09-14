@@ -1,5 +1,9 @@
 packages:
   ./*.cabal
+  ./submodules/item/
+  ./submodules/monad-effect/
+  ./submodules/monad-effect-logger/
+  ./submodules/monad-effect-database/
 with-compiler: ghc-9.12.2
 tests: True
 multi-repl: True

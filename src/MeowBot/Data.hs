@@ -2,10 +2,8 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module MeowBot.Data
   ( module MeowBot.MetaMessage
+  , module MeowBot.Data
   , UserId(..), GroupId(..), ChatId(..), BotId(..)
-  , ChatRoom
-  , WholeChat--, AllData(..), OtherData(..)
-  --, SavedData(..)
 
   , CQMessage(..), CQEventType(..)
   , ReceCQMessage(..), SentCQMessage(..)
@@ -23,7 +21,7 @@ module MeowBot.Data
   , BotName(..)
   , BotModules(..)
   , BotInstance(..)
-  , RunningMode, DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..), WatchDogFlag(..)
+  , DebugFlag(..), RunningFlag(..), IdentityFlag(..), ProxyFlag(..), LogFlag(..), CommandFlags(..), WatchDogFlag(..)
   , EssentialContent
 
   , module Utils.Text
@@ -32,13 +30,7 @@ module MeowBot.Data
   ) where
 
 import Control.DeepSeq (NFData)
-import Data.Additional
-import Data.Aeson -- (FromJSON(..), withObject, withText, ToJSON(..))
-import Data.Aeson.Types (Parser)
 import Data.Default
-import Data.Maybe
-import Data.Time (UTCTime)
-import Data.Time.Clock.POSIX
 import External.ProxyWS (ProxyData)
 import GHC.Generics
 import MeowBot.CommandRule
@@ -48,7 +40,6 @@ import MeowBot.Data.CQHttp.Notice
 import MeowBot.Data.CQHttp.Query
 import MeowBot.Data.ChatId
 import MeowBot.MetaMessage
-import MeowBot.Parser (cqmsg)
 import Utils.Lens
 import Utils.Text
 import qualified MeowBot.Parser as MP

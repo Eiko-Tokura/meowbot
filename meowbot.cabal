@@ -96,29 +96,29 @@ library crontab
     default-language: Haskell2010
 
 
-library item
-
-    exposed-modules: Control.Monad.Item
-                   , Parser.Char
-                   , Parser.String
-                   , Parser.Definition
-                   , Parser.Except
-                   , Parser.Run
-                   , Parser.Template
-                   , Parser.Text
-
--- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
-
-    build-depends: base  >=4.7 && <5
-                 , mtl
-                 , transformers
-                 , text
-                 , template-haskell
-
-    hs-source-dirs:   item
-
-    default-language: GHC2024
+-- library item
+-- 
+--     exposed-modules: Control.Monad.Item
+--                    , Parser.Char
+--                    , Parser.String
+--                    , Parser.Definition
+--                    , Parser.Except
+--                    , Parser.Run
+--                    , Parser.Template
+--                    , Parser.Text
+-- 
+-- -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
+--     ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
+-- 
+--     build-depends: base  >=4.7 && <5
+--                  , mtl
+--                  , transformers
+--                  , text
+--                  , template-haskell
+-- 
+--     hs-source-dirs:   item
+-- 
+--     default-language: GHC2024
 
 -- | A library that provides
 -- * google search (via python)
@@ -299,6 +299,9 @@ library meowbot-lib
                  , http-types
                  , item
                  , lens
+                 , monad-effect
+                 , monad-effect-logger
+                 , monad-effect-database
                  , monad-logger
                  , mtl
                  , parallel
@@ -355,6 +358,9 @@ executable meowbot
                  , http-types
                  , item
                  , lens
+                 , monad-effect
+                 , monad-effect-logger
+                 , monad-effect-database
                  , monad-logger
                  , mtl
                  , parallel
