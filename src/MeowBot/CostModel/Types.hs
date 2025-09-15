@@ -46,22 +46,34 @@ instance Default MonthlySubscriptionFee where def = monthlySubscriptionFee ( def
 instance Default PayAsYouGoFeeRate      where def = payAsYouGoFeeRate      ( def :: PricingModel )
 instance Default DailyBasicCost         where def = dailyBasicCost         ( def :: PricingModel )
 
+data OtherCost
+  = DailyCost       DailyBasicCost           -- ^ daily cost, independent of usage
+  | DailyCostCapped DailyBasicCost Int -- ^ daily cost, capped at some number of days
+  deriving (Show, Read, Eq)
+
+displayOtherCost :: OtherCost -> Text
+displayOtherCost (DailyCost d)         = "+" <> toText d <> "/day"
+displayOtherCost (DailyCostCapped d c) = "+" <> toText d <> "/day (max " <> toText c <> " days)"
+
+instance Default OtherCost where
+  def = DailyCostCapped (dailyBasicCost (def :: PricingModel)) 180
+
 data CostModel
-  = Unlimited                                                  -- ^ no cost attached at all
-  | Subscription MonthlySubscriptionFee                        -- ^ monthly subscription, no per-use cost
-  | PayAsYouGo   PayAsYouGoFeeRate      (Maybe DailyBasicCost) -- ^ pay per use, with possible fee rate
-  | CostOnly     (Maybe DailyBasicCost)                        -- ^ 0 fee rate, pay per use
+  = Unlimited                                             -- ^ no cost attached at all
+  | Subscription MonthlySubscriptionFee                   -- ^ monthly subscription, no per-use cost
+  | PayAsYouGo   PayAsYouGoFeeRate      (Maybe OtherCost) -- ^ pay per use, with possible fee rate
+  | CostOnly     (Maybe OtherCost)                        -- ^ 0 fee rate, pay per use
   deriving (Show, Read, Eq)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CostModel)
 
 instance ToText CostModel Text where
   toText Unlimited             = "Unlimited"
   toText (Subscription fee)    = "Subscription (" <> toText fee <> " per month)"
-  toText (PayAsYouGo _ mDaily) = "PayAsYouGo"     <> maybe "" (\d -> " +" <> toText d <> "/day") mDaily
-  toText (CostOnly mDaily)     = "CostOnly"       <> maybe "no daily cost" (\d -> toText d <> " daily cost") mDaily
+  toText (PayAsYouGo _ mDaily) = "PayAsYouGo"     <> maybe "" displayOtherCost mDaily
+  toText (CostOnly mDaily)     = "CostOnly"       <> maybe "" displayOtherCost mDaily
 
 chinoCostModel :: CostModel
-chinoCostModel = PayAsYouGo (payAsYouGoFeeRate def) (Just $ dailyBasicCost def)
+chinoCostModel = PayAsYouGo (payAsYouGoFeeRate def) (Just def)
 
 instance Default CostModel where
   def = PayAsYouGo (payAsYouGoFeeRate def) Nothing
@@ -90,12 +102,21 @@ toDoNothing (DisableService ns) = DoNothing ns
 instance Default OverdueBehavior where
   def = DoNothing []
 
-hasDailyCost :: CostModel -> Bool
-hasDailyCost cm = case getDailyCost cm of
+dailyCost :: OtherCost -> DailyBasicCost
+dailyCost (DailyCost d)         = d
+dailyCost (DailyCostCapped d _) = d
+
+hasOtherCost :: CostModel -> Bool
+hasOtherCost cm = case getOtherCost cm of
   Just _  -> True
   Nothing -> False
 
-getDailyCost :: CostModel -> Maybe DailyBasicCost
-getDailyCost (CostOnly (Just d))     = Just d
-getDailyCost (PayAsYouGo _ (Just d)) = Just d
-getDailyCost (Unlimited; Subscription _; PayAsYouGo _ _; CostOnly _) = Nothing
+getOtherCost :: CostModel -> Maybe OtherCost
+getOtherCost (CostOnly (Just d))     = Just d
+getOtherCost (PayAsYouGo _ (Just d)) = Just d
+getOtherCost (Unlimited; Subscription _; PayAsYouGo _ _; CostOnly _) = Nothing
+
+hasCap :: CostModel -> Maybe Int
+hasCap (CostOnly (Just (DailyCostCapped _ c)))                 = Just c
+hasCap (PayAsYouGo _ (Just (DailyCostCapped _ c)))             = Just c
+hasCap (Unlimited; Subscription _; PayAsYouGo _ _; CostOnly _) = Nothing

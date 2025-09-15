@@ -133,7 +133,7 @@ instance MonadUniform (State StdGen) where
 instance MonadInterleave (State StdGen) where
   interleaveRandom = id
   interleaveSplitRandom sa = do
-    (s1, s2) <- gets split
+    (s1, s2) <- gets splitGen
     put s2
     return $ evalState sa s1
   {-# INLINE interleaveRandom #-}

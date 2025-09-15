@@ -250,8 +250,11 @@ selfP = ItSelf <$ (asum . map string) ["self", "itself", "ItSelf"]
 feeRateP :: Parser T.Text Char PayAsYouGoFeeRate
 feeRateP = PayAsYouGoFeeRate <$> (string "rate=" >> float)
 
-dailyCostP :: Parser T.Text Char DailyBasicCost
-dailyCostP = DailyBasicCost <$> (string "daily=" >> float)
+dailyCostP :: Parser T.Text Char OtherCost
+dailyCostP = asum
+  [ DailyCostCapped <$> (string "daily=" >> DailyBasicCost <$> nFloat) <*> (spaces >> string "cap=" >> positiveInt)
+  , DailyCost . DailyBasicCost <$> (string "daily=" >> nFloat)
+  ]
 
 costModelP :: Parser T.Text Char CostModel
 costModelP = asum

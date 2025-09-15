@@ -27,13 +27,19 @@ checkAndUpdatePeriodicCost botId now = do
                   [ (p, Right bcmc) | (p, bcmc) <- lBotCostModelPerChat ]
   _inserted <- forM listCosts $ \(p, bcm) -> do
     let bcm'  = either (Left . entityKey) (Right . entityKey) bcm
-    let bcm'' = either (Left . entityVal) (Right . entityVal) bcm
+        bcm'' = either (Left . entityVal) (Right . entityVal) bcm
+        mCap  = hasCap $ either botCostModelCostModel botCostModelPerChatCostModel bcm''
     mLastRecord <- runDB $ findLastCostRecord bcm'
+    countRecords <- runDB $ countCostRecords bcm'
     receivedMessageToday <- runDB $ receivedMessageToday bcm'' (utctDay now)
-    let needAction =  receivedMessageToday > 0
+
+    let notCapped = maybe True (countRecords <) mCap
+        needAction =  receivedMessageToday > 0
+                   && notCapped
                    && periodicLogic Daily now (fmap periodicCostRecordTime mLastRecord)
+
     when needAction $ do
-      res <- runDB $ insertNewCostRecord p bcm now
+      res <- runDB $ insertNewCostRecord (dailyCost p) bcm now
       case res of
         Just () -> $logInfo  $ "Inserted daily basic cost record for " <> toText bcm
         Nothing -> $logError $ "Failed to insert daily basic cost record for " <> toText bcm
@@ -49,7 +55,7 @@ insertNewCostRecord dailyCost (Left enBCM) now = runMaybeT $ do
         , periodicCostRecordDescription               = Just "Daily basic cost"
         , periodicCostRecordCost                      = coerce dailyCost
         }
-  MaybeT $ pure $ guard $ hasDailyCost enBCM.entityVal.botCostModelCostModel
+  MaybeT $ pure $ guard $ hasOtherCost enBCM.entityVal.botCostModelCostModel
   lift $ do
     update enBCM.entityVal.botCostModelWalletId [WalletBalance -=. coerce dailyCost]
     insert_ costRecord
@@ -62,7 +68,7 @@ insertNewCostRecord dailyCost (Right enBCMP) now = runMaybeT $ do
         , periodicCostRecordDescription               = Just "Daily basic cost"
         , periodicCostRecordCost                      = coerce dailyCost
         }
-  MaybeT $ pure $ guard $ hasDailyCost enBCMP.entityVal.botCostModelPerChatCostModel
+  MaybeT $ pure $ guard $ hasOtherCost enBCMP.entityVal.botCostModelPerChatCostModel
   lift $ do
     update enBCMP.entityVal.botCostModelPerChatWalletId [WalletBalance -=. coerce dailyCost]
     insert_ costRecord
@@ -73,18 +79,24 @@ findLastCostRecord (Left botCostModelId)         = fmap entityVal <$>
 findLastCostRecord (Right botCostModelPerChatId) = fmap entityVal <$>
   selectFirst [PeriodicCostRecordReferToCostModelPerChatId ==. Just botCostModelPerChatId] [Desc PeriodicCostRecordTime]
 
-getBotPeriodicCostModel :: BotId -> DB (Maybe (DailyBasicCost, Entity BotCostModel))
+countCostRecords :: Either BotCostModelId BotCostModelPerChatId -> DB Int
+countCostRecords (Left botCostModelId)         =
+  count [PeriodicCostRecordReferToCostModelId ==. Just botCostModelId]
+countCostRecords (Right botCostModelPerChatId) =
+  count [PeriodicCostRecordReferToCostModelPerChatId ==. Just botCostModelPerChatId]
+
+getBotPeriodicCostModel :: BotId -> DB (Maybe (OtherCost, Entity BotCostModel))
 getBotPeriodicCostModel botId = runMaybeT $ do
   enCM      <- MaybeT $ getBotCostModel botId
-  basicCost <- MaybeT $ pure $ getDailyCost enCM.entityVal.botCostModelCostModel
+  basicCost <- MaybeT $ pure $ getOtherCost enCM.entityVal.botCostModelCostModel
   return ( basicCost, enCM )
 
-getBotPerChatPeriodicCostModel :: BotId -> DB [(DailyBasicCost, Entity BotCostModelPerChat)]
+getBotPerChatPeriodicCostModel :: BotId -> DB [(OtherCost, Entity BotCostModelPerChat)]
 getBotPerChatPeriodicCostModel botId = do
   list <- getBotPerChatCostModel botId
   return [ (p, en)
          | en@(Entity _ modelPerChat) <- list
-         , let mP = getDailyCost modelPerChat.botCostModelPerChatCostModel
+         , let mP = getOtherCost modelPerChat.botCostModelPerChatCostModel
          , Just p <- [mP]
          ]
 
