@@ -44,7 +44,7 @@ maintainer:         754829466@qq.com
 -- Extra files to be distributed with the package, such as examples or a README.
 extra-source-files: CHANGELOG.md
 
-tested-with: GHC == 9.2.8, GHC == 9.10.1
+tested-with: GHC == 9.12.2
 
 flag deploy
     description: Compile with great optimization effort, use cabal build --flag=deploy
@@ -273,6 +273,7 @@ library meowbot-lib
                    , Utils.Maybe
                    , Utils.Persist
                    , Utils.RunDB
+                   , Utils.RunEsql
                    , Utils.Text
                    , Utils.TH
                    , Utils.Time

@@ -2,7 +2,6 @@
 -- | This command generates interesting statistics about the current chat.
 module Command.Statistics where
 
-import Control.Monad.Logger
 import Command
 import Data.PersistModel
 import Data.List (sortOn)
@@ -14,10 +13,9 @@ import MeowBot.Prelude
 import Utils.Diagrams
 import Utils.Diagrams.Render
 import Utils.Esqueleto
-import Utils.RunDB
+import Utils.RunEsql
 import Utils.TH
 import Utils.Persist
-import qualified Database.Esqueleto.Experimental as SQL
 
 makeNewInts ["NUsers", "NDays"]
 
@@ -26,8 +24,10 @@ data StatisticsCommand
   | StatActivityUser (Maybe NDays) (Maybe UserId)
 
 data StatisticsAction
-  = AStatActivity     BotId ChatId NDays NUsers -- ^ Show activity statistics for the past N days and top N users in the chat
-  | AStatActivityUser BotId ChatId NDays UserId -- ^ Show activity statistics for the past N days and top N users in the chat
+  = AStatActivity     BotId ChatId NDays NUsers
+    -- ^ Show activity statistics for the past N days and top N users in the chat
+  | AStatActivityUser BotId ChatId NDays UserId
+    -- ^ Show activity statistics for the past N days and top N users in the chat
 
 statisticsCommandToAction :: BotId -> (ChatId, UserId) -> StatisticsCommand -> Maybe StatisticsAction
 statisticsCommandToAction bid (cid, _)   (StatActivity mDays mUsers)
@@ -40,48 +40,49 @@ statisticsCommandToAction bid (cid, uid) (StatActivityUser mDays mUser)
 statisticsAction :: Maybe String -> ChatId -> StatisticsAction -> Meow (Maybe [BotAction])
 statisticsAction mName scid = \case
   AStatActivity bid cid days users -> do
+    pool <- askDB
     now <- liftIO getCurrentTime
     let startDay = addUTCTime (negate $ fromIntegral (days.unNDays * 86400)) now
-    userActivity <- fmap toUnValue $ runDB $ SQL.select $ do
-      p <- SQL.from $ SQL.table @ChatMessage
-      SQL.where_
-        (         p SQL.^. ChatMessageBotId   SQL.==. SQL.val bid
-        SQL.&&.   p SQL.^. ChatMessageChatId  SQL.==. SQL.val cid
-        SQL.&&.   SQL.not_ (SQL.isNothing (p SQL.^. ChatMessageUserId)) -- is not null
-        SQL.&&.   p SQL.^. ChatMessageTime    SQL.>=. SQL.val startDay
-        )
-      SQL.groupBy (p SQL.^. ChatMessageUserId)
-      let countMessages = SQL.countRows :: SQL.SqlExpr (SQL.Value Int)
-      SQL.orderBy [SQL.desc countMessages]
-      SQL.limit $ fromIntegral users
-      pure (p SQL.^. ChatMessageUserId, countMessages)
-    selfActivity <- fmap toUnValue $ runDB $ SQL.select $ do
-      p <- SQL.from $ SQL.table @ChatMessage
-      SQL.where_
-        (         p SQL.^. ChatMessageBotId     SQL.==. SQL.val bid
-        SQL.&&.   p SQL.^. ChatMessageChatId    SQL.==. SQL.val cid
-        SQL.&&.   p SQL.^. ChatMessageEventType SQL.==. SQL.val (PersistUseInt64 SelfMessage)
-        SQL.&&.   p SQL.^. ChatMessageTime      SQL.>=. SQL.val startDay
-        )
-      let countMessages = SQL.countRows :: SQL.SqlExpr (SQL.Value Int)
-      pure countMessages
-    let allActivity =  take (fromIntegral users)
-                    $  sortOn (Down . snd)
-                    $  [(name u, fromIntegral a) | (u, a) <- userActivity]
-                    <> maybeToList ((fromMaybe ">w<" mName, ) . fromIntegral <$> listToMaybe selfActivity)
-        plot = SimpleNamedBarPlot
-                 { snbpTitle =  "Top " ++ show (length allActivity)
-                             ++ " active users in the past "
-                             ++ show days ++ " days (number of messages)"
-                 , snbpData  = reverse allActivity
-                 }
-        name (Just (UserId uid)) = show uid
-        name Nothing             = "owo?"
-        lbs = axisToPngLbs (mkSizeSpec2D (Just 1200) Nothing) $ simpleNamedBarPlot plot
-    $logInfo $ "userActivity: " <> toText allActivity
-    $logInfo $ "selfActivity: " <> toText selfActivity
-    return $ Just [ baSendImageLbs scid lbs ]
-    
+    fetchStat <- liftIO . async $ do -- ^ doing the database fetch asynchronously, avoid blocking the main thread
+      userActivity <- fmap toUnValue $ flip runSqlPool pool $ select $ do
+        p <- from $ table @ChatMessage
+        where_
+          (   p ^. ChatMessageBotId  ==. val bid
+          &&. p ^. ChatMessageChatId ==. val cid
+          &&. not_ (isNothing_ (p ^. ChatMessageUserId)) -- is not null
+          &&. p ^. ChatMessageTime   >=. val startDay
+          )
+        groupBy (p ^. ChatMessageUserId)
+        let countMessages = countRows :: SqlExpr (Value Int)
+        orderBy [desc countMessages]
+        limit $ fromIntegral users
+        pure (p ^. ChatMessageUserId, countMessages)
+      selfActivity <- fmap toUnValue $ flip runSqlPool pool $ select $ do
+        p <- from $ table @ChatMessage
+        where_
+          (   p ^. ChatMessageBotId     ==. val bid
+          &&. p ^. ChatMessageChatId    ==. val cid
+          &&. p ^. ChatMessageEventType ==. val (PersistUseInt64 SelfMessage)
+          &&. p ^. ChatMessageTime      >=. val startDay
+          )
+        let countMessages = countRows :: SqlExpr (Value Int)
+        pure countMessages
+      let allActivity =  take (fromIntegral users)
+                      $  sortOn (Down . snd)
+                      $  [(name u, fromIntegral a) | (u, a) <- userActivity]
+                      <> maybeToList ((fromMaybe ">w<" mName, ) . fromIntegral <$> listToMaybe selfActivity)
+          plot = SimpleNamedBarPlot
+                   { snbpTitle =  "Top " ++ show (length allActivity)
+                               ++ " active users in the past "
+                               ++ show days ++ " days (number of messages)"
+                   , snbpData  = reverse allActivity
+                   }
+          name (Just (UserId uid)) = show uid
+          name Nothing             = "owo?"
+          !lbs = axisToPngLbs (mkSizeSpec2D (Just 1080) Nothing) $ simpleNamedBarPlot plot
+      return [ baSendImageLbs scid lbs ]
+    return $ Just [BAPureAsync fetchStat]
+
   _ -> return Nothing
 
 checkPrivilegeStatistics :: IsSuperUser -> (ChatId, UserId) -> StatisticsCommand -> Bool

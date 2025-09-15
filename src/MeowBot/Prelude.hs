@@ -6,7 +6,6 @@ module MeowBot.Prelude
   , module Data.Default
   , module Data.Maybe
   , module Data.Time
-  , module Database.Persist
   , module Utils.Text
   , (&)
   , DB
@@ -26,7 +25,6 @@ import Data.Function ((&))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe
 import Data.Time
-import Database.Persist
 import Database.Persist.Sql
 import GHC.Generics (Generic)
 import Utils.Lens

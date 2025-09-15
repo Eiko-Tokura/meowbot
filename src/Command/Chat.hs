@@ -28,7 +28,6 @@ import Command.Cat.CatSet
 import Command.Hangman
 
 import Module.ConnectionManager
-import Data.Default
 import Data.PersistModel
 import Data.Proxy
 import Data.HList
