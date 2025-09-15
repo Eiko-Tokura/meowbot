@@ -182,6 +182,7 @@ library meowbot-lib
                    , Command.Retract
                    , Command.SetSysMessage
                    , Command.Study
+                   , Command.Statistics
                    , Command.User
                    , Command.Updater
                    , Control.Monad.Effect
@@ -264,6 +265,7 @@ library meowbot-lib
                    , System.WatchDog
                    , Utils.Base64
                    , Utils.ByteString
+                   , Utils.Esqueleto
                    , Utils.Lens
                    , Utils.List
                    , Utils.ListComp
@@ -272,10 +274,13 @@ library meowbot-lib
                    , Utils.Persist
                    , Utils.RunDB
                    , Utils.Text
+                   , Utils.TH
                    , Utils.Time
                    -- , Utils.LiveEval
                    , Utils.Unit
                    , Utils.TokenEstimator
+                   , Utils.Diagrams
+                   , Utils.Diagrams.Render
                    --, External.ChatAPI.Tool.Search
 
     -- LANGUAGE extensions used by modules in this package.
@@ -291,14 +296,21 @@ library meowbot-lib
                  , containers
                  , crontab
                  , crypton-connection
+                 , diagrams
+                 , diagrams-lib
+                 , diagrams-rasterific
+                 , plots
+                 , JuicyPixels
                  , data-default
                  , deepseq
                  , directory
+                 , esqueleto
                  , filepath
                  , http-client
                  , http-client-tls
                  , http-types
                  , item
+                 , linear
                  , lens
                  , monad-effect
                  , monad-effect-logger

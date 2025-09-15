@@ -17,12 +17,18 @@ import Control.Monad.Trans
 import Control.Monad.Trans.Except
 import Data.Maybe
 import Data.PersistModel
+import MeowBot.Data.CQHttp.CQCode
+import Utils.Base64
+import Utils.ByteString
 
 -- | Abstract representation of sending a message to a chat id.
 -- will NOT insert the message into the history.
 baSendToChatId :: ChatId -> Text -> BotAction
 baSendToChatId (GroupChat gid)   txt = BASendGroup gid txt
 baSendToChatId (PrivateChat uid) txt = BASendPrivate uid txt
+
+baSendImageLbs :: ChatId -> LazyByteString -> BotAction
+baSendImageLbs cid lbs = baSendToChatId cid (embedCQCode $ CQImage64 $ rawByteStringToBase64 lbs)
 
 -- | runing an ExceptT String IO String action with string result, and send the result to a chat id. Handles exceptions.
 -- will insert the message into the history.

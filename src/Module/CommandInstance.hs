@@ -36,6 +36,7 @@ import Command.Study
 import Command.Poll
 import Command.Hangman
 import Command.Updater
+import Command.Statistics
 -- import Command.Haskell
 
 import Module.Command
