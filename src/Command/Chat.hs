@@ -4,10 +4,10 @@ module Command.Chat where
 import Command
 import Command.Cat (catParser)
 import MeowBot
+import MeowBot.Prelude
 import MeowBot.GetInfo
 import MeowBot.BotStatistics
 import System.General (MeowT)
--- import Data.Maybe (fromMaybe, catMaybes)
 import External.ChatAPI as API
 import External.ChatAPI.Tool
 import External.ChatAPI.Tool.Search
@@ -21,18 +21,13 @@ import qualified Data.Text as T
 import qualified Data.Foldable as Foldable
 
 import Control.Applicative
-import Control.Monad
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger
-import Control.Monad.Trans
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.ReaderState
 import Command.Cat.CatSet
 import Command.Hangman
 
 import Module.ConnectionManager
-import Data.Maybe
-import Data.Time
 import Data.Default
 import Data.PersistModel
 import Data.Proxy

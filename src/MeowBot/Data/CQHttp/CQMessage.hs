@@ -128,7 +128,7 @@ instance FromJSON CQMessage where
                 (NoticeEvent , Just "notify"         , Just "poke"       ) -> Just $ NoticeNotify NoticeSubTypePoke
                 (NoticeEvent , Just "notify"         , Just "lucky_king" ) -> Just $ NoticeNotify NoticeSubTypeLuckyKing
                 (NoticeEvent , Just "notify"         , Just "honor"      ) -> Just $ NoticeNotify NoticeSubTypeHonor
-                _ -> Nothing )
+                _                                                          -> Nothing )
               <*> pure ( case (eventType, requestType, requestSubType) of
                 (RequestEvent, Just "friend"       , _                 ) -> Just $ RequestFriend comment flag
                 (RequestEvent, Just "group"        , Just "add"        ) -> Just $ RequestGroup RequestGroupAdd comment flag

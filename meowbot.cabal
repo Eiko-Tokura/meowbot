@@ -239,6 +239,7 @@ library meowbot-lib
                    , MeowBot.Data.CQHttp.Action
                    , MeowBot.Data.CQHttp.Notice
                    , MeowBot.MeowMsg
+                   , MeowBot.MeowMsg.CQHttp
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Prelude

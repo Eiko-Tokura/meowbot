@@ -196,7 +196,7 @@ instance
     botname <- lift getBotName
     cid <- effectEWith' (const $ TimedTaskToolError  "no ChatId found") getCid
     cronText <- pureEWith' (const $ TimedTaskToolError "invalid crontab format") $ validateCronText unVerifiedCronText
-    lift $ runDBMeowTool $ insert $ BotCronJob
+    cronId <- lift $ runDBMeowTool $ insert $ BotCronJob
       { botCronJobBotName          = botname
       , botCronJobBotId            = botId
       , botCronJobChatId           = Just cid
@@ -205,7 +205,7 @@ instance
       , botCronJobCronMeowAction   = CronMeowChatBack cid desc
       , botCronJobCronDetail       = Just desc
       }
-    return $ StringT "success" :%* ObjT0Nil
+    return $ StringT (tshow cronId) :%* ObjT0Nil
 
 data CronTabList
 -- ^ List all cron jobs for the current bot in the current chat.

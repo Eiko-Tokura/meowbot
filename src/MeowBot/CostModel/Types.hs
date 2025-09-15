@@ -47,7 +47,7 @@ instance Default PayAsYouGoFeeRate      where def = payAsYouGoFeeRate      ( def
 instance Default DailyBasicCost         where def = dailyBasicCost         ( def :: PricingModel )
 
 data OtherCost
-  = DailyCost       DailyBasicCost           -- ^ daily cost, independent of usage
+  = DailyCost       DailyBasicCost     -- ^ daily cost, independent of usage
   | DailyCostCapped DailyBasicCost Int -- ^ daily cost, capped at some number of days
   deriving (Show, Read, Eq)
 

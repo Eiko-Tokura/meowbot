@@ -3,6 +3,7 @@ module MeowBot.Prelude
   , module Control.Monad
   , module Control.Monad.Trans
   , module Control.Monad.Trans.Maybe
+  , module Data.Default
   , module Data.Maybe
   , module Data.Time
   , module Database.Persist
@@ -20,6 +21,7 @@ import Control.Monad
 import Control.Monad.Reader
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
+import Data.Default
 import Data.Function ((&))
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe

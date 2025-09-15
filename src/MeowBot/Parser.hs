@@ -19,6 +19,7 @@ module MeowBot.Parser
   , canBeEmpty
   , parseByRead
   , onlyMessage
+  , innerParserToBatchParser
   , MetaMessage(..)
   , CQCode(..)
   , ChatSetting(..)
@@ -36,7 +37,9 @@ import GHC.Generics (Generic)
 import Data.Maybe (listToMaybe, fromMaybe, catMaybes)
 import Data.Either(lefts, fromRight)
 import Data.Text (Text)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Text as T
+import qualified Data.List.NonEmpty as NE
 import Data.List (groupBy)
 
 data Tree a = EmptyTree | Node a [Tree a] deriving Show
@@ -218,3 +221,19 @@ parseByRead = do
     [(x, "")] -> return x
     _ -> zero
 {-# INLINE parseByRead #-}
+
+innerParserToBatchParser :: Parser Text Char a -> Parser T.Text Char (NonEmpty a)
+innerParserToBatchParser innerParser = headCommand "" >> asum
+    [ fmap pure
+      ( innerParser
+        <* many spaceOrEnter
+        <* end
+      )
+    , many spaceOrEnter
+      >> just '{'
+      >> many spaceOrEnter
+      >> NE.some1 (innerParser <* many spaceOrEnter <* just ';' <* many spaceOrEnter)
+      <* just '}'
+      <* many spaceOrEnter
+      <* end
+    ]

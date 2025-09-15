@@ -2,8 +2,6 @@
 module Command.Balance where
 
 import Command
-import Data.Default
-import Data.Maybe
 import Data.PersistModel
 import Data.Time.Clock
 import GHC.Exts
@@ -272,20 +270,7 @@ costModelP = asum
   ]
 
 balanceParser :: Parser T.Text Char (NonEmpty BalanceCommand)
-balanceParser = headCommand "" >> asum
-    [ fmap pure
-      ( innerBalanceParser
-        <* many spaceOrEnter
-        <* end
-      )
-    , many spaceOrEnter
-      >> just '{'
-      >> many spaceOrEnter
-      >> NE.some1 (innerBalanceParser <* many spaceOrEnter <* just ';' <* many spaceOrEnter)
-      <* just '}'
-      <* many spaceOrEnter
-      <* end
-    ]
+balanceParser = innerParserToBatchParser innerBalanceParser
   where
     innerBalanceParser = asum
       [ string "own" >> spaces >> Own Nothing <$> chatIdP <*> pure Nothing
