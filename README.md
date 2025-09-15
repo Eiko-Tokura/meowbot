@@ -1,20 +1,25 @@
-This is a cute qq bot 'MeowMeow' I wrote in haskell owo
+This is a cute QQ bot 'MeowMeow',
 
-It was my first Haskell project and was not well written. But I have now revisited it and heavily refactored, it is now much more modular, maintainable! I also added a lot exciting new features!
+It was my first Haskell project, I learned a lot! Typically you wouldn't maintain your first project that long, but somehow meowbot gets a lot of users. I have revisited it and heavily refactored it multiple times, so I think it is still great and extendable owo (But still, I think now it needs a heavy refactor...)
 
 ## Features
-- [x] Chat with you via ChatGPT API
+
+- [x] Chat with you via various LLM API
+- [x] Custom format tool calling support for LLM
+- [x] Send you crontab based reminders
 - [x] Send you interesting voices (aokana >w<)
 - [x] Generating really good pictures, formulas from Markdown
 - [x] Generating Chat output in Markdown and display in pictures
 - [x] Generating Random Variables
+- [x] Producing chat related statistics
 - [x] Polling
 - [x] Funny Hangman Game
 - [x] User, group and command management
-- [x] Automatic retract user messages in group
+- [x] API-Key, user and balance management
+- [x] retract user messages in group
 - [x] Proxy WebSocket connection to connect to external servers
-- [x] Run as client mode or server mode, or many of them at once
-- [x] Full async and concurrent support
+- [x] You can run as client or server, many of them at once
+- [x] Builtin async and concurrency support
 
 When using the bot, you can use ':help' to get more information about each command.
 
@@ -25,8 +30,10 @@ Welcome to contribute and play with MeowMeow!
 If you want to run it, you need the following files to support the above functions: (otherwise the corresponding functions will not work)
 
 1. LLOneBot framework (replacing cqhttp) or natpcat.
-2. Create a file 'apiKey' containing the API key of ChatGPT in the root directory of the project. Otherwise, the ChatGPT function will not work.
-3. Add aokana voice files in ./aokana/voice and script files in ./aokana/scripts. Otherwise, the aokana function will not work.
+
+2. For the LLM functionalities, either create a file 'apiKey' containing the API key of ChatGPT in the root directory of the project (in Show format), or set the api-key via bot commands `:cat-set ...` or set it up in the database.
+
+3. ~~(Don't use this functionality anyway) Add aokana voice files in ./aokana/voice and script files in ./aokana/scripts. Otherwise, the aokana function will not work.~~
 
 Compile and run it in either ghc, cabal or stack, whatever >w<
 
@@ -35,20 +42,9 @@ Compile and run it in either ghc, cabal or stack, whatever >w<
   We are using the newest and coolest `ghc-9.10.1` compiler. If you haven't installed `ghc`, `cabal`, nor `stack`, install `ghcup` first is recommended, find it [here](https://www.haskell.org/ghcup/).
 
   ```bash
-  git clone https://Eiko-Tokura/meowbot
+  git clone https://github.com/Eiko-Tokura/meowbot
   cd meowbot
   cabal build
-  ```
-
-* Using stack
-
-  Install stack via `curl -sSL https://get.haskellstack.org/ | sh` or via your package manager, also find their [website](https://docs.haskellstack.org/en/stable/install_and_upgrade/). Then run the following commands:
-
-  ```bash
-  git clone https://Eiko-Tokura/meowbot
-  cd meowbot
-  stack init
-  stack build
   ```
 
 ### Command Line Arguments
@@ -72,15 +68,17 @@ Multiple bots can be started by using multiple sets of flags, starting with a ru
 
 ### To Do
 
-- [ ] Adding TUI interface and control panel
-- [ ] ChatGPT Function Calling
-- [ ] Assistant And Notes Function
 - [x] Using database to store user data and statistics
-- [ ] Provide interesting statistics functions to users
+- [x] Provide interesting statistics functions to users
 - [x] Bring back the funny hangman game
 - [x] Implement common data shared among concurrent bot instances
 - [x] Proper logging system
 - [x] Modular system using type level programming and monad transformers
-- [ ] Upload `item` as a separate package to hackage
+- [x] Assistant And Notes Function
+- [ ] Split some parts into separate packages
+- [ ] Adding TUI interface and control panel
+- [ ] ChatGPT Function Calling
+- [ ] Design a cross-platform message format, adapting layer (qq, discord, etc.)
+- [ ] Refactor into using my `monad-effect` effect system
 - [ ] Refactor commands like `aokana` and `study` to use the database
 - [ ] Flag tracking system
