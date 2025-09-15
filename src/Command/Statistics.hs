@@ -52,10 +52,10 @@ statisticsAction _ scid = \case
       return (p SQL.^. ChatMessageUserId, countMessages)
     let plot = SimpleNamedBarPlot
                  { snbpTitle = "Top " ++ show (length userActivity) ++ " active users in the past " ++ show days ++ " days"
-                 , snbpData  = [(show u, fromIntegral a) | (Just u, a) <- userActivity]
+                 , snbpData  = [(show u, fromIntegral a) | (Just (UserId u), a) <- userActivity]
                  }
-        pngLbs = axisToPngLbs (dims $ V2 1000 800) $ simpleNamedBarPlot plot
-    return $ Just [ baSendImageLbs scid pngLbs ]
+        lbs = axisToBmpLbs (dims $ V2 1000 800) $ simpleNamedBarPlot plot
+    return $ Just [ baSendImageLbs scid lbs ]
     
   _ -> return Nothing
 

@@ -7,4 +7,4 @@ packages:
 with-compiler: ghc-9.12.2
 tests: True
 multi-repl: True
-allow-newer: lens, base, template-haskell
+allow-newer: lens, hashable, data-default

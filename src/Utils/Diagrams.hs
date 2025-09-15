@@ -13,4 +13,5 @@ simpleNamedBarPlot :: SimpleNamedBarPlot -> Axis Rasterific V2 Double
 simpleNamedBarPlot p = r2Axis &~ do
   yMin ?= 0
   xLabel .= p.snbpTitle
+  axisStyle .= vividColours
   namedBarPlot p.snbpData $ return ()

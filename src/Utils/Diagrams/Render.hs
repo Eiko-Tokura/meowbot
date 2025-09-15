@@ -13,5 +13,11 @@ import qualified Data.ByteString.Lazy as BL
 renderPngLbs :: Monoid m => SizeSpec V2 Double -> QDiagram Rasterific V2 Double m -> BL.ByteString
 renderPngLbs ss dia = encodePng $ renderDia Rasterific (RasterificOptions ss) dia
 
+renderBmpLbs :: Monoid m => SizeSpec V2 Double -> QDiagram Rasterific V2 Double m -> BL.ByteString
+renderBmpLbs ss dia = encodeBitmap $ renderDia Rasterific (RasterificOptions ss) dia
+
 axisToPngLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
 axisToPngLbs ss = renderPngLbs ss . renderAxis
+
+axisToBmpLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
+axisToBmpLbs ss = renderBmpLbs ss . renderAxis
