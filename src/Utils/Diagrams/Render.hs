@@ -2,6 +2,7 @@
 module Utils.Diagrams.Render
   ( module Utils.Diagrams.Render
   , dims, V2(..)
+  , mkSizeSpec2D
   ) where
 
 import Codec.Picture
@@ -17,7 +18,10 @@ renderBmpLbs :: Monoid m => SizeSpec V2 Double -> QDiagram Rasterific V2 Double 
 renderBmpLbs ss dia = encodeBitmap $ renderDia Rasterific (RasterificOptions ss) dia
 
 axisToPngLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
-axisToPngLbs ss = renderPngLbs ss . renderAxis
+axisToPngLbs ss = renderPngLbs ss . withWhiteBackground . renderAxis
 
 axisToBmpLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
-axisToBmpLbs ss = renderBmpLbs ss . renderAxis
+axisToBmpLbs ss = renderBmpLbs ss . withWhiteBackground . renderAxis
+
+withWhiteBackground :: Monoid m => QDiagram Rasterific V2 Double m -> QDiagram Rasterific V2 Double m
+withWhiteBackground = bgFrame 2 white

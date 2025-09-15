@@ -14,4 +14,5 @@ simpleNamedBarPlot p = r2Axis &~ do
   yMin ?= 0
   xLabel .= p.snbpTitle
   axisStyle .= vividColours
+  hide minorTicks
   namedBarPlot p.snbpData $ return ()
