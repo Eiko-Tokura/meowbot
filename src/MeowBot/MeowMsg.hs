@@ -6,16 +6,18 @@ module MeowBot.MeowMsg where
 
 import Data.Kind (Type)
 import Data.Void
-import MeowBot.Data.ChatId
 import Utils.Lens
 import Utils.Text
 import qualified Data.ByteString.Lazy as BL
 
 class Platform (w :: k) where
   -- identity types:
-  type MChat   w :: Type -- ^ type identifying each independent chat, like group id, private chat id, discord channel id, etc.
+  type MType   w :: Type -- ^ message type, like group message, private message, etc. Cannot be Void
 
-  type MUserId w :: Type -- ^ user id type
+  type MUserId w :: Type  -- ^ user id type
+  type MGroupId w :: Type -- ^ group id type
+
+  type MUserInfo w :: Type -- ^ user info type, like nickname ..
 
   type MMsgId  w :: Type -- ^ message id type
 
@@ -30,7 +32,7 @@ class Platform (w :: k) where
   type MImage  w = UrlOrBytes
 
   type MAt     w :: Type -- ^ @mention type
-  type MAt     w = Void
+  type MAt     w = MUserId w
 
   type MFace   w :: Type -- ^ face/emoticon type, not emojis as they are part of text
   type MFace   w = Void
@@ -48,18 +50,9 @@ class Platform (w :: k) where
   type MReply  w :: Type -- ^ reply type, typically = Maybe (MMsgId w)
   type MReply  w = Maybe (MMsgId w)
 
-data MeowInternal
 newtype MessageId = MessageId { unMessageId :: Int }
 data UrlOrBytes = Url Text | Bytes BL.ByteString
   deriving (Show, Eq)
-
-instance Platform MeowInternal where
-  type MImage  MeowInternal = UrlOrBytes
-  type MAt     MeowInternal = UserId
-  type MMsgId  MeowInternal = MessageId
-  type MFace   MeowInternal = Int
-  type MChat   MeowInternal = ChatId
-  type MUserId MeowInternal = UserId
 
 data MsgInline (w :: k)
   = MsgText  (MText   w)
@@ -72,7 +65,9 @@ data MeowMsg (w :: k) = MeowMsg
   { msgInlines :: ![MMsgInline w]
   , msgAttach  :: ![MAttach w]
   , msgReply   :: !(MReply w)
-  , msgChat    :: !(MChat w)
+  , msgChat    :: !(MType w)
+  , msgUserId  :: !(MUserId w)
+  , msgUserInfo:: !(MUserInfo w)
   , msgMeta    :: MMeta w
   }
 

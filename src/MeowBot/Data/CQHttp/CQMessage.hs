@@ -21,7 +21,7 @@ data CQMessage = CQMessage
   , messageId    :: Maybe Int
   , groupId      :: Maybe GroupId
   , userId       :: Maybe UserId   -- ^ user id
-  , sender       :: Maybe Sender   -- ^ sender information
+  , sender       :: Maybe CQSenderInfo   -- ^ sender information
   , message      :: Maybe Text     -- ^ raw message
   , time         :: Maybe Int
   , utcTime      :: Maybe UTCTime
@@ -41,18 +41,18 @@ instance HasAdditionalData CQMessage where
   getAdditionalData = maybe [] additionalData . metaMessage
   modifyAdditionalData f cqmsg = cqmsg {metaMessage = modifyAdditionalData f <$> metaMessage cqmsg}
 
-data Sender = Sender
+data CQSenderInfo = CQSenderInfo
   { senderNickname :: Maybe Text
   , senderCard     :: Maybe Text
   , senderRole     :: Maybe Role
   } deriving (Show, Read, Eq, Generic, NFData)
 
-instance FromJSON Sender where
+instance FromJSON CQSenderInfo where
   parseJSON = withObject "Sender" $ \o -> do
     nickname <- o .:? "nickname"
     card     <- o .:? "card"
     role     <- o .:? "role"
-    return Sender { senderNickname = nickname, senderCard = card, senderRole = role }
+    return CQSenderInfo { senderNickname = nickname, senderCard = card, senderRole = role }
 
 roleToText :: Role -> Maybe Text
 roleToText ROwner   = Just "群主"
@@ -147,7 +147,7 @@ showCQ cqmsg = concat [absId, messageType, " ",  chatId, senderId, " ", senderNa
         messageContent = maybe "" unpack $ message cqmsg
         surround s     = if null s then s else "(" ++ s ++ ")"
 
-type EssentialContent = (Text, ChatId, UserId, CQMessageId, Sender)
+type EssentialContent = (Text, ChatId, UserId, CQMessageId, CQSenderInfo)
 cqmsgToEssentialContent :: CQMessage -> Maybe EssentialContent
 cqmsgToEssentialContent cqmsg =
   (,,,,) <$> (fmap onlyMessage . metaMessage $ cqmsg)

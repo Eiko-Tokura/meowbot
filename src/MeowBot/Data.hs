@@ -7,7 +7,7 @@ module MeowBot.Data
 
   , CQMessage(..), CQEventType(..)
   , ReceCQMessage(..), SentCQMessage(..)
-  , Sender(..), Role(..), roleToText
+  , CQSenderInfo(..), Role(..), roleToText
   , ResponseData(..)
 
   , Flag(..)

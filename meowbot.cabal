@@ -240,7 +240,9 @@ library meowbot-lib
                    , MeowBot.Data.CQHttp.Action
                    , MeowBot.Data.CQHttp.Notice
                    , MeowBot.MeowMsg
+                   , MeowBot.MeowMsg.ChatId
                    , MeowBot.MeowMsg.CQHttp
+                   , MeowBot.MeowMsg.Discord
                    , MeowBot.MetaMessage
                    , MeowBot.Parser
                    , MeowBot.Prelude
@@ -300,6 +302,7 @@ library meowbot-lib
                  , diagrams
                  , diagrams-lib
                  , diagrams-rasterific
+                 , discord-haskell
                  , plots
                  , JuicyPixels
                  , data-default
@@ -329,6 +332,9 @@ library meowbot-lib
                  , search-scrape-text
                  , servant
                  , servant-client
+                 , singletons
+                 , singletons-th
+                 , singletons-base
                  , stm
                  , tasty
                  , template-haskell
@@ -366,6 +372,7 @@ executable meowbot
                  , data-default
                  , deepseq
                  , directory
+                 , discord-haskell
                  , filepath
                  , http-client
                  , http-client-tls
