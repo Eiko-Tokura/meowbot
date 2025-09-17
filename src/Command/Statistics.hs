@@ -101,12 +101,20 @@ statisticsAction mName scid = \case
     fetchStat <- liftIO . async $ flip runSqlPool pool $ do
       result <- statProximity bid cid days users
       let toPairs = weightPairsToPoints
-                    [ (unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r,
-                       unpack $ fromMaybe (toText $ unUserId $ sprUserId2 r) $ sprName2 r,
-                       sprWeight r)
+                    [ ( (r.sprUserId1, unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r)
+                      , (r.sprUserId2, unpack $ fromMaybe (toText $ unUserId $ sprUserId2 r) $ sprName2 r)
+                      , sprWeight r
+                      )
                     | r <- result
                     ]
-          plot = scatter toPairs
+          userCount = M.fromList [ (r.sprUserId1, r.sprN1) | r <- result ]
+          avgCount  = fromIntegral (sum (M.elems userCount)) / max 1 (fromIntegral $ M.size userCount)
+          userSize  = M.map (\n -> max 0.1 $ (fromIntegral n / avgCount) ** (1/2)) userCount
+          toPairsSized =  [ ( name1, userSize M.! uid1, pos )
+                          | ( (uid1, name1), pos ) <- toPairs
+                          , M.member uid1 userSize
+                          ]
+          plot = scatterSized toPairsSized
           title = "群友宇宙owo (in the past " ++ show days ++ " days)"
           diagram = D.vcat [ plot, D.text title & D.fontSizeL 0.018 & D.fcA (D.black `D.withOpacity` 0.7) ]
           !lbs = defaultToPngLbs (mkSizeSpec2D (Just 1440) Nothing) diagram
@@ -161,7 +169,7 @@ statProximity bid (GroupId gid) ndays nUsers = do
   let wReply   = toText (5.0 :: Double) :: Text
       wAdj     = toText (1.0 :: Double) :: Text
       kReplySec = 1200 :: Int -- 20 minutes
-      kAdjSec   = 300 :: Int  -- 5 minutes
+      kAdjSec   = 300  :: Int  -- 5 minutes
       adjSecMax = 1200 :: Int -- 20 minutes
   let alphaEdge = toText (2.0 :: Double) :: Text  -- edge reliability shrink
       alphaDeg  = toText (1.0 :: Double) :: Text  -- degree smoothing (units of weight)
@@ -280,7 +288,7 @@ deg AS (
 edges_norm AS (
   SELECT
     e.u1, e.u2,
-    e.w_eff / ( ((COALESCE(d1.d,0)+#{alphaDeg}) + (COALESCE(d2.d,0)+#{alphaDeg})) / 2.0 ) AS w_norm
+    e.w_eff /  sqrt((COALESCE(d1.d,0)+#{alphaDeg}) * (COALESCE(d2.d,0)+#{alphaDeg})) AS w_norm
   FROM edges_shrunk e
   LEFT JOIN deg d1 ON d1.uid = e.u1
   LEFT JOIN deg d2 ON d2.uid = e.u2

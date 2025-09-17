@@ -9,12 +9,12 @@ import Plots
 -- | some basic patterns like circle, square, triangle, cross, star
 -- without color
 patterns :: [QDiagram Rasterific V2 Double Any]
-patterns = [ circle 0.7
+patterns = [ circle 0.64
            , square 1.2
-           , eqTriangle 1.4
-           , eqTriangle 1.4 # rotateBy (1/2)
+           , eqTriangle 1.44
+           , eqTriangle 1.44 # rotateBy (1/2)
            , pentagon 0.9
-           , hexagon 0.9
+           , hexagon 0.72
            , diamond 1.2
            ]
 
@@ -30,17 +30,20 @@ colors =
 cyclePatternColor :: [QDiagram Rasterific V2 Double Any]
 cyclePatternColor = zipWith (#) (cycle patterns) (fc <$> cycle colors)
 
+cyclePatternColor' :: [QDiagram Rasterific V2 Double Any]
+cyclePatternColor' = zipWith (#) (cycle patterns) (fcA . (`withOpacity` 0.6) <$> cycle colors)
+
 -- | put points on to the diagram
 diagramDifferentPoints :: [(String, P2 Double)] -> QDiagram Rasterific V2 Double Any
 diagramDifferentPoints pts = 
   let n       = length pts
-      marks   = take n cyclePatternColor # map (scale 0.007 . lw none)
+      marks   = take n cyclePatternColor # map (scale 0.006 . lw none)
       placed  = position (zip (map snd pts) marks)
       labels  = mconcat
-        [ moveTo (p .+^ r2 (0,0.015))
+        [ moveTo (p .+^ r2 (0,0.008))
             ( text s
             # cjk
-            # fontSizeL 0.007
+            # fontSizeL 0.005
             # fcA (black `withOpacity` 0.7)
             # lcA (opaque white)
             )
@@ -48,17 +51,31 @@ diagramDifferentPoints pts =
         ]
   in placed <> labels
 
-testDiagram :: QDiagram Rasterific V2 Double Any
-testDiagram = diagramDifferentPoints
-  [ (name, p2 (x, y))
-  | i <- [1 .. 31 :: Int]
-  , let name = printf "点%02d" i
-        x    = sin $ fromIntegral i / 5
-        y    = cos $ fromIntegral i / 5
-  ] # centerXY # pad 1.1
+diagramSizedDifferentPoints :: [(String, Double, P2 Double)] -> QDiagram Rasterific V2 Double Any
+diagramSizedDifferentPoints ptsw =
+  let n       = length ptsw
+      marks   = take n cyclePatternColor # zipWith (\w p -> scale (0.006 * (w ^. _2)) $ lw none p) ptsw
+      placed  = position (zip ((^. _3) <$> ptsw) marks)
+      labels  = mconcat
+        [ moveTo (p .+^ r2 (0, 0.008 * w))
+            ( text s
+            # cjk
+            # fontSizeL (0.005 * w)
+            # fcA (black `withOpacity` 0.6)
+            # lcA (opaque white)
+            )
+        | (s, w, p) <- ptsw
+        ]
+  in placed <> labels
 
 scatter :: [(String, (Double, Double))] -> QDiagram Rasterific V2 Double Any
 scatter pts = diagramDifferentPoints
   [ (name, p2 (x, y))
   | (name, (x, y)) <- pts
+  ] # centerXY # pad 1.1
+
+scatterSized :: [(String, Double, (Double, Double))] -> QDiagram Rasterific V2 Double Any
+scatterSized pts = diagramSizedDifferentPoints
+  [ (name, size, p2 (x, y))
+  | (name, size, (x, y)) <- pts
   ] # centerXY # pad 1.1
