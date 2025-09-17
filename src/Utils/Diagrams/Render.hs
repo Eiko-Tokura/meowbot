@@ -8,6 +8,7 @@ module Utils.Diagrams.Render
 import Codec.Picture
 import Diagrams.Backend.Rasterific
 import Diagrams.Prelude
+import Utils.Diagrams.CJK (cjk)
 import Plots
 import qualified Data.ByteString.Lazy as BL
 
@@ -18,10 +19,13 @@ renderBmpLbs :: Monoid m => SizeSpec V2 Double -> QDiagram Rasterific V2 Double 
 renderBmpLbs ss dia = encodeBitmap $ renderDia Rasterific (RasterificOptions ss) dia
 
 axisToPngLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
-axisToPngLbs ss = renderPngLbs ss . withWhiteBackground . renderAxis
+axisToPngLbs ss = renderPngLbs ss . cjk . withWhiteBackground . renderAxis
 
 axisToBmpLbs :: SizeSpec V2 Double -> Axis Rasterific V2 Double -> BL.ByteString
-axisToBmpLbs ss = renderBmpLbs ss . withWhiteBackground . renderAxis
+axisToBmpLbs ss = renderBmpLbs ss . cjk . withWhiteBackground . renderAxis
+
+defaultToPngLbs :: Monoid m => SizeSpec V2 Double -> QDiagram Rasterific V2 Double m -> BL.ByteString
+defaultToPngLbs ss = renderPngLbs ss . withWhiteBackground . cjk
 
 withWhiteBackground :: Monoid m => QDiagram Rasterific V2 Double m -> QDiagram Rasterific V2 Double m
-withWhiteBackground = bgFrame 2 white
+withWhiteBackground = bgFrame 0.02 white

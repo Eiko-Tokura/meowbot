@@ -3,7 +3,7 @@
 module MeowBot.Data
   ( module MeowBot.MetaMessage
   , module MeowBot.Data
-  , UserId(..), GroupId(..), ChatId(..), BotId(..)
+  , UserId(..), unUserId, GroupId(..), ChatId(..), BotId(..)
 
   , CQMessage(..), CQEventType(..)
   , ReceCQMessage(..), SentCQMessage(..)

@@ -10,7 +10,7 @@ module MeowBot.BotStructure
   , module MeowBot.BotStructure
 
   , BotModules(..), BotConfig(..), OverrideSettings(..)
-  , GroupId(..), UserId(..), ChatId(..)
+  , GroupId(..), UserId(..), unUserId, ChatId(..)
 
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
   , UserGroup(..), GroupGroup(..)

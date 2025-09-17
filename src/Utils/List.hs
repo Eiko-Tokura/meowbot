@@ -1,6 +1,8 @@
+{-# LANGUAGE TransformListComp #-}
 module Utils.List where
 
-import Control.Parallel.Strategies
+import Control.Parallel.Strategies as S
+import Utils.ListComp
 
 chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
@@ -10,12 +12,12 @@ chunksOf n xs = take n xs : chunksOf n (drop n xs)
 -- will evaluate the entire list, dropping unused elements.
 -- This is helpful for avoiding lazy stateful thunk leak when the rest of the list is not needed.
 strictTake :: Int -> [a] -> [a]
-strictTake n = (`using` evalList rseq) . take n
+strictTake n = (`S.using` evalList rseq) . take n
 {-# INLINE strictTake #-}
 
 -- | Strict take n elements from the tail of a list, whenever it gets evaluated
 strictTakeTail :: Int -> [a] -> [a]
-strictTakeTail n = (`using` evalList rseq) . reverse . take n . reverse
+strictTakeTail n = (`S.using` evalList rseq) . reverse . take n . reverse
 {-# INLINE strictTakeTail #-}
 
 -- | Some really clever magic owo I came up with
@@ -35,3 +37,7 @@ optimalCap :: Int -> Int
 optimalCap n = max 0 $ round @Double $ (2*) $ sqrt (fromIntegral n' * 2 * (1 - alpha)) - 1
   where alpha = 0.125
         n' = n `div` 2
+
+nubList :: Ord a => [a] -> [a]
+nubList xs = [head' x | x <- xs, then group by x using groupWith ]
+
