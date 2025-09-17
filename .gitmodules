@@ -10,3 +10,6 @@
 [submodule "submodules/item"]
 	path = submodules/item
 	url = Qute:~/git/item
+[submodule "submodules/diagram-rasterific"]
+	path = submodules/diagram-rasterific
+	url = https://github.com/diagrams/diagrams-rasterific.git

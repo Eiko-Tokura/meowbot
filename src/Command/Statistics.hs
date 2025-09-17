@@ -1,33 +1,42 @@
-{-# LANGUAGE TransformListComp #-}
+{-# LANGUAGE QuasiQuotes, TransformListComp #-}
 -- | This command generates interesting statistics about the current chat.
 module Command.Statistics where
 
 import Command
-import Data.PersistModel
 import Data.List (sortOn)
 import Data.Ord (Down(..))
+import Data.PersistModel
 import MeowBot
 import MeowBot.GetInfo
 import MeowBot.Parser
 import MeowBot.Prelude
+import Text.Shakespeare.Text (st)
 import Utils.Diagrams
 import Utils.Diagrams.Render
+import Utils.Diagrams.Scatter
 import Utils.Esqueleto
+import Utils.List
+import Utils.Persist
 import Utils.RunEsql
 import Utils.TH
-import Utils.Persist
+import qualified Data.Map.Strict as M
+import qualified Database.Persist.Sql as Sql
+import qualified Diagrams.Prelude as D
+import qualified Numeric.LinearAlgebra as LA
 
 makeNewInts ["NUsers", "NDays"]
 
 data StatisticsCommand
   = StatActivity     (Maybe NDays) (Maybe NUsers)
   | StatActivityUser (Maybe NDays) (Maybe UserId)
+  | StatProximity    (Maybe NDays) (Maybe NUsers)
 
 data StatisticsAction
   = AStatActivity     BotId ChatId NDays NUsers
     -- ^ Show activity statistics for the past N days and top N users in the chat
   | AStatActivityUser BotId ChatId NDays UserId
     -- ^ Show activity statistics for the past N days and top N users in the chat
+  | AStatProximity    BotId GroupId NDays NUsers
 
 statisticsCommandToAction :: BotId -> (ChatId, UserId) -> StatisticsCommand -> Maybe StatisticsAction
 statisticsCommandToAction bid (cid, _)   (StatActivity mDays mUsers)
@@ -36,6 +45,10 @@ statisticsCommandToAction bid (cid, _)   (StatActivity mDays mUsers)
 statisticsCommandToAction bid (cid, uid) (StatActivityUser mDays mUser)
   | maybe True (<=180) mDays = Just $ AStatActivityUser bid cid (fromMaybe 30 mDays) (fromMaybe uid mUser)
   | otherwise = Nothing
+statisticsCommandToAction bid (GroupChat gid, _)   (StatProximity mDays mUsers)
+  | maybe True (<=180) mDays && maybe True (<= 50) mUsers = Just $ AStatProximity bid gid (fromMaybe 30 mDays) (fromMaybe 15 mUsers)
+  | otherwise = Nothing
+statisticsCommandToAction _ (PrivateChat {}, _)   (StatProximity {}) = Nothing
 
 statisticsAction :: Maybe String -> ChatId -> StatisticsAction -> Meow (Maybe [BotAction])
 statisticsAction mName scid = \case
@@ -83,18 +96,38 @@ statisticsAction mName scid = \case
       return [ baSendImageLbs scid lbs ]
     return $ Just [BAPureAsync fetchStat]
 
+  AStatProximity bid cid days _ -> do
+    pool <- askDB
+    fetchStat <- liftIO . async $ flip runSqlPool pool $ do
+      result <- statProximity bid cid days
+      let toPairs = weightPairsToPoints
+                    [ (unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r,
+                       unpack $ fromMaybe (toText $ unUserId $ sprUserId2 r) $ sprName2 r,
+                       sprWeight r)
+                    | r <- result
+                    ]
+          plot = scatter toPairs
+          title = "群友地图owo (in the past " ++ show days ++ " days)"
+          diagram = D.vcat [ plot, D.text title & D.fontSizeL 0.02 & D.fcA (D.black `D.withOpacity` 0.7) ]
+          !lbs = defaultToPngLbs (mkSizeSpec2D (Just 1080) Nothing) diagram
+      return [ baSendImageLbs scid lbs ]
+    return $ Just [BAPureAsync fetchStat]
   _ -> return Nothing
 
 checkPrivilegeStatistics :: IsSuperUser -> (ChatId, UserId) -> StatisticsCommand -> Bool
-checkPrivilegeStatistics _ (GroupChat{}, _)    StatActivity{}                      = True
-checkPrivilegeStatistics _ (GroupChat{}, _)    StatActivityUser {}                 = True
-checkPrivilegeStatistics _ (PrivateChat{}, _) (StatActivity{}; StatActivityUser{}) = False
+checkPrivilegeStatistics _ (GroupChat{}, _)    StatActivity{}      = True
+checkPrivilegeStatistics _ (GroupChat{}, _)    StatActivityUser {} = True
+checkPrivilegeStatistics _ (GroupChat{}, _)    StatProximity {}    = True
+checkPrivilegeStatistics _ (PrivateChat{}, _) (StatActivity{}; StatActivityUser{}; StatProximity{}) = False
 
 statisticsParser :: Parser Text Char (NonEmpty StatisticsCommand)
 statisticsParser = innerParserToBatchParser innerStatisticsParser
   where innerStatisticsParser = asum
-          [ statP >> StatActivity <$> optMaybe (spaces >> ndaysP) <*> optMaybe (spaces >> nUsersP) ]
+          [ statP >> StatActivity <$> optMaybe (spaces >> ndaysP) <*> optMaybe (spaces >> nUsersP)
+          , statP >> spaces >> proxP >> StatProximity <$> optMaybe (spaces >> ndaysP) <*> optMaybe (spaces >> nUsersP)
+          ]
         statP   = asum [ string "stat", string "statistics" ]
+        proxP   = string "proximity" <|> string "prox"
         ndaysP  = nint <* (do spaces0; string "d" <|> string "days")
         nUsersP = nint <* (do spaces0; string "u" <|> string "users")
 
@@ -112,3 +145,205 @@ commandStatistics = BotCommand Statistics $ botT $ do
     (Just (action :| []), True) -> MaybeT $ statisticsAction botName cid action
     (Just actions, True)        -> MaybeT $ concatOutput (Just "") $ statisticsAction botName cid `mapM` actions
     (Just _, False)             -> return [baSendToChatId cid "Operation not permitted."]
+
+data StatProximityRow = StatProximityRow
+  { sprUserId1 :: UserId
+  , sprName1   :: Maybe Text
+  , sprN1      :: Int
+  , sprUserId2 :: UserId
+  , sprName2   :: Maybe Text
+  , sprN2      :: Int
+  , sprWeight  :: Double
+  }
+
+statProximity :: BotId -> GroupId -> NDays -> NUsers -> DB [StatProximityRow]
+statProximity bid (GroupId gid) ndays nUsers = do
+  let wReply   = toText (5.0 :: Double) :: Text
+      wAdj     = toText (1.0 :: Double) :: Text
+      kReplySec = 1200 :: Int -- 20 minutes
+      kAdjSec   = 300 :: Int  -- 5 minutes
+      adjSecMax = 1200 :: Int -- 20 minutes
+  let alphaEdge = 2.0 :: Double  -- edge reliability shrink
+      alphaDeg  = 1.0 :: Double  -- degree smoothing (units of weight)
+  rows :: [ ( Single UserId, Single Int, Single (Maybe Text), Single (Maybe Text), Single UserId, Single Int, Single (Maybe Text), Single (Maybe Text), Single Double ) ]
+    <- (`Sql.rawSql` [])
+      [st|
+WITH m AS (
+  SELECT id, user_id, time, message_id, sender_card, sender_nickname, reply_to
+  FROM chat_message
+  WHERE bot_id = #{bid.unBotId}
+    AND chat_id = #{gid}
+    AND user_id IS NOT NULL
+    AND time >= datetime('now', '-' || #{ndays.unNDays} || ' days')
+),
+
+-- replies: a.message replies to r.message_id (Δt-based strength)
+edges_reply AS (
+  SELECT
+    CASE WHEN a.user_id < r.user_id THEN a.user_id ELSE r.user_id END AS u1,
+    CASE WHEN a.user_id < r.user_id THEN r.user_id ELSE a.user_id END AS u2,
+    ABS(strftime('%s', a.time) - strftime('%s', r.time)) AS dt_sec
+  FROM m AS a
+  JOIN chat_message AS r
+    ON r.bot_id     = #{bid.unBotId}
+   AND r.chat_id    = #{gid}
+   AND r.message_id = a.reply_to
+  WHERE a.reply_to IS NOT NULL
+    AND r.user_id IS NOT NULL
+    AND a.user_id <> r.user_id
+),
+edges_reply_w AS (
+  SELECT u1, u2,
+         #{wReply} * (1.0 / (1.0 + (dt_sec * 1.0) / #{kReplySec})) AS w
+  FROM edges_reply
+),
+
+-- adjacent alternating turns within #{adjSecMax} (Δt-based strength)
+seq AS (
+  SELECT
+    id, user_id, time,
+    LAG(user_id) OVER (ORDER BY time) AS prev_uid,
+    LAG(time)    OVER (ORDER BY time) AS prev_time
+  FROM m
+),
+edges_adjacent AS (
+  SELECT
+    CASE WHEN s.user_id < s.prev_uid THEN s.user_id ELSE s.prev_uid END AS u1,
+    CASE WHEN s.user_id < s.prev_uid THEN s.prev_uid ELSE s.user_id END AS u2,
+    (strftime('%s', s.time) - strftime('%s', s.prev_time)) AS dt_sec
+  FROM seq AS s
+  WHERE s.prev_uid IS NOT NULL
+    AND s.user_id <> s.prev_uid
+    AND (strftime('%s', s.time) - strftime('%s', s.prev_time)) BETWEEN 0 AND #{adjSecMax}
+),
+edges_adjacent_w AS (
+  SELECT u1, u2,
+         #{wAdj} * (1.0 / (1.0 + (dt_sec * 1.0) / #{kAdjSec})) AS w
+  FROM edges_adjacent
+),
+
+-- combine, sum, degree-normalize
+edges_raw AS (
+  SELECT u1,u2,w FROM edges_reply_w
+  UNION ALL
+  SELECT u1,u2,w FROM edges_adjacent_w
+),
+edges AS (
+  SELECT u1,u2, SUM(w) AS w
+  FROM edges_raw
+  GROUP BY u1,u2
+),
+deg AS (
+  SELECT u AS uid, SUM(w) AS d FROM (
+    SELECT u1 AS u, w FROM edges
+    UNION ALL
+    SELECT u2 AS u, w FROM edges
+  )
+  GROUP BY u
+),
+edges_norm AS (
+  SELECT
+    e.u1, e.u2,
+    e.w / (sqrt(d1.d * d2.d) + 1e-9) AS w_norm
+  FROM edges e
+  JOIN deg d1 ON d1.uid = e.u1
+  JOIN deg d2 ON d2.uid = e.u2
+),
+
+-- per-user stats & quick “latest non-empty” display fields from the window
+user_msgs AS (
+  SELECT user_id, COUNT(*) AS n_msgs
+  FROM m
+  GROUP BY user_id
+),
+recent_card AS (
+  SELECT user_id, sender_card AS card
+  FROM (
+    SELECT user_id, sender_card,
+           ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY time DESC) AS rn
+    FROM m
+    WHERE sender_card IS NOT NULL AND sender_card <> ''
+  ) t WHERE rn = 1
+),
+recent_nick AS (
+  SELECT user_id, sender_nickname AS nickname
+  FROM (
+    SELECT user_id, sender_nickname,
+           ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY time DESC) AS rn
+    FROM m
+    WHERE sender_nickname IS NOT NULL AND sender_nickname <> ''
+  ) t WHERE rn = 1
+)
+
+SELECT
+  en.u1,
+  um1.n_msgs                  AS n1,
+  rc1.card                    AS card_u1,
+  rn1.nickname                AS nickname_u1,
+  en.u2,
+  um2.n_msgs                  AS n2,
+  rc2.card                    AS card_u2,
+  rn2.nickname                AS nickname_u2,
+  en.w_norm
+FROM edges_norm en
+LEFT JOIN user_msgs   um1 ON um1.user_id = en.u1
+LEFT JOIN recent_card rc1 ON rc1.user_id = en.u1
+LEFT JOIN recent_nick rn1 ON rn1.user_id = en.u1
+LEFT JOIN user_msgs   um2 ON um2.user_id = en.u2
+LEFT JOIN recent_card rc2 ON rc2.user_id = en.u2
+LEFT JOIN recent_nick rn2 ON rn2.user_id = en.u2
+ORDER BY en.w_norm DESC;
+      |]
+  return $ [ StatProximityRow
+              { sprUserId1 = u1
+              , sprN1      = n1
+              , sprName1   = mcard1 <|> mname1
+              , sprUserId2 = u2
+              , sprN2      = n2
+              , sprName2   = mcard2 <|> mname2
+              , sprWeight  = w_norm
+              }
+           | ( Single u1, Single n1, Single mcard1, Single mname1
+             , Single u2, Single n2, Single mcard2, Single mname2
+             , Single w_norm ) <- rows
+           ]
+
+weightPairsToPoints :: (Ord a) => [(a, a, Double)] -> [(a, (Double, Double))]
+weightPairsToPoints ws =
+  let nameL = nubList $ [ x | (x,_,_) <- ws ] ++ [ y | (_,y,_) <- ws ]
+      nameIdMap = M.fromList $ zip nameL [0..]
+      idNameMap = M.fromList $ zip [0..] nameL
+      n = M.size nameIdMap
+      wMat = LA.trustSym $ LA.assoc (n,n) 0.0 $
+        [ ((nameIdMap M.! x, nameIdMap M.! y), v)
+        | (x,y,v) <- ws
+        ]
+        ++
+        [ ((nameIdMap M.! y, nameIdMap M.! x), v)
+        | (x,y,v) <- ws
+        ]
+        ++
+        [ ((i,i), 1.0)
+        | i <- [0..n-1]
+        ]
+      (vx, vy) = innerTo2D (LA.konst 1.0 n) wMat
+  in [ ( idNameMap M.! i
+       , (vx LA.! i, vy LA.! i)
+       )
+     | i <- [0..n-1]
+     ]
+
+-- | input symmetric {w_{ij}} matrix representing inner products
+-- output two vectors (x_i), (y_i) in R^2 st. w_{ij} ~ <x_i, y_j> approx
+-- using eigen-decomposition
+innerTo2D :: LA.Vector Double -> LA.Herm Double -> (LA.Vector Double, LA.Vector Double)
+innerTo2D d w =
+  let diagDSqrtInv = LA.diag (LA.cmap sqrt d)
+      dimension = LA.size d
+      identity = LA.ident dimension
+      l_sym = LA.sym $ negate $ identity - diagDSqrtInv LA.<> LA.unSym w LA.<> diagDSqrtInv
+      (_eigenVals, eigenVects) = LA.eigSH l_sym
+      eiVs = LA.toColumns eigenVects
+  in ( eiVs !! 0
+     , eiVs !! 1
+     )
