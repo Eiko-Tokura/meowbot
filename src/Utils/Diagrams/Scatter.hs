@@ -54,13 +54,13 @@ diagramDifferentPoints pts =
 diagramSizedDifferentPoints :: [(String, Double, P2 Double)] -> QDiagram Rasterific V2 Double Any
 diagramSizedDifferentPoints ptsw =
   let n       = length ptsw
-      marks   = take n cyclePatternColor # zipWith (\w p -> scale (0.006 * (w ^. _2)) $ lw none p) ptsw
+      marks   = take n cyclePatternColor' # zipWith (\w p -> scale (0.0066 * (w ^. _2)) $ lw none p) ptsw
       placed  = position (zip ((^. _3) <$> ptsw) marks)
       labels  = mconcat
-        [ moveTo (p .+^ r2 (0, 0.008 * w))
+        [ moveTo (p .+^ r2 (0, 0.009 * w))
             ( text s
             # cjk
-            # fontSizeL (0.005 * w)
+            # fontSizeL (0.006 * max 0.3 w)
             # fcA (black `withOpacity` 0.6)
             # lcA (opaque white)
             )
