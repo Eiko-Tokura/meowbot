@@ -34,13 +34,13 @@ cyclePatternColor = zipWith (#) (cycle patterns) (fc <$> cycle colors)
 diagramDifferentPoints :: [(String, P2 Double)] -> QDiagram Rasterific V2 Double Any
 diagramDifferentPoints pts = 
   let n       = length pts
-      marks   = take n cyclePatternColor # map (scale 0.01 . lw none)
+      marks   = take n cyclePatternColor # map (scale 0.007 . lw none)
       placed  = position (zip (map snd pts) marks)
       labels  = mconcat
         [ moveTo (p .+^ r2 (0,0.015))
             ( text s
             # cjk
-            # fontSizeL 0.01
+            # fontSizeL 0.007
             # fcA (black `withOpacity` 0.7)
             # lcA (opaque white)
             )

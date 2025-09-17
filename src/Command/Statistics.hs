@@ -107,9 +107,9 @@ statisticsAction mName scid = \case
                     | r <- result
                     ]
           plot = scatter toPairs
-          title = "群友地图owo (in the past " ++ show days ++ " days)"
-          diagram = D.vcat [ plot, D.text title & D.fontSizeL 0.02 & D.fcA (D.black `D.withOpacity` 0.7) ]
-          !lbs = defaultToPngLbs (mkSizeSpec2D (Just 1080) Nothing) diagram
+          title = "群友宇宙owo (in the past " ++ show days ++ " days)"
+          diagram = D.vcat [ plot, D.text title & D.fontSizeL 0.018 & D.fcA (D.black `D.withOpacity` 0.7) ]
+          !lbs = defaultToPngLbs (mkSizeSpec2D (Just 1440) Nothing) diagram
       return [ baSendImageLbs scid lbs ]
     return $ Just [baSendToChatId scid "正在计算中，等我几分钟>wo (请不要重复发送命令>.<!)", BAPureAsync fetchStat]
   _ -> return Nothing
