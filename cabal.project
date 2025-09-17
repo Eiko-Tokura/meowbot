@@ -4,6 +4,11 @@ packages:
   ./submodules/monad-effect/
   ./submodules/monad-effect-logger/
   ./submodules/monad-effect-database/
+  ./submodules/diagram-rasterific/
 with-compiler: ghc-9.12.2
 tests: True
 multi-repl: True
+package hmatrix
+  flags: +openblas +no-random_r
+package persistent-sqlite
+  flags: +systemlib

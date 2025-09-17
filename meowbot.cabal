@@ -284,6 +284,8 @@ library meowbot-lib
                    , Utils.TokenEstimator
                    , Utils.Diagrams
                    , Utils.Diagrams.Render
+                   , Utils.Diagrams.Scatter
+                   , Utils.Diagrams.CJK
                    --, External.ChatAPI.Tool.Search
 
     -- LANGUAGE extensions used by modules in this package.
@@ -313,6 +315,7 @@ library meowbot-lib
                  , http-client
                  , http-client-tls
                  , http-types
+                 , hmatrix
                  , item
                  , linear
                  , lens
@@ -335,6 +338,7 @@ library meowbot-lib
                  , singletons
                  , singletons-th
                  , singletons-base
+                 , shakespeare
                  , stm
                  , tasty
                  , template-haskell

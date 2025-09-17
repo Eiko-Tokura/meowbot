@@ -26,6 +26,9 @@ instance Default ChatId where
 newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
 
+unUserId :: UserId -> Int
+unUserId (UserId uid) = uid
+
 instance PersistField GroupId where
   toPersistValue (GroupId gid) = toPersistValue gid
   fromPersistValue = fmap GroupId . fromPersistValue

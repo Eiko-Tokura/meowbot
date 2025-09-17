@@ -46,7 +46,7 @@ statisticsCommandToAction bid (cid, uid) (StatActivityUser mDays mUser)
   | maybe True (<=180) mDays = Just $ AStatActivityUser bid cid (fromMaybe 30 mDays) (fromMaybe uid mUser)
   | otherwise = Nothing
 statisticsCommandToAction bid (GroupChat gid, _)   (StatProximity mDays mUsers)
-  | maybe True (<=180) mDays && maybe True (<= 50) mUsers = Just $ AStatProximity bid gid (fromMaybe 30 mDays) (fromMaybe 15 mUsers)
+  | maybe True (<=180) mDays && maybe True (<= 100) mUsers = Just $ AStatProximity bid gid (fromMaybe 30 mDays) (fromMaybe 30 mUsers)
   | otherwise = Nothing
 statisticsCommandToAction _ (PrivateChat {}, _)   (StatProximity {}) = Nothing
 
@@ -96,10 +96,10 @@ statisticsAction mName scid = \case
       return [ baSendImageLbs scid lbs ]
     return $ Just [BAPureAsync fetchStat]
 
-  AStatProximity bid cid days _ -> do
+  AStatProximity bid cid days users -> do
     pool <- askDB
     fetchStat <- liftIO . async $ flip runSqlPool pool $ do
-      result <- statProximity bid cid days
+      result <- statProximity bid cid days users
       let toPairs = weightPairsToPoints
                     [ (unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r,
                        unpack $ fromMaybe (toText $ unUserId $ sprUserId2 r) $ sprName2 r,
@@ -111,7 +111,7 @@ statisticsAction mName scid = \case
           diagram = D.vcat [ plot, D.text title & D.fontSizeL 0.02 & D.fcA (D.black `D.withOpacity` 0.7) ]
           !lbs = defaultToPngLbs (mkSizeSpec2D (Just 1080) Nothing) diagram
       return [ baSendImageLbs scid lbs ]
-    return $ Just [BAPureAsync fetchStat]
+    return $ Just [baSendToChatId scid "正在计算中，等我几分钟>wo (请不要重复发送命令>.<!)", BAPureAsync fetchStat]
   _ -> return Nothing
 
 checkPrivilegeStatistics :: IsSuperUser -> (ChatId, UserId) -> StatisticsCommand -> Bool
@@ -163,8 +163,8 @@ statProximity bid (GroupId gid) ndays nUsers = do
       kReplySec = 1200 :: Int -- 20 minutes
       kAdjSec   = 300 :: Int  -- 5 minutes
       adjSecMax = 1200 :: Int -- 20 minutes
-  let alphaEdge = 2.0 :: Double  -- edge reliability shrink
-      alphaDeg  = 1.0 :: Double  -- degree smoothing (units of weight)
+  let alphaEdge = toText (2.0 :: Double) :: Text  -- edge reliability shrink
+      alphaDeg  = toText (1.0 :: Double) :: Text  -- degree smoothing (units of weight)
   rows :: [ ( Single UserId, Single Int, Single (Maybe Text), Single (Maybe Text), Single UserId, Single Int, Single (Maybe Text), Single (Maybe Text), Single Double ) ]
     <- (`Sql.rawSql` [])
       [st|
@@ -177,7 +177,22 @@ WITH m AS (
     AND time >= datetime('now', '-' || #{ndays.unNDays} || ' days')
 ),
 
--- replies: a.message replies to r.message_id (Δt-based strength)
+-- per-user message counts in-window
+user_msgs AS (
+  SELECT user_id, COUNT(*) AS n_msgs
+  FROM m
+  GROUP BY user_id
+),
+
+-- top-N users by activity
+top_users AS (
+  SELECT user_id, n_msgs
+  FROM user_msgs
+  ORDER BY n_msgs DESC, user_id
+  LIMIT #{nUsers.unNUsers}
+),
+
+-- replies: only keep pairs where BOTH endpoints are in top_users
 edges_reply AS (
   SELECT
     CASE WHEN a.user_id < r.user_id THEN a.user_id ELSE r.user_id END AS u1,
@@ -188,6 +203,8 @@ edges_reply AS (
     ON r.bot_id     = #{bid.unBotId}
    AND r.chat_id    = #{gid}
    AND r.message_id = a.reply_to
+  JOIN top_users t1 ON t1.user_id = a.user_id
+  JOIN top_users t2 ON t2.user_id = r.user_id
   WHERE a.reply_to IS NOT NULL
     AND r.user_id IS NOT NULL
     AND a.user_id <> r.user_id
@@ -198,13 +215,14 @@ edges_reply_w AS (
   FROM edges_reply
 ),
 
--- adjacent alternating turns within #{adjSecMax} (Δt-based strength)
+-- adjacent alternating turns within #{adjSecMax}, restricted to top_users
 seq AS (
   SELECT
     id, user_id, time,
     LAG(user_id) OVER (ORDER BY time) AS prev_uid,
     LAG(time)    OVER (ORDER BY time) AS prev_time
   FROM m
+  WHERE user_id IN (SELECT user_id FROM top_users)
 ),
 edges_adjacent AS (
   SELECT
@@ -222,47 +240,61 @@ edges_adjacent_w AS (
   FROM edges_adjacent
 ),
 
--- combine, sum, degree-normalize
-edges_raw AS (
-  SELECT u1,u2,w FROM edges_reply_w
-  UNION ALL
-  SELECT u1,u2,w FROM edges_adjacent_w
-),
+-- combine, aggregate per pair, and apply reliability shrink by number of events
 edges AS (
-  SELECT u1,u2, SUM(w) AS w
-  FROM edges_raw
+  SELECT u1, u2,
+         SUM(w)   AS w_sum,
+         COUNT(*) AS n_events
+  FROM (
+    SELECT u1,u2,w FROM edges_reply_w
+    UNION ALL
+    SELECT u1,u2,w FROM edges_adjacent_w
+  )
   GROUP BY u1,u2
 ),
-deg AS (
-  SELECT u AS uid, SUM(w) AS d FROM (
-    SELECT u1 AS u, w FROM edges
-    UNION ALL
-    SELECT u2 AS u, w FROM edges
-  )
-  GROUP BY u
+
+-- OPTIONAL: require a minimum number of interactions to keep an edge
+--edges_filtered AS (
+--  SELECT * FROM edges WHERE n_events >= 2
+--),
+-- use edges_filtered instead of edges below if you enable the threshold
+
+edges_shrunk AS (
+  SELECT
+    u1, u2,
+    -- reliability shrink: n / (n + alphaEdge)
+    w_sum * ((n_events * 1.0) / (n_events + #{alphaEdge})) AS w_eff
+  FROM edges
 ),
+
+-- degrees on the induced top-users subgraph using shrunk weights
+deg AS (
+  SELECT u AS uid, SUM(w_eff) AS d FROM (
+    SELECT u1 AS u, w_eff FROM edges_shrunk
+    UNION ALL
+    SELECT u2 AS u, w_eff FROM edges_shrunk
+  ) GROUP BY u
+),
+
+-- normalization: arithmetic mean with degree smoothing (no sqrt needed)
 edges_norm AS (
   SELECT
     e.u1, e.u2,
-    e.w / (sqrt(d1.d * d2.d) + 1e-9) AS w_norm
-  FROM edges e
-  JOIN deg d1 ON d1.uid = e.u1
-  JOIN deg d2 ON d2.uid = e.u2
+    e.w_eff / ( ((COALESCE(d1.d,0)+#{alphaDeg}) + (COALESCE(d2.d,0)+#{alphaDeg})) / 2.0 ) AS w_norm
+  FROM edges_shrunk e
+  LEFT JOIN deg d1 ON d1.uid = e.u1
+  LEFT JOIN deg d2 ON d2.uid = e.u2
 ),
 
--- per-user stats & quick “latest non-empty” display fields from the window
-user_msgs AS (
-  SELECT user_id, COUNT(*) AS n_msgs
-  FROM m
-  GROUP BY user_id
-),
+-- recent display fields restricted to top users (cheap)
 recent_card AS (
   SELECT user_id, sender_card AS card
   FROM (
     SELECT user_id, sender_card,
            ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY time DESC) AS rn
     FROM m
-    WHERE sender_card IS NOT NULL AND sender_card <> ''
+    WHERE user_id IN (SELECT user_id FROM top_users)
+      AND sender_card IS NOT NULL AND sender_card <> ''
   ) t WHERE rn = 1
 ),
 recent_nick AS (
@@ -271,25 +303,26 @@ recent_nick AS (
     SELECT user_id, sender_nickname,
            ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY time DESC) AS rn
     FROM m
-    WHERE sender_nickname IS NOT NULL AND sender_nickname <> ''
+    WHERE user_id IN (SELECT user_id FROM top_users)
+      AND sender_nickname IS NOT NULL AND sender_nickname <> ''
   ) t WHERE rn = 1
 )
 
 SELECT
   en.u1,
-  um1.n_msgs                  AS n1,
-  rc1.card                    AS card_u1,
-  rn1.nickname                AS nickname_u1,
+  tu1.n_msgs               AS n1,
+  rc1.card                 AS card_u1,
+  rn1.nickname             AS nickname_u1,
   en.u2,
-  um2.n_msgs                  AS n2,
-  rc2.card                    AS card_u2,
-  rn2.nickname                AS nickname_u2,
+  tu2.n_msgs               AS n2,
+  rc2.card                 AS card_u2,
+  rn2.nickname             AS nickname_u2,
   en.w_norm
 FROM edges_norm en
-LEFT JOIN user_msgs   um1 ON um1.user_id = en.u1
+JOIN top_users  tu1 ON tu1.user_id = en.u1
+JOIN top_users  tu2 ON tu2.user_id = en.u2
 LEFT JOIN recent_card rc1 ON rc1.user_id = en.u1
 LEFT JOIN recent_nick rn1 ON rn1.user_id = en.u1
-LEFT JOIN user_msgs   um2 ON um2.user_id = en.u2
 LEFT JOIN recent_card rc2 ON rc2.user_id = en.u2
 LEFT JOIN recent_nick rn2 ON rn2.user_id = en.u2
 ORDER BY en.w_norm DESC;
