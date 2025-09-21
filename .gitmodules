@@ -7,9 +7,6 @@
 [submodule "submodules/item"]
 	path = submodules/item
 	url = Qute:~/git/item
-[submodule "submodules/diagram-rasterific"]
-	path = submodules/diagram-rasterific
-	url = https://github.com/diagrams/diagrams-rasterific.git
 [submodule "submodules/monad-effect-logging"]
 	path = submodules/monad-effect-logging
 	url = Qute:~/git/monad-effect-logging
