@@ -1,6 +1,10 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, TemplateHaskell, UndecidableInstances #-}
 module System.General where
 
+import Control.Monad.Effect
+import Module.Logging
+import Module.RS.QQ
+
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
 import System
@@ -20,7 +24,6 @@ newtype CatT r mods m a = CatT { runCatT :: SystemT r AllData mods m a }
 -- running in this monad it is necessary to block other threads from modifying the data.
 -- so avoid running long blocking operations in this monad, use async and staged actions instead.
 -- type System mods = SystemT () AllData mods (LoggingT IO) ()
-
 
 -- | The monad transformer that the bot runs in.
 newtype MeowT (r :: Type) (mods :: [Type]) (m :: Type -> Type) a = MeowT

@@ -1,6 +1,8 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, UndecidableInstances #-}
 module System.Meow where
 
+import Control.Monad.Effect
+
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad.Reader
@@ -127,6 +129,10 @@ instance (MeowDataClass p, InitMeowDataClass (CList MeowDataClass ps)) => InitMe
 type Mods   = '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
 -- | The monads the commands run in
+type Meow' = EffT
+  '[RModule WholeChat, RModule BotConfig]
+  '[]
+
 type Meow a = MeowT MeowData Mods IO a
 
 -- | The monad the bot instance runs in
