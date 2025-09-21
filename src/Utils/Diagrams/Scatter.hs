@@ -3,7 +3,6 @@ module Utils.Diagrams.Scatter where
 import Utils.Diagrams.CJK (cjk)
 import Diagrams.Prelude
 import Diagrams.Backend.Rasterific
-import Text.Printf
 import Plots
  
 -- | some basic patterns like circle, square, triangle, cross, star

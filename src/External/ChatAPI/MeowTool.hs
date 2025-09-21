@@ -321,10 +321,10 @@ instance
   toolDescription _ _ = "Make the bot leave the current group chat. Can be useful when getting extreme abuse and bullying, use with extra caution."
   toolHandler _ _ ObjT0Nil = do
     gid <- effectEWith' (const $ LeaveError "This tool is only valid in group chats, this is a private chat.") getGid
-    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetGroupLeave gid False)]
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BADelayedPureAction 5000 $ pure $ BAActionAPI (SetGroupLeave gid False)]
     tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
-    return $ StringT "success" :%* ObjT0Nil
+    return $ StringT "success, will leave group in 5 seconds" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
 
 -- | A helper function to compute whether a setting is enabled from the database.

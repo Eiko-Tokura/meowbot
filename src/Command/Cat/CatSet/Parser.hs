@@ -72,7 +72,7 @@ catSetParser =
       , MP.string "atReply"                 >> fmap (action range) (AtReply                 <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "mentionReply"            >> fmap (action range) (MentionReply            <$> MP.optMaybe (MP.spaces >> MP.bool))
       , MP.string "activeProbability"       >> fmap (action range) (ActiveProbability       <$> MP.optMaybe (MP.spaces >> require (\x -> x <= 0.20 && x >= 0) MP.nFloat))
-      , MP.string "maxMessageInState"       >> fmap (action range) (MaxMessageInState       <$> MP.optMaybe (MP.spaces >> MP.intRange 1 24))
+      , MP.string "maxMessageInState"       >> fmap (action range) (MaxMessageInState       <$> MP.optMaybe (MP.spaces >> MP.intRange 1 30))
       , MP.string "note"                   >> fmap (action range) (Note <$> MP.optMaybe (MP.spaces >> MP.int))
       , MP.string "crontab"                >> fmap (action range) (CronTab <$> MP.optMaybe (MP.spaces >> MP.int))
       , MP.string "enableNotes"            >> fmap (action range) (EnableNotes <$> MP.optMaybe (MP.spaces >> MP.bool))

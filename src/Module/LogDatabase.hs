@@ -35,7 +35,7 @@ instance
   getInitDataL _ = (Just LogDatabaseInitDataL, empty)
 
   initModule _ (LogDatabaseInitDataG path) = do
-    pool <- createSqlitePool (pack path) 3
+    pool <- createSqlitePool (pack path) 2
     runMigration migrateAll `runSqlPool` pool
     -- ^ run the migration, which will create the table if not exists, and add the columns if not exists.
     return $ LogDatabaseGlobalState pool
