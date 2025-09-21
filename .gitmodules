@@ -1,9 +1,6 @@
 [submodule "submodules/monad-effect"]
 	path = submodules/monad-effect
 	url = Qute:~/git/rst
-[submodule "submodules/monad-effect-logger"]
-	path = submodules/monad-effect-logger
-	url = Qute:~/git/rst-logger
 [submodule "submodules/monad-effect-database"]
 	path = submodules/monad-effect-database
 	url = Qute:~/git/rst-database
@@ -13,3 +10,6 @@
 [submodule "submodules/diagram-rasterific"]
 	path = submodules/diagram-rasterific
 	url = https://github.com/diagrams/diagrams-rasterific.git
+[submodule "submodules/monad-effect-logging"]
+	path = submodules/monad-effect-logging
+	url = Qute:~/git/monad-effect-logging

@@ -320,7 +320,7 @@ library meowbot-lib
                  , linear
                  , lens
                  , monad-effect
-                 , monad-effect-logger
+                 , monad-effect-logging
                  , monad-effect-database
                  , monad-logger
                  , mtl
@@ -384,7 +384,7 @@ executable meowbot
                  , item
                  , lens
                  , monad-effect
-                 , monad-effect-logger
+                 , monad-effect-logging
                  , monad-effect-database
                  , monad-logger
                  , mtl

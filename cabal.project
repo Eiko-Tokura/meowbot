@@ -2,7 +2,7 @@ packages:
   ./*.cabal
   ./submodules/item/
   ./submodules/monad-effect/
-  ./submodules/monad-effect-logger/
+  ./submodules/monad-effect-logging/
   ./submodules/monad-effect-database/
   ./submodules/diagram-rasterific/
 with-compiler: ghc-9.12.2
