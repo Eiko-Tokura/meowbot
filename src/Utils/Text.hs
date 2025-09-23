@@ -25,6 +25,8 @@ import qualified Data.Text.Lazy.Encoding as TLE
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 
+import qualified Text.Pretty.Simple as PP
+
 type LazyText = TL.Text
 
 class TextUtils t where
@@ -142,9 +144,9 @@ instance ToText a LazyText => ToText (Maybe a) LazyText where
   {-# INLINE toText #-}
 
 instance {-# OVERLAPPABLE #-} Show a => ToText a Text where
-  toText = T.pack . show
+  toText = TL.toStrict . PP.pShow
   {-# INLINE toText #-}
 
 instance {-# OVERLAPPABLE #-} Show a => ToText a LazyText where
-  toText = TL.pack . show
+  toText = PP.pShow
   {-# INLINE toText #-}

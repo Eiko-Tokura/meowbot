@@ -42,19 +42,19 @@ testChatAPI man = testGroup "ChatAPI Round Trip"
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r  -> return $ unpack r
     ]
-  -- , testGroup "DeepSeek API"
-  --   [ testCaseInfo "Say hi" $ do
-  --       let params = ChatParams
-  --             { chatMarkDown = False
-  --             , chatSetting = def
-  --             , chatManager = man
-  --             , chatTimeout = timeoutHttp
-  --             } :: ChatParams (DeepSeek DeepSeekChat) '[]
-  --       res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
-  --       case content <$> res of
-  --         Left err -> assertFailure $ "messageChat failed: " ++ show err
-  --         Right r -> return $ unpack r
-  --   ]
+  , testGroup "DeepSeek R1 API"
+    [ testCaseInfo "Say hi" $ do
+        let params = ChatParams
+              { chatMarkDown = False
+              , chatSetting = def
+              , chatManager = man
+              , chatTimeout = timeoutHttp
+              } :: ChatParams (DeepSeek DeepSeekReasoner) '[]
+        res <- runStdoutLoggingT . runExceptT $ messageChat params [UserMessage "你好"]
+        case content <$> res of
+          Left err -> assertFailure $ "messageChat failed: " ++ show err
+          Right r -> return $ unpack r
+    ]
   -- , testGroup "OpenRouter API"
   --   [ testCaseInfo "Say hi" $ do
   --       let params = ChatParams

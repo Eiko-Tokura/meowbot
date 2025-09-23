@@ -328,6 +328,7 @@ library meowbot-lib
                  , persistent
                  , persistent-sqlite
                  , persistent-template
+                 , pretty-simple
                  , process
                  , random
                  , resource-pool
