@@ -55,8 +55,7 @@ type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state,
 instance IsAdditionalData AllChatState      -- use getTypeWithDef
 
 modelsInUse :: CFList ChatAPI Proxy
-  [ Local       DeepSeekR1_14B
-  , Local       DeepSeekR1_32B
+  [ Local       Qwen3_30B
   , Local       Qwen2_5_32B
   , Local       Command_R_Latest
   , Local       DummyTestModel

@@ -117,17 +117,13 @@ instance ChatAPI (Local DummyTestModel) where
   chatModel  = Local DummyTestModel
   type ChatCompletionResponse (Local DummyTestModel) = ChatCompletionResponseOpenAI
 
-instance ChatAPI (Local DeepSeekR1_14B) where
-  chatModel  = Local DeepSeekR1_14B
-  type ChatCompletionResponse (Local DeepSeekR1_14B) = ChatCompletionResponseOllama
-
-instance ChatAPI (Local DeepSeekR1_32B) where
-  chatModel  = Local DeepSeekR1_32B
-  type ChatCompletionResponse (Local DeepSeekR1_32B) = ChatCompletionResponseOllama
-
 instance ChatAPI (Local Qwen2_5_32B) where
   chatModel  = Local Qwen2_5_32B
   type ChatCompletionResponse (Local Qwen2_5_32B) = ChatCompletionResponseOllama
+
+instance ChatAPI (Local Qwen3_30B) where
+  chatModel  = Local Qwen3_30B
+  type ChatCompletionResponse (Local Qwen3_30B) = ChatCompletionResponseOllama
 
 instance ChatAPI (Local Command_R_Latest) where
   chatModel  = Local Command_R_Latest
@@ -283,16 +279,16 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text), "content" .= c]
   -- ^ we haven't implemented tool role for ollama api yet, so we use user role instead
 
-instance ToJSON (ModelDependent (Local DeepSeekR1_32B) Message) where
-  toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
-  toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c Nothing _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
-  toJSON (ModelDependent (AssistantMessage c (Just think) _ _))
-    = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
-  toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
-  -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
-
-deriving via (ModelDependent (Local DeepSeekR1_32B) Message) instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message)
+-- instance ToJSON (ModelDependent (Local DeepSeekR1_32B) Message) where
+--   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)    , "content" .= c]
+--   toJSON (ModelDependent (UserMessage      c)  ) = A.object ["role" .= ("user" :: Text)      , "content" .= c]
+--   toJSON (ModelDependent (AssistantMessage c Nothing _ _)) = A.object ["role" .= ("assistant" :: Text) , "content" .= c]
+--   toJSON (ModelDependent (AssistantMessage c (Just think) _ _))
+--     = A.object ["role" .= ("assistant" :: Text) , "content" .= ("<think>\n" <> c <> "</think>\n\n" <> think)]
+--   toJSON (ModelDependent (ToolMessage      c _)) = A.object ["role" .= ("user" :: Text) , "content" .= c]
+--   -- ^ deepseek r1:32b model does not support tool role, and we use user role instead
+-- 
+-- deriving via (ModelDependent (Local DeepSeekR1_32B) Message) instance ToJSON (ModelDependent (Local DeepSeekR1_14B) Message)
 
 apiKeyFile :: FilePath
 apiKeyFile = "apiKey"

@@ -16,7 +16,7 @@ data ChatModel
 
 data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq, Generic, NFData)
 data DeepSeekModel    = DeepSeekChat | DeepSeekReasoner deriving (Show, Read, Eq, Generic, NFData)
-data LocalModel       = QwQ | DeepSeekR1_14B | DeepSeekR1_32B | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq, Generic, NFData)
+data LocalModel       = Qwen3_30B | QwQ | Qwen2_5_32B | Command_R_Latest | DummyTestModel deriving (Show, Read, Eq, Generic, NFData)
 data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
 data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq, Generic, NFData)
@@ -40,11 +40,10 @@ instance ToJSON ChatModel where
   toJSON (DeepSeek DeepSeekChat)         = "deepseek-chat"
   toJSON (DeepSeek DeepSeekReasoner)     = "deepseek-reasoner"
   toJSON (Local DummyTestModel)          = "dummy-test-model"
-  toJSON (Local DeepSeekR1_14B)          = "deepseek-r1:14b"
-  toJSON (Local DeepSeekR1_32B)          = "deepseek-r1:32b"
   toJSON (Local Qwen2_5_32B)             = "qwen2.5:32b"
   toJSON (Local Command_R_Latest)        = "command-r:latest"
   toJSON (Local QwQ)                     = "qwq:latest"
+  toJSON (Local Qwen3_30B)               = "qwen3:30b"
   toJSON (OpenRouter OR_DeepSeekR1)      = "deepseek/deepseek-r1"
   toJSON (OpenRouter OR_DeepSeekV3_Free) = "deepseek/deepseek-chat:free"
   toJSON (OpenRouter OR_DeepSeekR1_Free) = "deepseek/deepseek-r1:free"
