@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.ConnectionManager where
 
-
 import Control.Monad.Trans.ReaderState
 import Control.Monad.Logger
 import Control.Applicative

@@ -11,7 +11,7 @@ import Data.Typeable
 import Data.Maybe
 import Control.Monad.IO.Class
 import MeowBot.BotStructure
-import System.General
+import System.Meow
 import Control.Monad.Logger
 
 getTypeWithDef :: forall t r mods m. (MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT r mods m t

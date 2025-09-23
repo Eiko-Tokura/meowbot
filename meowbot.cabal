@@ -67,6 +67,7 @@ common extensions
       OverloadedRecordDot
       OrPatterns
       ParallelListComp
+      QuasiQuotes
       DuplicateRecordFields
       RecordWildCards
 
@@ -185,7 +186,6 @@ library meowbot-lib
                    , Command.Statistics
                    , Command.User
                    , Command.Updater
-                   , Control.Monad.Effect
                    , Control.Monad.ExceptionReturn
                    , Control.Monad.IOe
                    , Control.Monad.MaybeHints
@@ -247,7 +247,7 @@ library meowbot-lib
                    , MeowBot.Parser
                    , MeowBot.Prelude
                    , MeowBot.Update
-                   , Module
+                   -- , Module
                    , Module.Async
                    , Module.AsyncInstance
                    , Module.CronTabTick
@@ -258,11 +258,15 @@ library meowbot-lib
                    , Module.LogDatabase
                    , Module.StatusMonitor
                    , Module.ProxyWS
+
+                   --
+                   , Module.Connection
+                   , Module.RawMessage
                    , Probability.Foundation
-                   , System
+                   -- , System
                    , System.Cat
-                   , System.General
-                   , System.Logging
+                   -- , System.General
+                   -- , System.Logging
                    , System.Meow
                    , System.WatchDog
                    , Utils.Base64
@@ -322,6 +326,7 @@ library meowbot-lib
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
+                 , monad-effect-prometheus
                  , monad-logger
                  , mtl
                  , parallel

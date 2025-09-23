@@ -9,6 +9,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import Control.Concurrent.STM
 import Control.Lens
 import Control.Monad
+import Control.Monad.Effect
 import Control.Monad.IO.Class
 import Control.Monad.Logger
 import Control.Monad.Trans.ReaderState
@@ -21,10 +22,10 @@ import Data.UpdateMaybe
 import Debug.Trace
 import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
-import Module
-import System.General
 import Utils.List
 import qualified MeowBot.Parser as MP
+import Module.RS
+import Module.RecvSentCQ
 
 forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
 
@@ -37,14 +38,6 @@ updateSelfInfo cqmsg = do
     (Nothing, Just sid) -> change $ _otherdata . _selfInfo ?~ SelfInfo (coerce sid) NothingYet
     _ -> return ()
 
--- | if savedData changed, save it to file
-saveData :: MonadIO m => AllData -> CatT r mods m ()
-saveData prev_data = do
-  new_data <- query @AllData
-  when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) $ do
-    $(logDebug) "Saved data changed, I'm saving it to file! owo"
-    liftIO $ writeFile (savedDataPath . nameOfBot . botModules . botConfig $ new_data) $ show $ savedData (otherdata new_data)
-
 -- | Specify the path to save the data according to the bot name.
 savedDataPath :: BotName -> FilePath
 savedDataPath (BotName Nothing)  = "savedData"
@@ -55,23 +48,10 @@ makeHeader = do
   sid <- queries (fmap selfId . selfInfo . otherdata)
   return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
 
--- | globalize MeowT to CatT r mods m a = SystemT r AllData mods m a
-globalizeMeow :: (Monad m) => MeowT r mods m a -> CatT r mods m a
-globalizeMeow
-  = CatT . ReaderStateT
-  . (\wbaraoo (allglob, r) (allloc, alld) ->
-      let (wc, bc) = (wholechat alld, botConfig alld)
-      in second (second (\o -> AllData wc bc o)) <$> wbaraoo ((wc, bc), (allglob, r)) (allloc, otherdata alld)
-    )
-  . runReaderStateT . runMeowT
-
-gIncreaseAbsoluteId :: (Monad m) => CatT r mods m Int
-gIncreaseAbsoluteId = globalizeMeow increaseAbsoluteId
-
-increaseAbsoluteId :: (MonadModifiable OtherData m) => m Int
+increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m Int
 increaseAbsoluteId = do
-  change $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
-  queries message_number
+  modifyS $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
+  getsS message_number
 
 updateSavedAdditionalData :: (MonadModifiable AllData m) => m ()
 updateSavedAdditionalData = change $ \ad ->
@@ -167,15 +147,12 @@ attachRule msg1 = do
   repId <- MP.replyTo mtm
   return $ (Just repId ==) . messageId
 
--- | A constraint on the monad that we can insert a message into the chat history.
-type InsertHistory r m = (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
-
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 -- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
-insertMyResponseHistory :: InsertHistory r m => ChatId -> MetaMessage -> MeowT r mods m ()
+insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> EffT '[SModule OtherData, RecvSentCQ] NoError m ()
 insertMyResponseHistory (GroupChat gid) meta = do
-  utc <- query
-  other_data <- query
+  utc <- liftIO getCurrentTime
+  other_data <- getS
   let my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
@@ -185,12 +162,12 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
-  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
-  utc <- query
-  other_data <- query
+  utc <- liftIO getCurrentTime
+  other_data <- getS
   let my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
@@ -200,8 +177,8 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
-  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 
 -- | Filter out the messages that are not within 60 seconds of the current time.
