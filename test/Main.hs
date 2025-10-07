@@ -9,20 +9,23 @@ import Test.ChatAPI
 import Test.SearchScrape
 import Network.HTTP.Client
 import Network.HTTP.Client.TLS
+import Module.Logging
+import Module.Logging.Logger
 
 main = do
   man <- newManager tlsManagerSettings
-  defaultMain (tests man)
+  base <- createStdoutBaseLogger
+  defaultMain (tests (simpleLogger True (baseLogFunc base)) man)
 
-tests :: Manager -> TestTree
-tests man = testGroup "Tests"
+tests :: Logger IO LogData -> Manager -> TestTree
+tests logger man = testGroup "Tests"
   [ testGroup "Legacy Tests"
     [ testCase "Saved Additional" testSavedAdditional
     , testCase "Poll Parser" pollParserTest
     ]
   , testTools
   , testSearchScrape
-  , testChatAPI man
+  , testChatAPI logger man
   ]
   -- testSavedAdditional
   -- pollParserTest

@@ -9,7 +9,11 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 
 import MeowBot.Data.CQHttp.CQCode
 import MeowBot
@@ -72,12 +76,12 @@ commandAokana :: BotCommand
 commandAokana = BotCommand Aokana $ botT $ do
   (msg, cid, _, mid, _) <- MaybeT $ getEssentialContent <$> query
   aokanaParser' <- lift $ commandParserTransformByBotName aokanaParser
-  queries <- pureMaybe $ MP.runParser aokanaParser' msg
+  queries <- MaybeT . pure $ MP.runParser aokanaParser' msg
   other_data <- lift query
   let scripts = aokana other_data
       results = searchScripts queries scripts
       hasVoice = filter (\block -> not $ null [ () | Voice _ <- associatedData block ]) results
-  lift $ sendResults cid mid results hasVoice queries
+  lift . embedEffT $ sendResults cid mid results hasVoice queries
   where
     sendResults cid mid results hasVoice queries
       | [] <- results       = return [baSendToChatId cid "啥也没有找到！o.o"]

@@ -4,7 +4,6 @@ module Command.Cat.CatSet
   , catSetParser
   ) where
 
-import System.General
 import Module.LogDatabase
 import MeowBot
 import qualified MeowBot.Parser as MP
@@ -13,12 +12,16 @@ import qualified Data.Text as T
 import qualified Data.Map.Strict as SM
 import Data.Default
 import Data.Additional.Default
-import Data.HList
+import Data.HList hiding (In)
 import Data.Proxy
 import Data.Maybe
 import qualified Data.BSeq as BSeq
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Module.MeowTypes
+import Control.Monad.Effect
+import Control.Monad.RS.Class
+import Control.Monad.Trans
 import Control.Monad
 import Utils.RunDB
 import Utils.Persist
@@ -97,7 +100,7 @@ helpCatSet = T.intercalate "\n" $
   , ""
   , "* range is one of default | perchat | perchat <chatid>"
   , "  if omitted, 'perchat' will be used"
-  , "  only Admin can change 'default' and 'perchat <chatid>' settings"
+  , "  only Admin can modify 'default' and 'perchat <chatid>' settings"
   , ""
   , "* item is one of "
   , "    displayThinking :: Bool"
@@ -131,8 +134,10 @@ helpCatSet = T.intercalate "\n" $
   ]
 
 insertBotSettingPerChatIfNotExists
-  :: (LogDatabase `In` mods)
-  => BotId -> ChatId -> MaybeT (MeowT r mods IO) ()
+  :: ( LogDatabase  `In` mods
+     , MeowDatabase `In` mods
+     )
+  => BotId -> ChatId -> MaybeT (MeowT mods IO) ()
 insertBotSettingPerChatIfNotExists botid cid = lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
     True -> return ()
     False -> insert_ $ def
@@ -142,7 +147,12 @@ insertBotSettingPerChatIfNotExists botid cid = lift $ runDB $ exists [BotSetting
 
 ----------------------------------- catSet -----------------------------------
 
-catSet :: ($(unitsNamed unitTestsCatSetParser), LogDatabase `In` mods) => CatSetCommand -> MaybeT (MeowT r mods IO) [BotAction]
+catSet ::
+  ($(unitsNamed unitTestsCatSetParser)
+  , LogDatabase `In` mods
+  , MeowDatabase `In` mods
+  , MeowAllData mods
+  ) => CatSetCommand -> MaybeT (MeowT mods IO) [BotAction]
 catSet (Set Default item) = do
   (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []

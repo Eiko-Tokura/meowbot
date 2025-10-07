@@ -21,7 +21,10 @@ import Control.Applicative
 import Control.Monad.Trans
 import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Module.Logging
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Monad.Except
 import Control.Concurrent
 
@@ -58,7 +61,7 @@ commandCat = BotCommand Cat $ botT $ do
   botname    <- query
   botid      <- query
   mcatSetCommand <- (`MP.runParser` msg) <$> lift (commandParserTransformByBotName catSetParser)
-  ConnectionManagerModuleG man timeout <- query
+  ConnectionManagerModuleRead man timeout <- lift askModule
   case mcatSetCommand of
     Just catSetCommand -> catSet catSetCommand
     Nothing -> do
@@ -110,8 +113,8 @@ commandCat = BotCommand Cat $ botT $ do
             , botSettingDisplayThinking =<< botSetting
             ]
       lChatModelMsg <- if activeChat
-        then pureMaybe Nothing  -- disable cat command when active chat, we will use chat command instead
-        else pureMaybe $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
+        then MaybeT . pure $ Nothing  -- disable cat command when active chat, we will use chat command instead
+        else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
 
       needAction <- lift . runDB $ serviceBalanceActionCheck botid cid
       breakAction <- case needAction of
@@ -121,31 +124,27 @@ commandCat = BotCommand Cat $ botT $ do
         Just (DisableService notis, winfo) -> do
           lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
 
-      logger <- askLoggerIO
+      LoggingRead logger <- lift askModule
 
       let addManager md cs = ChatParams md cs man timeout
           rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
           params = fst . head $ rlChatModelMsg   -- take the last message model
           md = either chatMarkDown chatMarkDown (bimap ($ addManager) ($ addManager) params)  -- whether to use markdown
-          ioEChatResponse = case params of
+          ioEChatResponse = fmap (second Just) . runEffT00 . runLogging logger $ case params of
 
             Left  paramCat      ->
               case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
                 Nothing ->
-                  fmap (second Just) . flip runLoggingT  logger $ do
-                  messagesChat @ModelCat @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
+                  messagesChatDefault @ModelCat @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-                  fmap (second Just) . flip runLoggingT  logger $ do
-                  messagesChat @a @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
+                  messagesChatDefault @a @MeowTools (coerce $ paramCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
             Right paramSuperCat ->
               case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelSuperCat) of
                 Nothing ->
-                  fmap (second Just) . flip runLoggingT  logger $ do
-                  messagesChat @ModelSuperCat @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
+                  messagesChatDefault @ModelSuperCat @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
                 Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-                  fmap (second Just) . flip runLoggingT logger $ do
-                  messagesChat @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
+                  messagesChatDefault @a @MeowTools (coerce $ paramSuperCat addManager) $ (map snd . reverse . take 20) rlChatModelMsg
 
       case breakAction of
         Left disableAndNotify -> do

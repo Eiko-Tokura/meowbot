@@ -13,7 +13,9 @@ import qualified Data.Text as T
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 
 --data Pattern a where
 --  PString      :: String    -> Pattern String
@@ -27,7 +29,7 @@ commandRetract = BotCommand Retract $ botT $ do
   cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> query)
   (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> query
   (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> query
-  pureMaybe $ listToMaybe $ catMaybes
+  MaybeT . pure $ listToMaybe $ catMaybes
     [ do
         props   <- listToMaybe [ props | CQOther "mface" props <- cqs ]
         summary <- lookup "summary" props

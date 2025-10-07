@@ -6,7 +6,10 @@ import MeowBot
 import Probability.Foundation
 import MeowBot.Parser as MP
 import qualified Data.Text as T
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Trans
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Monad.Trans.Maybe
 
 data RandomQuery
@@ -35,7 +38,7 @@ sampleQuery (Distribution (Beta a b))      = Right . Right <$> betaS a b
 sampleQuery (ChooseFromList list)          = Left          <$> uniformElemS list
 sampleQuery (CustomDistribution list)      = Left          <$> discreteSamplingByList (normalizeDistList list)
 
-commandRandom :: BotCommand --ReaderStateT WholeChat OtherData IO [BotAction]
+commandRandom :: BotCommand
 commandRandom = BotCommand Random $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   randomParser' <- lift $ commandParserTransformByBotName randomParser

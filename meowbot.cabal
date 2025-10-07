@@ -70,6 +70,7 @@ common extensions
       QuasiQuotes
       DuplicateRecordFields
       RecordWildCards
+      ImpredicativeTypes
 
 library crontab
     -- Modules exported by the library.
@@ -189,8 +190,6 @@ library meowbot-lib
                    , Control.Monad.ExceptionReturn
                    , Control.Monad.IOe
                    , Control.Monad.MaybeHints
-                   , Control.Monad.Readable
-                   , Control.Monad.Trans.ReaderState
                    , Data.Additional
                    , Data.Additional.Default
                    , Data.Additional.Saved
@@ -260,7 +259,9 @@ library meowbot-lib
                    , Module.ProxyWS
 
                    --
-                   , Module.Connection
+                   , Module.MeowTypes
+                   , Module.MeowConnection
+                   , Module.RecvSentCQ
                    , Module.RawMessage
                    , Probability.Foundation
                    -- , System
@@ -333,6 +334,7 @@ library meowbot-lib
                  , persistent
                  , persistent-sqlite
                  , persistent-template
+                 , probabilist
                  , process
                  , random
                  , resource-pool
@@ -432,6 +434,8 @@ test-suite meowbot-test
                  , tasty
                  , tasty-hunit
                  , mtl
+                 , monad-effect
+                 , monad-effect-logging
                  , meowbot-lib
                  , http-client
                  , http-client-tls

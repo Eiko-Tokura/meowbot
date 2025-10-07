@@ -3,17 +3,17 @@ module System.Meow where
 
 import Control.Monad.Effect
 import Module.RS.QQ
+import Module.RS
 
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Monad.Reader
 
-import MeowBot.BotAction
 import MeowBot.BotStructure
 import MeowBot.CommandRule
 import Network.WebSockets hiding (Response)
 import qualified Data.ByteString.Lazy as BL
 
+import Module.Logging
 import Module.LogDatabase
 import Module.Command
 import Module.Async
@@ -21,23 +21,37 @@ import Module.ProxyWS
 import Module.ConnectionManager
 import Module.StatusMonitor
 import Module.CronTabTick
+import Module.MeowTypes
+import Module.RecvSentCQ
+import Module.MeowConnection
+import Module.Prometheus
 
 import Data.UpdateMaybe
-import Data.HList
 import Data.Kind
 
--- | The monad the bot instance runs in
-type Cat  a = CatT  MeowData Mods IO a
-
 -- | The modules loaded into the bot
-type Mods   = '[LogDatabase] -- '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
+type Mods =
+  [ LogDatabase
+  , AsyncModule
+  , ConnectionManagerModule
+  , ProxyWS
+  , CronTabTickModule
+  , RecvSentCQ
+  , MeowActionQueue
+  , MeowConnection
+  , SModule BotConfig
+  , SModule WholeChat
+  , SModule OtherData
+  , MeowDatabase
+  , Prometheus
+  , LoggingModule
+  ]
+  -- '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
 -- | The monads the commands run in
-type MeowT mods = EffT ('[SModule WholeChat, SModule BotConfig, SModule OtherData] ++ mods) '[SystemError]
+type MeowT mods m = EffT mods '[] m
 
-type CatT mods = MeowT mods
-
-type Meow a = MeowT MeowData Mods IO a
+type Meow = MeowT Mods IO
 
 ------------------------------------------------------------------------
 data BotAction
@@ -66,21 +80,26 @@ data BotAction
 
 -- | Because of the reference to Meow, have to put it here
 [makeRModule__|
-MeowData
-  meowReadsConnection    :: Connection
-  meowReadsAction        :: TVar [Meow [BotAction]]
-  meowReadsQueries       :: TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )]
+MeowActionQueue
+  meowReadsAction  :: TVar [Meow [BotAction]]
+  meowReadsQueries :: TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )]
 |]
 
-overrideMeow :: OverrideSettings -> Meow' a -> Meow' a
-overrideMeow override = local
-  ( \((wc, bc), other) -> ((wc, bc { overrideSettings = Just override }), other)
-  )
+withMeowActionQueue :: MonadIO m => EffT (MeowActionQueue : mods) es m a -> EffT mods es m a
+withMeowActionQueue = undefined
 
-instance Show (Async (Meow [BotAction])) where
+overrideMeow :: OverrideSettings -> Meow a -> Meow a
+overrideMeow override = localByState $ \bc -> bc { overrideSettings = Just override }
+{-# INLINE overrideMeow #-}
+
+instance Monad m => Show (Async (m [BotAction])) where
   show a = "Async (Meow BotAction) " ++ show (asyncThreadId a)
 
 data BotCommand = BotCommand
   { identifier :: CommandId
   , command    :: Meow [BotAction]
   }
+
+---
+
+

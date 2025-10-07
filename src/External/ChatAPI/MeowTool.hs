@@ -3,11 +3,11 @@
 module External.ChatAPI.MeowTool where
 
 import Control.Applicative
+import Control.Monad.Effect
 import Control.Monad.Except
 import Control.Monad.Trans.Maybe
 import Control.Monad.ExceptionReturn
 import Control.Monad.Reader
-import Data.HList
 import Data.PersistModel
 import Data.Time.Clock
 import Control.Concurrent.STM
@@ -15,8 +15,8 @@ import External.ChatAPI.MeowToolEnv
 import External.ChatAPI.Tool
 import MeowBot.BotStructure
 import MeowBot.Action
-import Module
 import Module.LogDatabase
+import Module.MeowTypes
 import System.Meow
 import Utils.RunDB hiding (In)
 import Utils.Persist
@@ -29,7 +29,7 @@ data NoteToolAdd
 data NoteToolReplace
 data NoteToolDelete
 
-instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead where
+instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolRead where
   type ToolInput NoteToolRead = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the note to read"])
   type ToolOutput NoteToolRead = ParamToData (ObjectP0 --"note" "retrived note"
     '[ IntP "note_id" "note_id of the note"
@@ -49,7 +49,7 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolRead wh
       Just (AssistantNote _ _ _ title content time) -> return $ IntT note_id :%* StringT title :%* StringT content :%* StringT (toText time) :%* ObjT0Nil
       Nothing -> throwError $ NoteReadError "Note not found"
 
-instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd where
+instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolAdd where
   type ToolInput NoteToolAdd = ParamToData (ObjectP0 --"note" "the note to add"
     '[ StringP "title" "the note title should be informative"
      , StringP "content" "the note content, you can include more detailed information here"
@@ -77,7 +77,8 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolAdd whe
       }
     return $ IntT newNoteId :%* ObjT0Nil
 
-instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace where
+instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
+  => ToolClass (MeowToolEnv mods) NoteToolReplace where
   type ToolInput NoteToolReplace = ParamToData (ObjectP0 --"note" "the note to replace"
     '[ IntP "note_id" "note_id of the note to replace"
      , StringP "title" "the note title"
@@ -103,7 +104,8 @@ instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolReplace
       Nothing -> throwError $ NoteReplaceError "Note not found"
     return $ IntT note_id :%* ObjT0Nil
 
-instance LogDatabase `In` mods => ToolClass (MeowToolEnv r mods) NoteToolDelete where
+instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
+  => ToolClass (MeowToolEnv mods) NoteToolDelete where
   type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[ArrayPInt "note_id" "array of note_id to delete"])
   type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
   data ToolError NoteToolDelete = NoteDeleteError Text deriving Show
@@ -146,8 +148,9 @@ getNoteListing bn cid = do
 
 -- | The tool to send like or send poke
 data ActionTool
-
-instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r mods) ActionTool where
+-- HasSystemRead (TVar [Meow [BotAction]])
+instance (In MeowActionQueue mods, MeowAllData mods)
+  => ToolClass (MeowToolEnv mods) ActionTool where
   type ToolInput ActionTool = ParamToData
     (ObjectP0
       [ StringP "action" "action can be 'like' or 'poke'"
@@ -160,7 +163,7 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
   toolDescription _ _ =  "Send a like (点赞) or a poke (戳一戳) to one or multiple user. Example Output : "
                       <> "{\"tool\": \"action\", \"args\": {\"action\": \"like\", \"user_list\": [<user_id>]}}"
   toolHandler _ _ ((StringT act) :%* (ArrayT user_ids) :%* ObjT0Nil) = do
-    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    tvarBotAction <- lift $ asksModule meowReadsAction
     cid <- effectEWith' (const $ ActionError "no ChatId found") getCid
     action <- case act of
       "like" -> liftIO $ baSequenceDelayFullAsync intercalateDelay
@@ -175,9 +178,11 @@ instance HasSystemRead (TVar [Meow [BotAction]]) r => ToolClass (MeowToolEnv r m
 data CronTabTool
 
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) CronTabTool where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) CronTabTool where
   type ToolInput CronTabTool = ParamToData
     (ObjectP0
       [ StringP "crontab" "crontab format schedule in UTC, for example '10 0 * * *' means trigger at every 0:10 UTC"
@@ -210,9 +215,11 @@ instance
 data CronTabList
 -- ^ List all cron jobs for the current bot in the current chat.
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) CronTabList where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) CronTabList where
   type ToolInput CronTabList = ParamToData (ObjectP0 '[])
   type ToolOutput CronTabList = ParamToData (ObjectP0 '[StringP "cron_jobs" "list of cron jobs"])
   data ToolError CronTabList = CronTabListError Text deriving Show
@@ -229,9 +236,11 @@ instance
 data CronTabDelete
 -- ^ Delete a cron job by its ID.
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) CronTabDelete where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) CronTabDelete where
   type ToolInput CronTabDelete = ParamToData (ObjectP0 '[ArrayPInt "cron_id" "list of cron job IDs to delete"])
   type ToolOutput CronTabDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
   data ToolError CronTabDelete = CronTabDeleteError Text deriving Show
@@ -247,9 +256,11 @@ instance
 data SetEssenceMessage
 -- ^ Set a very good message as essence (only valid in group chats).
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) SetEssenceMessage where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) SetEssenceMessage where
   type ToolInput SetEssenceMessage = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to set as essence"])
   type ToolOutput SetEssenceMessage = ParamToData (ObjectP0 '[StringP "result" "the result of the action"])
   data ToolError SetEssenceMessage = EssenceError Text deriving Show
@@ -262,7 +273,7 @@ instance
   toolHandler _ _ ((IntT messageId) :%* ObjT0Nil) = do
     _ <- effectEWith' (const $ EssenceError "This tool is only valid in group chats, this is a private chat.") getGid
     action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (SetEssenceMessage messageId)]
-    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    tvarBotAction <- lift $ asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
@@ -272,9 +283,11 @@ data SetGroupBanTool
 -- ^ A tool that provides the ability to ban a user in the current chat. (Only for group chats where the bot is an admin)
 -- This tool is useful for moderating the chat and preventing unwanted interactions.
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) SetGroupBanTool where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) SetGroupBanTool where
   type ToolInput SetGroupBanTool  = ParamToData (ObjectP0
       '[ IntP "user_id" "the user_id of the user to ban, 0 means ban everyone (except admins)"
        , IntP "duration" "the duration in seconds to ban the user, 0 means cancel the ban. When banning everyone, duration can only be 0 (stop ban) or 1 (enable ban)."
@@ -297,7 +310,7 @@ instance
         -> return $ BAActionAPI (SetGroupBan gid (UserId uid) duration)
       _ -> throwE $ BanError "Invalid user_id duration combination."
     action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [banAction]
-    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    tvarBotAction <- lift $ asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
@@ -307,9 +320,11 @@ data LeaveGroupTool
 -- It can be useful when the bot is getting abused.
 
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( In MeowActionQueue mods
   , In LogDatabase mods
-  ) => ToolClass (MeowToolEnv r mods) LeaveGroupTool where
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) LeaveGroupTool where
   type ToolInput LeaveGroupTool = ParamToData (ObjectP0 '[])
   type ToolOutput LeaveGroupTool = ParamToData (ObjectP0 '[StringP "result" "the result of the leave action"])
   data ToolError LeaveGroupTool = LeaveError Text deriving Show
@@ -322,13 +337,18 @@ instance
   toolHandler _ _ ObjT0Nil = do
     gid <- effectEWith' (const $ LeaveError "This tool is only valid in group chats, this is a private chat.") getGid
     action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BADelayedPureAction 5000 $ pure $ BAActionAPI (SetGroupLeave gid False)]
-    tvarBotAction <- asks (readSystem @(TVar [Meow [BotAction]]) . snd . snd . fst)
+    tvarBotAction <- lift $ asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success, will leave group in 5 seconds" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
 
 -- | A helper function to compute whether a setting is enabled from the database.
-computeSettingFromDB :: In LogDatabase mods => (BotSetting -> Maybe b) -> (BotSettingPerChat -> Maybe b) -> MeowToolEnv r mods (Maybe b)
+computeSettingFromDB
+  :: ( In LogDatabase mods
+     , In MeowDatabase mods
+     , MeowAllData mods
+     )
+  => (BotSetting -> Maybe b) -> (BotSettingPerChat -> Maybe b) -> MeowToolEnv mods (Maybe b)
 computeSettingFromDB gSel lSel = fmap (>>= id) . runMaybeT $ do
   botId <- lift getBotId
   cid <- MaybeT getCid

@@ -1,7 +1,9 @@
 {-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.ConnectionManager where
 
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Monad.Logger
 import Control.Applicative
 import Control.Monad.Effect
@@ -43,6 +45,28 @@ instance
     $logInfo "Connection Manager Initialized"
     return $ (ConnectionManagerModuleRead manager customTimeout, ConnectionManagerModuleState)
   
+
+withConnectionManager ::
+  ( LoggingModule `In` mods
+  , ConsFDataList FData (ConnectionManagerModule : mods)
+  , m ~ IO
+  )
+  => EffT (ConnectionManagerModule : mods) es m a -> EffT mods es m a
+withConnectionManager act = do
+  let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
+  let customManagerSettings =
+        (mkManagerSettings
+          ( case def of  -- | Turn off forcing EMS since bilibili doesn't support it, weird.
+                         -- The library author says tls is insecure without EMS, but we don't have a choice.
+             t@TLSSettingsSimple{} -> t { settingClientSupported = def { supportedExtendedMainSecret = AllowEMS } }
+             t -> t
+         )
+          Nothing
+        ){ managerResponseTimeout = responseTimeoutMicro customTimeout }
+  manager <- liftIO $ newManager customManagerSettings
+  $logInfo "Connection Manager Initialized"
+  let r = ConnectionManagerModuleRead manager customTimeout
+  runConnectionManagerModule r act
 
 -- instance MeowModule r AllData ConnectionManagerModule where
 --   data ModuleLocalState ConnectionManagerModule  = ConnectionManagerModuleL

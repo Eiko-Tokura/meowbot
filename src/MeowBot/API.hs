@@ -8,9 +8,11 @@ import MeowBot.Data
 import Network.WebSockets (Connection, sendTextData)
 import System.Random
 import Utils.ByteString
+import Control.Monad.Effect
+import Module.Logging
 
 -- | Low-level functions to send any action
-actionAPI :: Connection -> ActionForm ActionAPI -> LoggingT IO ()
+actionAPI :: Connection -> ActionForm ActionAPI -> EffT '[LoggingModule] '[] IO ()
 actionAPI conn af = do
   lift . sendTextData conn $ encode af
   $(logInfo) $ "=> Action: " <> tshow af

@@ -4,78 +4,82 @@ import Control.Applicative
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Control.Monad.IO.Unlift
+import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Logger
-import Control.Monad.Reader
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Data.TypeList
+import Control.Lens
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Data.Maybe
-import Data.HList
 import Database.Persist.Sql hiding (In)
 import MeowBot.BotStructure
 import MeowBot.GetSelfInfo ( isSelfAdminInGroup )
-import Module.LogDatabase
-import System
 import System.Meow
-import System.General
+import Module.MeowTypes
+import Utils.RunDB (runDB)
 
+type MeowToolEnvDefault = MeowToolEnv Mods
+type MeowToolEnv mods = MeowT mods IO
 -- | This will be the monad the tools will run in, ReaderT is necessary to make UnliftIO work
-newtype MeowToolEnv r mods a = MeowToolEnv
-  { runMeowToolEnv
-    :: ReaderT
-        ( ( (WholeChat, BotConfig)
-          , (AllModuleGlobalStates mods, r)
-          )
-        , ( AllModuleLocalStates mods
-          , OtherData
-          )
-        )
-        (LoggingT IO)
-        a
-  } deriving newtype
-    ( Functor, Applicative, Monad, MonadUnliftIO, MonadIO, MonadLogger
-    , MonadReader
-        ( ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
-        , (AllModuleLocalStates mods, OtherData)
-        )
-    )
+-- newtype MeowToolEnv a = MeowToolEnv
+--   { runMeowToolEnv
+--     -- :: ReaderT
+--     --     ( ( (WholeChat, BotConfig)
+--     --       , (AllModuleGlobalStates mods, r)
+--     --       )
+--     --     , ( AllModuleLocalStates mods
+--     --       , OtherData
+--     --       )
+--     --     )
+--     --     (LoggingT IO)
+--       :: EffT
+--           '[RModule WholeChat, RModule BotConfig]
+--           a
+--   } deriving newtype
+--     ( Functor, Applicative, Monad, MonadUnliftIO, MonadIO, MonadLogger
+--     , MonadReader
+--         ( ((WholeChat, BotConfig), (AllModuleGlobalStates mods, r))
+--         , (AllModuleLocalStates mods, OtherData)
+--         )
+--     )
 
-type MeowToolEnvDefault = MeowToolEnv MeowData Mods
+overrideMeowToolEnv :: MeowAllData mods => OverrideSettings -> MeowToolEnv mods a -> MeowToolEnv mods a
+overrideMeowToolEnv override = local ( _overrideSettings ?~ override )
+  -- ( \( (wc_bc, allGlob_r), localStates_otherdata) ->
+  --     ( ((fst wc_bc, (snd wc_bc) { overrideSettings = Just override })
+  --       , allGlob_r
+  --       )
+  --     , localStates_otherdata
+  --     )
+  -- )
 
-overrideMeowToolEnv :: OverrideSettings -> MeowToolEnv r mods a -> MeowToolEnv r mods a
-overrideMeowToolEnv override = local
-  ( \( (wc_bc, allGlob_r), localStates_otherdata) ->
-      ( ((fst wc_bc, (snd wc_bc) { overrideSettings = Just override })
-        , allGlob_r
-        )
-      , localStates_otherdata
-      )
-  )
-
-meowGroupAdmin :: MeowToolEnv r mods Bool
+meowGroupAdmin :: MeowAllData mods => MeowToolEnv mods Bool
 meowGroupAdmin = fmap (fromMaybe False) . runMaybeT $ do
     gid  <- MaybeT getGid
     self <- MaybeT meowGetSelfInfo
     MaybeT $ pure $ isSelfAdminInGroup self gid
 
-meowGetSelfInfo :: MeowToolEnv r mods (Maybe SelfInfo)
-meowGetSelfInfo = asks (selfInfo . snd . snd)
+meowGetSelfInfo :: MeowAllData mods => MeowToolEnv mods (Maybe SelfInfo)
+meowGetSelfInfo = getsS selfInfo
 
-getBotName :: MeowToolEnv r mods (Maybe String)
-getBotName = asks (maybeBotName . nameOfBot . botModules . snd . fst . fst)
+getBotName :: MeowAllData mods => MeowToolEnv mods (Maybe String)
+getBotName = getsS (maybeBotName . nameOfBot . botModules)
 {-# INLINE getBotName #-}
 
-getBotId :: MeowToolEnv r mods BotId
-getBotId = asks (botId . botModules . snd . fst . fst)
+getBotId :: MeowAllData mods => MeowToolEnv mods BotId
+getBotId = getsS (botId . botModules)
 {-# INLINE getBotId #-}
 
-getCid :: MeowToolEnv r mods (Maybe ChatId)
-getCid = asks
+getCid :: MeowAllData mods => MeowToolEnv mods (Maybe ChatId)
+getCid =
   (liftA2 (<|>)
-    ((chatIdOverride <=< overrideSettings) . snd . fst . fst)
-    (cqmsgToCid . getNewMsg . fst . fst . fst)
+    (getsS $ chatIdOverride <=< overrideSettings)
+    (getsS $ cqmsgToCid . getNewMsg)
   )
 {-# INLINE getCid #-}
 
-getGid :: MeowToolEnv r mods (Maybe GroupId)
+getGid :: MeowAllData mods => MeowToolEnv mods (Maybe GroupId)
 getGid = do
   cid <- getCid
   return $ case cid of
@@ -83,7 +87,7 @@ getGid = do
     _                    -> Nothing
 {-# INLINE getGid #-}
 
-isGroupChat :: MeowToolEnv r mods Bool
+isGroupChat :: MeowAllData mods => MeowToolEnv mods Bool
 isGroupChat = do
   cid <- getCid
   return $ case cid of
@@ -91,17 +95,9 @@ isGroupChat = do
     _                  -> False
 {-# INLINE isGroupChat #-}
 
-embedMeowToolEnv :: MeowToolEnv r mods a -> MeowT r mods IO a
-embedMeowToolEnv
-  = MeowT
-  . ReaderStateT
-  . (\arr (wc_bc, allGlob_r) allLocl_other -> (, allLocl_other) <$> arr ((wc_bc, allGlob_r), allLocl_other)
-    )
-  . runReaderT
-  . runMeowToolEnv
+embedMeowToolEnv :: (SubList FData mods Mods, MeowAllData mods) => MeowToolEnv mods a -> Meow a
+embedMeowToolEnv = embedEffT
 {-# INLINE embedMeowToolEnv #-}
 
-runDBMeowTool :: (LogDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv r mods b
-runDBMeowTool acts = do
-  pool <- asks (databasePool . getF @LogDatabase . fst . snd . fst)
-  liftIO $ runSqlPool acts pool
+runDBMeowTool :: (MeowDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv mods b
+runDBMeowTool = runDB

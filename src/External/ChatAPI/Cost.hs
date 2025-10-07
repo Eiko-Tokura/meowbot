@@ -71,7 +71,7 @@ modelPrice _ _ = Nothing
 {-# DEPRECATED modelPrice "we should move to database-based price data instead" #-}
 
 deepSeekTokenPrice :: UTCTime -> TokenPrice
-deepSeekTokenPrice u -- price change on 2025-09-05 UTC 16:00
+deepSeekTokenPrice u -- price modify on 2025-09-05 UTC 16:00
   | u < UTCTime (fromGregorian 2025 9 5) (secondsToDiffTime (16 * 3600)) = oldPrice
   | otherwise = newPrice
   where

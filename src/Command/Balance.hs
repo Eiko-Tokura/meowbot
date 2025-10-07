@@ -26,7 +26,7 @@ data BalanceCommand
   | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
   | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
   | BalanceCheckInChat (Maybe ChatId)                    -- ^ a different semantics, finds back the ownerId and check balance, for normal user
-  | ChangeOwner  WalletId OwnerId               -- ^ admin changes the owner of a wallet
+  | ChangeOwner  WalletId OwnerId               -- ^ admin modifys the owner of a wallet
   | TotalBalance (Maybe BotId) -- for admin only
   deriving (Show, Eq)
 
@@ -284,7 +284,7 @@ balanceParser = innerParserToBatchParser innerBalanceParser
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
       , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
-      , string "change owner of wallet" >> spaces >> ChangeOwner <$> walletIdP <*> (spaces >> string "to" >> spaces >> ownerIdP)
+      , string "modify owner of wallet" >> spaces >> ChangeOwner <$> walletIdP <*> (spaces >> string "to" >> spaces >> ownerIdP)
       ]
 
 unitTestsBalanceParser :: [(Maybe (NonEmpty BalanceCommand), Bool)]

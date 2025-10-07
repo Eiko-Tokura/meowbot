@@ -8,68 +8,100 @@ import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad.Logger
-import Control.Monad.Trans.ReaderState
+import Control.Monad
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Data.Time
 import MeowBot.BotStructure
 import MeowBot.CronTab
 import MeowBot.CronTab.PeriodicCost
-import Module
 import Module.CronTabTick
+import Module.RS.QQ
 import System.Meow
+import Control.System
 
 instance
-  ( HasSystemRead (TVar [Meow [BotAction]]) r
+  ( -- HasSystemRead (TVar [Meow [BotAction]]) r
   )
-  => MeowModule r AllData CronTabTickModule where
-  data ModuleLocalState CronTabTickModule      = CronTabTickModuleL
-    { cronTickAsync :: Async CronTabTick
+  => Module CronTabTickModule where
+  data ModuleRead CronTabTickModule  = CronTabTickModuleRead
+    { recvTick :: TMVar CronTabTick
     }
-  data ModuleEarlyLocalState CronTabTickModule = CronTabTickEarlyLocalState
-  data ModuleGlobalState CronTabTickModule     = CronTabTickModuleG
-  data ModuleEvent CronTabTickModule           = CronTabTickEvent { cronTabTick :: CronTabTick }
-  data ModuleInitDataG CronTabTickModule       = CronTabTickInitDataG
-  data ModuleInitDataL CronTabTickModule       = CronTabTickInitDataL
+  data ModuleState CronTabTickModule = CronTabTickModuleState
 
-  getInitDataG _ = (Just CronTabTickInitDataG, empty)
+instance SystemModule CronTabTickModule where
+  data ModuleInitData CronTabTickModule = CronTabTickModuleInitData
+  data ModuleEvent CronTabTickModule = CronTabTickModuleEvent { cronTabTick :: CronTabTick }
 
-  getInitDataL _ = (Just CronTabTickInitDataL, empty)
+instance Dependency' c CronTabTickModule '[MeowActionQueue] mods => Loadable c CronTabTickModule mods where
+  initModule _ = do
+    recvTick <- liftIO newEmptyTMVarIO
+    return (CronTabTickModuleRead recvTick, CronTabTickModuleState)
 
-  initModule _ _ = return CronTabTickModuleG
+withCronTabTick :: (MonadMask m, MonadIO m, MeowActionQueue `In` mods, ConsFDataList FData (CronTabTickModule : mods))
+  => EffT (CronTabTickModule : mods) es m a
+  -> EffT mods es m a
+withCronTabTick act = bracketEffT
+  (do
+    recvTick <- liftIO newEmptyTMVarIO
+    thread <- liftIO $ newCronTabTick recvTick
+    return (recvTick, thread)
+  )
+  ( \(_, thread) -> liftIO $ killThread thread
+  )
+  (\(recvTick, _) -> runEffTOuter_ (CronTabTickModuleRead recvTick) CronTabTickModuleState act
+  )
 
-  initModuleLocal _ _ _ _ _ = do
-    newTick <- liftIO $ newCronTabTick Nothing
-    return $ CronTabTickModuleL newTick
 
-  initModuleEarlyLocal _ _ _ = return CronTabTickEarlyLocalState
+  -- data ModuleLocalState CronTabTickModule      = CronTabTickModuleL
+  --   { cronTickAsync :: Async CronTabTick
+  --   }
+  -- data ModuleEarlyLocalState CronTabTickModule = CronTabTickEarlyLocalState
+  -- data ModuleGlobalState CronTabTickModule     = CronTabTickModuleG
+  -- data ModuleEvent CronTabTickModule           = CronTabTickEvent { cronTabTick :: CronTabTick }
+  -- data ModuleInitDataG CronTabTickModule       = CronTabTickInitDataG
+  -- data ModuleInitDataL CronTabTickModule       = CronTabTickInitDataL
 
-  quitModule _ = do
-    CronTabTickModuleL asyncTick <- readModuleStateL (Proxy @CronTabTickModule)
-    liftIO $ cancel asyncTick
+  --getInitDataG _ = (Just CronTabTickInitDataG, empty)
 
-  moduleEvent _ = do
-    CronTabTickModuleL asyncTick <- readModuleStateL (Proxy @CronTabTickModule)
-    return $ CronTabTickEvent <$> waitSTM asyncTick
+  --getInitDataL _ = (Just CronTabTickInitDataL, empty)
 
-  moduleEventHandler p (CronTabTickEvent tick) = do
-    $(logDebug) "CronTab Event Completed"
-    newTick <- liftIO $ newCronTabTick (Just tick)
-    modifyModuleState p $ \_ -> CronTabTickModuleL newTick
-    meowList <- asks (readSystem . snd)
-    liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick, periodicCostHandleCronTabTick tick])
+  --initModule _ _ = return CronTabTickModuleG
+
+  --initModuleLocal _ _ _ _ _ = do
+  --  newTick <- liftIO $ newCronTabTick Nothing
+  --  return $ CronTabTickModuleL newTick
+
+  --initModuleEarlyLocal _ _ _ = return CronTabTickEarlyLocalState
+
+  --quitModule _ = do
+  --  CronTabTickModuleL asyncTick <- readModuleStateL (Proxy @CronTabTickModule)
+  --  liftIO $ cancel asyncTick
+
+  --moduleEvent _ = do
+  --  CronTabTickModuleL asyncTick <- readModuleStateL (Proxy @CronTabTickModule)
+  --  return $ CronTabTickEvent <$> waitSTM asyncTick
+
+  --moduleEventHandler p (CronTabTickEvent tick) = do
+  --  $(logDebug) "CronTab Event Completed"
+  --  newTick <- liftIO $ newCronTabTick (Just tick)
+  --  modifyModuleState p $ \_ -> CronTabTickModuleL newTick
+  --  meowList <- asks (readSystem . snd)
+  --  liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick, periodicCostHandleCronTabTick tick])
 
 -- | generate a new tick thread
 -- it will return if a new minute has reached
-newCronTabTick :: Maybe CronTabTick -> IO (Async CronTabTick)
-newCronTabTick Nothing = do
-  async $ CronTabTick <$> getCurrentTime
-newCronTabTick (Just (CronTabTick tickTime0)) = do
-  async $ do
+newCronTabTick :: TMVar CronTabTick -> IO ThreadId
+newCronTabTick putHere = do
+  tickTime0 <- getCurrentTime
+  forkIO $ forever $ do
     let waitUntilNewMinute = do
           threadDelay 1_000_000 -- 1 second
           now <- getCurrentTime
           let diff = diffUTCTime now (floorToMinute tickTime0)
           if diff >= 60
-          then return $ CronTabTick now
+          then atomically $ writeTMVar putHere $ CronTabTick now
           else waitUntilNewMinute
     waitUntilNewMinute
 

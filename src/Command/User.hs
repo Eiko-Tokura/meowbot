@@ -11,7 +11,9 @@ import qualified Data.Text as T
 import qualified Data.List as L
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Utils.RunDB hiding (Add)
 import Data.PersistModel
 
@@ -28,7 +30,7 @@ commandUser = BotCommand User $ botT $ do
   userParser' <- lift $ commandParserTransformByBotName userParser
   botname <- queries maybeBotName
   botid   <- query
-  um <- pureMaybe $ MP.runParser userParser' msg
+  um <- MaybeT $ pure $ MP.runParser userParser' msg
   other <- lift query
   let sd = savedData other
   let (actions, sd', db) = case um of
@@ -43,7 +45,7 @@ commandUser = BotCommand User $ botT $ do
         RuleManagement List _                -> ([reportUM other cid um], sd, return ())
         _ -> ([], sd, return ())
   lift $ db
-  lift . change $ \other -> other {savedData = sd'}
+  lift . modify $ \other -> other {savedData = sd'}
   return actions
   where reportUM other_data cid um = baSendToChatId cid $ T.pack $ case um of
           UserManagement Add ug (Just uid)     -> "已添加用户" ++ show uid ++ "为" ++ show ug ++ "组。"

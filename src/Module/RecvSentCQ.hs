@@ -26,3 +26,10 @@ instance Loadable c RecvSentCQ mods where
     return ( RecvSentCQRead sentCQVar recvCQVar rawBSVar
            , RecvSentCQState
            )
+
+withRecvSentCQ :: (MonadIO m, ConsFDataList FData (RecvSentCQ : mods)) => EffT (RecvSentCQ : mods) es m a -> EffT mods es m a
+withRecvSentCQ act = do
+  sentCQVar <- liftIO $ newTVarIO Nothing
+  recvCQVar <- liftIO $ newTVarIO Nothing
+  rawBSVar  <- liftIO $ newTVarIO Nothing
+  runRecvSentCQ (RecvSentCQRead sentCQVar recvCQVar rawBSVar) act

@@ -2,7 +2,9 @@
 -- | This is a module that provides the function of logging messages into database.
 module Module.LogDatabase where
 
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Concurrent.STM
 import Control.Monad.Logger
 import Control.Monad
@@ -30,6 +32,9 @@ import Parser.Except
 LogDatabase
 |]
 
+withLogDatabase :: (Monad m, ConsFDataList FData (LogDatabase : mods)) => EffT (LogDatabase : mods) es m a -> EffT mods es m a
+withLogDatabase = runEffTOuter_ LogDatabaseRead LogDatabaseState
+
 instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDatabase] mods
   => Loadable c LogDatabase mods where
   initModule _ = return (LogDatabaseRead, LogDatabaseState)
@@ -44,8 +49,10 @@ instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModu
     mNewMessage <- getsS (cqMessageToChatMessage botid botname . getNewMsg)
     case (mcq, mNewMessage) of
       (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage, SelfMessage]) $ do
-        runMeowDB (insert_ newMessage)
-        $logDebug "Inserted a new message into the database."
+        $logDebug "Inserting a new message into the database."
+        runMeowDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowdb") ->
+          $logError $ "While trying to insert new message:" <> dbError
+          )
       _    -> do
         return ()
 

@@ -13,3 +13,6 @@
 [submodule "submodules/monad-effect-prometheus"]
 	path = submodules/monad-effect-prometheus
 	url = Qute:~/git/monad-effect-prometheus
+[submodule "submodules/probabilist"]
+	path = submodules/probabilist
+	url = Qute:~/git/probabilist

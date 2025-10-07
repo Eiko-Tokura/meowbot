@@ -12,7 +12,9 @@ import Control.Monad
 import Control.Monad.Effect
 import Control.Monad.IO.Class
 import Control.Monad.Logger
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Parallel.Strategies
 import Data.Additional
 import Data.Bifunctor
@@ -30,12 +32,12 @@ import Module.RecvSentCQ
 forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
-updateSelfInfo :: (MonadReadable AllData m, MonadModifiable AllData m) => CQMessage -> m ()
+updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m ()
 updateSelfInfo cqmsg = do
-  mselfInfo <- queries (selfInfo . otherdata)
+  mselfInfo <- gets selfInfo
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> change $ _otherdata . _selfInfo ?~ SelfInfo (coerce sid) NothingYet
+    (Nothing, Just sid) -> modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet
     _ -> return ()
 
 -- | Specify the path to save the data according to the bot name.
@@ -53,52 +55,50 @@ increaseAbsoluteId = do
   modifyS $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
   getsS message_number
 
-updateSavedAdditionalData :: (MonadModifiable AllData m) => m ()
-updateSavedAdditionalData = change $ \ad ->
-  let od = otherdata ad
-      sd = savedData od
+updateSavedAdditionalData :: (MonadStateful OtherData m) => m ()
+updateSavedAdditionalData = modify $ \od ->
+  let sd = savedData od
       rd = runningData od
       sd' = sd { savedAdditional = coerce filterSavedAdditional rd } `using` rseqSavedData
-  in ad { otherdata = od { savedData = sd' } }
+  in od { savedData = sd' }
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
-updateAllDataByMessage :: CQMessage -> AllData -> AllData
-updateAllDataByMessage cqmsg (AllData whole_chat m other_data) =
+updateWholeChatByMessage :: Monad m => CQMessage -> EffT '[SModule WholeChat, SModule OtherData] NoError m ()
+updateWholeChatByMessage cqmsg =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
-      Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg)
-        m
-        other_data
-      Nothing -> AllData whole_chat m other_data
+      Just gid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg
+      Nothing -> return ()
 
     PrivateMessage -> case userId cqmsg of
-      Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg)
-        m
-        other_data
-      Nothing -> AllData whole_chat m other_data
+      Just uid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg
+      Nothing -> return ()
 
     Response -> let (rdata, mecho) = (responseData cqmsg, echoR cqmsg) in
       case rdata of
-        Nothing     -> AllData whole_chat m other_data
-        Just rsdata -> updateAllDataByResponse (rsdata, mecho) (AllData whole_chat m other_data)
-    _ -> AllData whole_chat m other_data
+        Nothing     -> return ()
+        Just rsdata -> updateAllDataByResponse (rsdata, mecho)
+    _ -> return ()
 
 
-updateAllDataByResponse :: (ResponseData, Maybe Text) -> AllData -> AllData
-updateAllDataByResponse (rdata, mecho) alldata =
-  case (message_id rdata, (sent_messages . otherdata) alldata) of
-    (Nothing,_) -> alldata
-    (_, []) -> alldata
+updateAllDataByResponse :: Monad m => (ResponseData, Maybe Text) -> EffT '[SModule WholeChat, SModule OtherData] NoError m ()
+updateAllDataByResponse (rdata, mecho) = do
+  otherdata <- getS
+  case (message_id rdata, sent_messages otherdata) of
+    (Nothing,_) -> pure ()
+    (_, []) -> pure ()
     (Just mid, sentMessageList@(headSentMessageList:_)) ->
       let m0 = fromMaybe headSentMessageList $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
           ms = filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of -- attach to the message id that the bot is replying to
-        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        _ -> alldata
+        (Just gid, _) -> do
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}
+          modifyS $ \od -> od { sent_messages = ms }
+        (Nothing, Just uid) -> do
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}
+          modifyS $ \od -> od { sent_messages = ms }
+        _ -> pure ()
 
 type End a = a -> a
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.

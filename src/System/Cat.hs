@@ -3,30 +3,38 @@
 {-# HLINT ignore "Redundant $" #-}
 module System.Cat where
 
-import System.General
-import Control.Monad.Trans.ReaderState
-import Control.Monad
-import Control.Concurrent.STM
+import Command
+import Command.Aokana
 import Control.Concurrent
+import Control.Concurrent.STM
 import Control.Exception
-import System
-import System.Process (system)
-import System.WatchDog
-import Utils.Logging
-import Data.HList
+import Control.Monad
+import Control.Monad.Trans
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Data.Default
 import MeowBot
 import MeowBot.CommandRule
-import Network.WebSockets
-import Command
-import Command.Aokana
-import Module.CronTabTickInstance
-import Module.CommandInstance
 import Module.AsyncInstance
-import Module.LogDatabase
-import Module.ProxyWS
+import Module.CommandInstance
 import Module.ConnectionManager
+import Module.CronTabTickInstance
+import Module.Database
+import Module.LogDatabase
+import Module.Logging
+import Module.MeowTypes
+import Module.ProxyWS
+import Module.RS
+import Module.RecvSentCQ
+import Module.MeowConnection
 import Module.StatusMonitor
+import Module.Prometheus
+import Network.WebSockets
+import System.Process (system)
+import System.WatchDog
+import System.Meow
+import Utils.Logging
+import System.IO.Unsafe (unsafeInterleaveIO)
 
 import System.Directory
 import Data.Coerce
@@ -35,40 +43,31 @@ import Text.Read (readMaybe)
 
 import Control.Monad.ExceptionReturn
 
+import Control.System
 import Database.Persist.Sql hiding (In)
 import Data.PersistModel
 import External.ChatAPI
 import Utils.Persist
 import MeowBot.Data.Book
 
--- the modules loaded in the system are:
--- type Mods   = '[CommandModule, AsyncModule, LogDatabase, ProxyWS]
-
-botLoop :: Cat never_returns
+botLoop :: Meow never_returns
 botLoop = do
-  $(logDebug) "Bot loop started, running before meow actions"
-  CatT beforeMeowActions
+  beforeSystem
 
-  $(logDebug) "Listening and handling events"
-  CatT $ handleEvents =<< liftIO . atomically =<< listenToEvents
+  listenToEvents >>= liftIO . atomically >>= handleEvents
 
-  $(logDebug) "Performing meow actions"
   performMeowActions
 
-  $(logDebug) "After meow actions"
-  CatT afterMeowActions
+  afterSystem
 
-  $(logDebug) "Bot loop finished"
   botLoop
 
-performMeowActions :: Cat ()
+performMeowActions :: Meow ()
 performMeowActions = do
-  actions <- askSystem
-  conn    <- askSystem
+  actions <- asksModule meowReadsAction
+  conn    <- asksModule meowConnection
   as <- liftIO . atomically $ readTVar actions <* writeTVar actions []
-  globalizeMeow $ mapM_ (doBotAction conn) . concat =<< sequence as
-
-type R = MeowData -- ^ the r parameter
+  mapM_ (doBotAction conn) . concat =<< sequence as
 
 -- the process of initialization:
 --
@@ -78,112 +77,134 @@ type R = MeowData -- ^ the r parameter
 --
 -- then initialize AllData, and run the botLoop
 
-allInitDataG :: AllModuleInitDataG Mods
-allInitDataG  = CronTabTickInitDataG :** StatusMonitorInitDataG
-              :** AsyncInitDataG :** CommandInitDataG
-              :** LogDatabaseInitDataG "meowbot.db"
-              :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
+-- allInitDataG :: AllModuleInitDataG Mods
+-- allInitDataG  = CronTabTickInitDataG :** StatusMonitorInitDataG
+--               :** AsyncInitDataG :** CommandInitDataG
+--               :** LogDatabaseInitDataG "meowbot.db"
+--               :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
 
-allInitDataL :: TVar MeowStatus -> [ProxyFlag] -> AllModuleInitDataL Mods
-allInitDataL tvar pf = CronTabTickInitDataL :** StatusMonitorInitDataL tvar
-                :** AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
-                :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
-                :** ConnectionManagerInitDataL :** FNil
+-- allInitDataL :: TVar MeowStatus -> [ProxyFlag] -> AllModuleInitDataL Mods
+-- allInitDataL tvar pf = CronTabTickInitDataL :** StatusMonitorInitDataL tvar
+--                 :** AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
+--                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
+--                 :** ConnectionManagerInitDataL :** FNil
 
 pingpongOptions = defaultPingPongOptions
   -- { pingInterval = 30
   -- , pongTimeout  = 30
   -- }
 
-runBots :: AllModuleInitDataG Mods -> [BotInstance] -> LoggingT IO ()
-runBots initglobs bots = do
-  $(logInfo) "Initializing all global states"
-  global <- initAllModulesG @R initglobs
-  $(logInfo) "Starting bot instances"
-  mapM_ (runBot initglobs global) bots
+-- runBots :: AllModuleInitDataG Mods -> [BotInstance] -> EffT '[LoggingModule] NoError IO ()
+-- runBots initglobs bots = do
+--   $(logInfo) "Initializing all global states"
+--   global <- initAllModulesG @R initglobs
+--   $(logInfo) "Starting bot instances"
+--   mapM_ (runBot initglobs global) bots
 
 -- | All these are read-only so no problem to reuse them when restarting the bot
-runBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> BotInstance -> LoggingT IO ()
-runBot initglobs glob bot = do
-  case botRunFlag bot of
-    RunClient ip port -> do
-      tvarMeowStat  <- liftIO $ initTVarMeowStatus
-      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
-      runBotClient ip port bot initglobs glob earlyLocal
-    RunServer ip port -> do
-      tvarMeowStat  <- liftIO $ initTVarMeowStatus
-      earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
-      runBotServer ip port bot initglobs glob earlyLocal
+-- runBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> BotInstance -> EffT '[LoggingModule] NoError IO ()
+-- runBot initglobs glob bot = do
+--   case botRunFlag bot of
+--     RunClient ip port -> do
+--       tvarMeowStat  <- liftIO $ initTVarMeowStatus
+--       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
+--       runBotClient ip port bot initglobs glob earlyLocal
+--     RunServer ip port -> do
+--       tvarMeowStat  <- liftIO $ initTVarMeowStatus
+--       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
+--       runBotServer ip port bot initglobs glob earlyLocal
 
-runBotServer ip port bot initglobs glob el = do
-  $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
-  botm     <- botInstanceToModule bot
+runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[] IO a
+runBot bot meow = do
+  botm <- embedEffT $ botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
-      watchDog = listToMaybe $ botWatchDogFlags bot
-  alldata       <- initAllData botconfig glob
-  connectedTVar <- liftIO $ newTVarIO False
-  let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
-  let checkHandle tvarExtra =
-        liftIO $ atomically $ do
-          meowStat <- readTVar tvarMeowStat
-          extra    <- readTVar tvarExtra
-          return $ foldl' (&&) True [meowStat == MeowOnline, extra]
-  mWatchDogId   <- case watchDog of
-    Just (WatchDogFlag interval action) -> do
-      $(logInfo) $ "Starting watch dog with interval " <> tshow interval
-      wd <- liftIO $ initWatchDog connectedTVar interval checkHandle (void $ system action)
-      liftIO $ Just <$> startWatchDog wd
-    Nothing -> return Nothing
-  void $
-    logThroughCont (runServer ip port) (\pendingconn -> do
-      conn <- lift $ acceptRequest pendingconn
-      liftIO . atomically $ writeTVar connectedTVar True
-      logThroughCont (withPingPong pingpongOptions conn) (\conn -> do
-        $(logInfo) $ "Connected to client"
-        meowData <- liftIO $ initMeowData conn
-        $(logDebug) $ "initMeowData finished"
-        local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
-        $(logDebug) $ "initAllModulesL finished, entering bot loop"
-        void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))) `logCatch`
-          (\e -> do
-            $(logError) $ "ERROR In connection with client : " <> tshow e
-          )
-      $(logInfo) $ "Disconnected from client"
-      liftIO . atomically $ writeTVar connectedTVar False) `logForkFinally`
-        ( \e -> do
-          maybe (pure ()) (liftIO . killThread) mWatchDogId
-          rerunBot initglobs glob el bot e
-        )
+  AllData wc bc od <- embedEffT $ initAllData botconfig
+  runSModule_ od $ runSModule_ wc $ runSModule_ bc
+    $ ( case botRunFlag bot of
+          RunClient addr port -> withClientConnection addr port
+          RunServer addr port -> withServerConnection addr port
+      )
+    $ withMeowActionQueue
+    $ withRecvSentCQ
+    $ withCronTabTick
+    $ withProxyWS (ProxyWSInitData [(add, ip) | ProxyFlag add ip <- bot.botProxyFlags])
+    $ withConnectionManager
+    $ withAsyncModule
+    $ withLogDatabase
+    $ meow
 
-runBotClient ip port bot initglobs glob el = do
-  $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
-  botm     <- botInstanceToModule bot
-  let botconfig = BotConfig botm (botDebugFlags bot) Nothing
-  let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
-  alldata  <- initAllData botconfig glob
-  void $
-    logThroughCont (runClient ip port "") (\conn -> do
-      $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
-      meowData <- liftIO $ initMeowData conn
-      local    <- initAllModulesL @R meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
-      runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
-      ) `logForkFinally` rerunBot initglobs glob el bot
+withServerConnection :: String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods es m a
+withServerConnection addr port = undefined
 
-initMeowData :: Connection -> IO MeowData
-initMeowData conn = MeowData <$> initAllMeowData (conn :* () :* () :* () :* () :* () :* Nil)
+withClientConnection :: String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods es m a
+withClientConnection addr port = undefined
 
-rerunBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> AllModuleEarlyLocalStates Mods -> BotInstance -> Either SomeException a -> LoggingT IO ()
-rerunBot initglobs glob el bot (Left e) = do
-  $(logError) $ "Bot instance failed: " <> tshow bot <> "\nWith Error: " <> tshow e
-  $(logInfo) "Restarting bot instance in 60 seconds"
-  liftIO $ threadDelay 60_000_000
-  case botRunFlag bot of
-    RunClient ip port -> runBotClient ip port bot initglobs glob el
-    RunServer ip port -> runBotServer ip port bot initglobs glob el
-rerunBot _ _ _ _ (Right _) = do
-  $(logInfo) $ "Bot instance finished successfully."
+-- runBotServer ip port bot initglobs glob el = do
+--   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
+--   botm     <- botInstanceToModule bot
+--   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
+--       watchDog = listToMaybe $ botWatchDogFlags bot
+--   alldata       <- initAllData botconfig glob
+--   connectedTVar <- liftIO $ newTVarIO False
+--   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
+--   let checkHandle tvarExtra =
+--         liftIO $ atomically $ do
+--           meowStat <- readTVar tvarMeowStat
+--           extra    <- readTVar tvarExtra
+--           return $ foldl' (&&) True [meowStat == MeowOnline, extra]
+--   mWatchDogId   <- case watchDog of
+--     Just (WatchDogFlag interval action) -> do
+--       $(logInfo) $ "Starting watch dog with interval " <> tshow interval
+--       wd <- liftIO $ initWatchDog connectedTVar interval checkHandle (void $ system action)
+--       liftIO $ Just <$> startWatchDog wd
+--     Nothing -> return Nothing
+--   void $
+--     logThroughCont (runServer ip port) (\pendingconn -> do
+--       conn <- lift $ acceptRequest pendingconn
+--       liftIO . atomically $ writeTVar connectedTVar True
+--       logThroughCont (withPingPong pingpongOptions conn) (\conn -> do
+--         $(logInfo) $ "Connected to client"
+--         meowData <- liftIO $ initMeowData conn
+--         $(logDebug) $ "initMeowData finished"
+--         local    <- initAllModulesL meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
+--         $(logDebug) $ "initAllModulesL finished, entering bot loop"
+--         void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))) `logCatch`
+--           (\e -> do
+--             $(logError) $ "ERROR In connection with client : " <> tshow e
+--           )
+--       $(logInfo) $ "Disconnected from client"
+--       liftIO . atomically $ writeTVar connectedTVar False) `logForkFinally`
+--         ( \e -> do
+--           maybe (pure ()) (liftIO . killThread) mWatchDogId
+--           rerunBot initglobs glob el bot e
+--         )
+-- 
+-- runBotClient ip port bot initglobs glob el = do
+--   $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
+--   botm     <- botInstanceToModule bot
+--   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
+--   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
+--   alldata  <- initAllData botconfig glob
+--   void $
+--     logThroughCont (runClient ip port "") (\conn -> do
+--       $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
+--       meowData <- liftIO $ initMeowData conn
+--       local    <- initAllModulesL meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
+--       runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
+--       ) `logForkFinally` rerunBot initglobs glob el bot
 
-botInstanceToModule :: BotInstance -> LoggingT IO BotModules
+-- rerunBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> AllModuleEarlyLocalStates Mods -> BotInstance -> Either SomeException a -> EffT '[LoggingModule] NoError IO ()
+-- rerunBot initglobs glob el bot (Left e) = do
+--   $(logError) $ "Bot instance failed: " <> tshow bot <> "\nWith Error: " <> tshow e
+--   $(logInfo) "Restarting bot instance in 60 seconds"
+--   liftIO $ threadDelay 60_000_000
+--   case botRunFlag bot of
+--     RunClient ip port -> runBotClient ip port bot initglobs glob el
+--     RunServer ip port -> runBotServer ip port bot initglobs glob el
+-- rerunBot _ _ _ _ (Right _) = do
+--   $(logInfo) $ "Bot instance finished successfully."
+
+botInstanceToModule :: BotInstance -> EffT '[LoggingModule] NoError IO BotModules
 botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags) = do
     $(logInfo) $ "\n### Starting bot instance: " <> tshow bot
     $(logInfo) $ "Running mode: "   <> tshow mode
@@ -209,27 +230,27 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
           }
     return botModules
 
-initAllData :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> LoggingT IO AllData
-initAllData botconfig glob = do
+initAllData :: BotConfig -> EffT '[MeowDatabase, LoggingModule] '[SystemError] IO AllData
+initAllData botconfig = do
   let mods = botModules botconfig
       botid = botId mods
-  savedDataDB   <-                              runExceptT $ loadSavedDataDB botid glob
-  savedDataFile <- unsafeInterleaveLoggingTIO $ runExceptT $ loadSavedDataFile (nameOfBot mods)
+  savedDataDB   <- embedEffT $ errorToEither $ loadSavedDataDB botid
+  savedDataFile <- embedEffT $ errorToEither $ baseTransform unsafeInterleaveIO $ loadSavedDataFile (nameOfBot mods)
   case (savedDataDB, savedDataFile) of
     (Right savedDataDB, _) -> do
       $(logInfo) "Loaded saved data from database"
       AllData [] botconfig . OtherData 0 Nothing [] savedDataDB (coerce $ savedAdditional savedDataDB) <$> lift getAllScripts
     (Left errDb, Right savedDataFile) -> do
-      $(logError) $ "Failed to load saved data from database: " <> errDb
+      $(logError) $ "Failed to load saved data from database: " <> toText errDb
       $(logInfo) "Loaded saved data from file"
       $(logInfo) $ "Trying to migrate data from file to database"
-      newSavedDataDB botconfig glob savedDataFile
+      newSavedDataDB botconfig savedDataFile
       AllData [] botconfig . OtherData 0 Nothing [] savedDataFile (coerce $ savedAdditional savedDataFile) <$> lift getAllScripts
     (Left errDb, Left errFile) -> do
-      $(logError) $ "Failed to load saved data from database: " <> errDb
-      $(logError) $ "Failed to load saved data from file: " <> errFile
+      $(logError) $ "Failed to load saved data from database: " <> toText errDb
+      $(logError) $ "Failed to load saved data from file: " <> toText errFile
       $(logInfo) "Starting with empty data, also writing empty data to database"
-      newSavedDataDB botconfig glob (SavedData [] initialUGroups initialGGroups initialRules initialBooks [])
+      newSavedDataDB botconfig (SavedData [] initialUGroups initialGGroups initialRules initialBooks [])
       AllData [] botconfig . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) [] <$> lift getAllScripts
   where
     initialUGroups = [(me, Admin)]
@@ -246,7 +267,7 @@ initAllData botconfig glob = do
     me = 754829466 :: UserId
     myGroup = 437447251 :: GroupId
 
-loadSavedDataFile :: BotName -> ExceptT Text (LoggingT IO) SavedData
+loadSavedDataFile :: BotName -> EffT '[LoggingModule] '[ErrorText "LoadSavedDataFile"] IO SavedData
 loadSavedDataFile botName = do
   fileExist <- liftIO $ doesFileExist (savedDataPath botName)
   if fileExist
@@ -260,14 +281,14 @@ loadSavedDataFile botName = do
           return msavedData
         Nothing -> do
           $(logError) "Failed to load saved data file! o.o Prelude no read!"
-          throwE "Failed to load saved data file! o.o Prelude no read!"
+          effThrow $ errorText @"LoadSavedDataFile" "Failed to load saved data file! o.o Prelude no read!"
     else do
       $(logInfo) "No saved data file found! o.o"
-      throwE "No saved data file found! o.o"
+      effThrow $ errorText @"LoadSavedDataFile" "No saved data file found! o.o"
 
-loadSavedDataDB :: (LogDatabase `In` mods) => BotId -> AllModuleGlobalStates mods -> ExceptT Text (LoggingT IO) SavedData
-loadSavedDataDB botid glob = do
-  let pool = databasePool (getF @LogDatabase glob)
+loadSavedDataDB :: BotId -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "LoadSavedDataDB"] IO SavedData
+loadSavedDataDB botid = do
+  let pool = asksModule dbPool
   _                    <- fmap  entityVal  .  effectE $ runSqlPool (selectList [BotSettingBotId ==. botid] [LimitTo 1]) pool
   botSettingsPerChat   <- fmap (map entityVal) . lift $ runSqlPool (selectList [BotSettingPerChatBotId ==. botid] []) pool
   inUserGroups         <- fmap (map entityVal) . lift $ runSqlPool (selectList [InUserGroupBotId ==. botid] []) pool
@@ -312,12 +333,11 @@ loadSavedDataDB botid glob = do
     , savedAdditional = savedAdditionalData
     }
 
-newSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
-newSavedDataDB botconfig glob sd = do
-  let pool = databasePool (getF @LogDatabase glob)
-      botname = nameOfBot (botModules botconfig)
+newSavedDataDB :: BotConfig -> SavedData -> EffT '[MeowDatabase, LoggingModule] '[] IO ()
+newSavedDataDB botconfig sd = do
+  let botname = nameOfBot (botModules botconfig)
       botid = botId $ botModules botconfig
-  runSqlPool (do
+  runMeowDB (do
     insert_ $ def
       { botSettingBotName                 = maybeBotName botname
       , botSettingBotId                   = botId $ botModules botconfig
@@ -366,29 +386,4 @@ newSavedDataDB botconfig glob sd = do
       , bookDBBookPages   = book_pages book
       , bookDBBookInfo    = book_info book
       } | book <- books sd]
-    ) pool
-
--- updateSavedDataDB :: (LogDatabase `In` mods) => BotConfig -> AllModuleGlobalStates mods -> SavedData -> LoggingT IO ()
--- updateSavedDataDB botconfig glob sd = do
---   let pool = databasePool (getF @LogDatabase glob)
---       botname = nameOfBot (botModules botconfig)
---   runSqlPool (do
---     -- deleteWhere [BotSettingBotName          ==. maybeBotName botname]
---     -- deleteWhere [BotSettingPerChatBotName   ==. maybeBotName botname]
---     -- deleteWhere [InUserGroupBotName         ==. maybeBotName botname]
---     -- deleteWhere [InGroupGroupBotName        ==. maybeBotName botname]
---     -- deleteWhere [CommandRuleDBBotName       ==. maybeBotName botname]
---     -- deleteWhere [SavedAdditionalDataBotName ==. maybeBotName botname]
---     -- deleteWhere ([] :: [Filter BookDB])
---     insertMany_ [ SavedAdditionalData
---       { savedAdditionalDataBotName  = maybeBotName botname
---       , savedAdditionalDataAdditionalData = PersistUseShow savedAdditional
---       } | savedAdditional <- savedAdditional sd]
---     insertMany_ [ BookDB
---       { bookDBBookName    = book_name book
---       , bookDBBookPdfPath = book_pdfPath book
---       , bookDBBookPages   = book_pages book
---       , bookDBBookInfo    = book_info book
---       } | book <- books sd]
---     ) pool
-
+    )

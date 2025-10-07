@@ -3,6 +3,9 @@ module System.WatchDog where
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (forever, unless)
+import Control.Monad.Effect
+import Module.RS.QQ
+import Data.Kind (Type)
 
 -- watch dog has its own thread
 -- it reads something (provide a handle to it) periodically to check the status
@@ -18,24 +21,36 @@ import Control.Monad (forever, unless)
 data WatchDogStatus = CountGood Int | CountBad Int
   deriving Show
 
-data WatchDog a = WatchDog
-  { wdExtraState    :: TVar a
-  , wdCheckInterval :: Int -- in seconds
-  , wdCheckCount    :: TVar WatchDogStatus
-  , wdCheckHandle   :: IO Bool
-  , wdAction        :: IO ()
-  }
+data WatchDog (a :: Type)
+  -- { wdExtraState    :: TVar a
+  -- , wdCheckInterval :: Int -- in seconds
+  -- , wdCheckCount    :: TVar WatchDogStatus
+  -- , wdCheckHandle   :: IO Bool
+  -- , wdAction        :: IO ()
+  -- }
+
+instance Module (WatchDog a) where
+  data ModuleRead (WatchDog a) = WatchDogRead
+    { wdExtraState    :: TVar a
+    , wdCheckInterval :: Int -- in seconds
+    , wdCheckCount    :: TVar WatchDogStatus
+    , wdCheckHandle   :: IO Bool
+    , wdAction        :: IO ()
+    }
+  data ModuleState (WatchDog a) = WatchDogState
+
+type WatchDogRead a = ModuleRead (WatchDog a)
 
 -- Function to start the watchdog
-startWatchDog :: WatchDog a -> IO ThreadId
+startWatchDog :: WatchDogRead a -> IO ThreadId
 startWatchDog wd = forkIO $ forever $ do
   threadDelay (wdCheckInterval wd * 1_000_000) -- Convert seconds to microseconds
   checkStatus wd
 
 -- Function to check the status
-checkStatus :: WatchDog a -> IO ()
+checkStatus :: WatchDogRead a -> IO ()
 checkStatus wd = do
-  statusCount <- atomically $ readTVar (wdCheckCount wd)
+  statusCount <- readTVarIO (wdCheckCount wd)
   currentGood <- wdCheckHandle wd
   unless currentGood $ do
     putStrLn "WatchDog: Bad Status Detected"
@@ -58,10 +73,10 @@ initWatchDog
   -> Int
   -> (TVar a -> IO Bool) -- ^ Check handle, using the extra state, and possibly reads other things, determine good or bad
   -> IO ()
-  -> IO (WatchDog a)
+  -> IO (WatchDogRead a)
 initWatchDog extraState interval checkHandle action = do
-  checkCount   <- atomically $ newTVar (CountGood 0)
-  return $ WatchDog
+  checkCount   <- newTVarIO (CountGood 0)
+  return $ WatchDogRead
             { wdExtraState    = extraState
             , wdCheckInterval = interval
             , wdCheckCount    = checkCount

@@ -14,6 +14,7 @@ import qualified Data.Text as T
 import Utils.Base64
 import External.ChatAPI
 
+import Control.Monad.Effect
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 
@@ -53,12 +54,11 @@ turnMdCQCode md = do
   return $ T.concat [either pack (embedCQCode . CQImage64) b64 | b64 <- eb64s]
 
 sendIOeToChatIdMd :: EssentialContent -> ExceptT Text IO Text -> Meow [BotAction]
---OtherData -> IO ([BotAction], OtherData)
 sendIOeToChatIdMd (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioe_ess
   case ess of
     Right (str, mdcq) -> do
-      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      embedEffT $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid mdcq ]
     Left err -> do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]
@@ -70,7 +70,7 @@ sendIOeToChatIdMdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioe_ess
   case ess of
     Right (msg, mdcq) -> return $ do
-      insertMyResponseHistory cid (generateMetaMessage (content msg) [] [MReplyTo mid, MMessage msg])
+      embedEffT $ insertMyResponseHistory cid (generateMetaMessage (content msg) [] [MReplyTo mid, MMessage msg])
       return [ baSendToChatId cid mdcq ]
     Left err -> return $ do
       return [ baSendToChatId cid . ("喵~出错啦：" <> ) $ err ]

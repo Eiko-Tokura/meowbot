@@ -14,14 +14,16 @@ import qualified MeowBot.Parser as MP
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 
 commandHelp :: BotCommand
 commandHelp = BotCommand Help $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   mbotName <- queries maybeBotName
   helpParser' <- lift $ commandParserTransformByBotName $ helpParser mbotName
-  helpText <- pureMaybe $ MP.runParser helpParser' msg
+  helpText <- MaybeT . pure $ MP.runParser helpParser' msg
   return [baSendToChatId cid helpText]
   where
     helpParser botName = do
