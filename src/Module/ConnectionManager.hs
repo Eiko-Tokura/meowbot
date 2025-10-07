@@ -29,8 +29,8 @@ instance SystemModule ConnectionManagerModule where
 
 instance
   Dependency' c ConnectionManagerModule '[LoggingModule] mods
-  => Loadable c ConnectionManagerModule mods where
-  initModule _ = do
+  => Loadable c ConnectionManagerModule mods ies where
+  withModule _ act = do
     let customTimeout = 120 * 1000000 -- 120 seconds in microseconds
     let customManagerSettings =
           (mkManagerSettings
@@ -43,8 +43,12 @@ instance
           ){ managerResponseTimeout = responseTimeoutMicro customTimeout }
     manager <- liftIO $ newManager customManagerSettings
     $logInfo "Connection Manager Initialized"
-    return $ (ConnectionManagerModuleRead manager customTimeout, ConnectionManagerModuleState)
-  
+    let r = ConnectionManagerModuleRead manager customTimeout
+    runEffTOuter_ r ConnectionManagerModuleState act
+
+instance
+  Dependency' c ConnectionManagerModule '[LoggingModule] mods
+  => EventLoop c ConnectionManagerModule mods es where
 
 withConnectionManager ::
   ( LoggingModule `In` mods

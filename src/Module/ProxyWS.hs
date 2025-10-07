@@ -37,12 +37,14 @@ instance SystemModule ProxyWS where
   data ModuleEvent    ProxyWS = ProxyWSEvent    { proxyEvent :: BL.ByteString }
 
 instance Dependency' c ProxyWS '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, MeowConnection, LoggingModule] mods
-  => Loadable c ProxyWS mods where
-  initModule (ProxyWSInitData {addressesAndIps}) = do
+  => Loadable c ProxyWS mods ies where
+  withModule (ProxyWSInitData {addressesAndIps}) act = do
     proxyDatas <- liftIO $ mapM (uncurry createProxyData) addressesAndIps
-    return ( ProxyWSRead
-           , ProxyWSState proxyDatas proxyDatas
-           )
+    runEffTOuter_ ProxyWSRead (ProxyWSState proxyDatas proxyDatas) act
+
+instance Dependency' c ProxyWS '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, MeowConnection, LoggingModule] mods
+  => EventLoop c ProxyWS mods es where
+  -- TODO
 
 withProxyWS ::
   ( SModule WholeChat `In` mods

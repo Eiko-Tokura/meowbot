@@ -7,11 +7,10 @@ import Command
 import Command.Aokana
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Exception
 import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Trans.Control
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Data.Default
 import MeowBot
 import MeowBot.CommandRule
@@ -27,7 +26,6 @@ import Module.ProxyWS
 import Module.RS
 import Module.RecvSentCQ
 import Module.MeowConnection
-import Module.StatusMonitor
 import Module.Prometheus
 import Network.WebSockets
 import System.Process (system)
@@ -41,10 +39,7 @@ import Data.Coerce
 import Data.Maybe
 import Text.Read (readMaybe)
 
-import Control.Monad.ExceptionReturn
-
 import Control.System
-import Database.Persist.Sql hiding (In)
 import Data.PersistModel
 import External.ChatAPI
 import Utils.Persist
@@ -114,15 +109,15 @@ pingpongOptions = defaultPingPongOptions
 --       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
 --       runBotServer ip port bot initglobs glob earlyLocal
 
-runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[] IO a
+runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
   botm <- embedEffT $ botInstanceToModule bot
   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
   AllData wc bc od <- embedEffT $ initAllData botconfig
-  runSModule_ od $ runSModule_ wc $ runSModule_ bc
+  embedError $ runSModule_ od $ runSModule_ wc $ runSModule_ bc
     $ ( case botRunFlag bot of
-          RunClient addr port -> withClientConnection addr port
-          RunServer addr port -> withServerConnection addr port
+          RunClient addr port -> void . withClientConnection addr port
+          RunServer addr port ->        withServerConnection addr port
       )
     $ withMeowActionQueue
     $ withRecvSentCQ
@@ -133,11 +128,40 @@ runBot bot meow = do
     $ withLogDatabase
     $ meow
 
-withServerConnection :: String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods es m a
-withServerConnection addr port = undefined
+runBots :: [BotInstance] -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[] IO ()
+runBots bots = mapM_ (\bot -> forkEffT $ runBot bot botLoop) bots >> liftIO (threadDelay maxBound)
 
-withClientConnection :: String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods es m a
-withClientConnection addr port = undefined
+withServerConnection
+  :: (ConsFDataList FData (MeowConnection : mods), LoggingModule `In` mods, m ~ IO, Show (EList es))
+  => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
+withServerConnection addr port act = do
+  $(logInfo) $ "Running bot server, listening on " <> tshow addr <> ":" <> tshow port
+  liftWith $ \run -> runServer addr port $ \pending -> do
+    conn <- acceptRequest pending
+
+    withPingPong pingpongOptions conn $ \conn -> void $ run $ do
+      $logInfo "Connected to client"
+
+      runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
+        (\e -> $logError $ "ERROR In connection with client : " <> tshow e)
+
+    void . run $ $logInfo $ "Disconnected from client"
+
+withClientConnection
+  :: ( ConsFDataList FData (MeowConnection : mods)
+     , LoggingModule `In` mods, m ~ IO, Show (EList es)
+     )
+  => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
+withClientConnection addr port act = do
+  $(logInfo) $ "Running bot client, connecting to " <> tshow addr <> ":" <> tshow port
+  liftWith $ \run -> runClient addr port "" $ \conn -> do
+
+    void . run $ $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
+    withPingPong pingpongOptions conn $ \conn -> void . run $ do
+
+      $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
+      runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
+        (\e -> $logError $ "ERROR In connection with server : " <> tshow e)
 
 -- runBotServer ip port bot initglobs glob el = do
 --   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
@@ -230,7 +254,7 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
           }
     return botModules
 
-initAllData :: BotConfig -> EffT '[MeowDatabase, LoggingModule] '[SystemError] IO AllData
+initAllData :: BotConfig -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "meowdb"] IO AllData
 initAllData botconfig = do
   let mods = botModules botconfig
       botid = botId mods
@@ -286,16 +310,16 @@ loadSavedDataFile botName = do
       $(logInfo) "No saved data file found! o.o"
       effThrow $ errorText @"LoadSavedDataFile" "No saved data file found! o.o"
 
-loadSavedDataDB :: BotId -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "LoadSavedDataDB"] IO SavedData
+loadSavedDataDB :: BotId -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "LoadSavedDataDB", ErrorText "meowdb"] IO SavedData
 loadSavedDataDB botid = do
-  let pool = asksModule dbPool
-  _                    <- fmap  entityVal  .  effectE $ runSqlPool (selectList [BotSettingBotId ==. botid] [LimitTo 1]) pool
-  botSettingsPerChat   <- fmap (map entityVal) . lift $ runSqlPool (selectList [BotSettingPerChatBotId ==. botid] []) pool
-  inUserGroups         <- fmap (map entityVal) . lift $ runSqlPool (selectList [InUserGroupBotId ==. botid] []) pool
-  inGroupGroups        <- fmap (map entityVal) . lift $ runSqlPool (selectList [InGroupGroupBotId ==. botid] []) pool
-  commandRulesDB       <- fmap (map entityVal) . lift $ runSqlPool (selectList [CommandRuleDBBotId ==. botid] []) pool
-  savedAdditionalDatas <- fmap (map entityVal) . lift $ runSqlPool (selectList [SavedAdditionalDataBotId ==. botid] []) pool
-  bookDBs              <- fmap (map entityVal) . lift $ runSqlPool (selectList [] []) pool
+  _                    <- fmap  entityVal      . effMaybeInWith (errorText @"LoadSavedDataDB" $ "BotId" <> toText botid <> "Not found")
+                            . fmap listToMaybe $ runMeowDB (selectList [BotSettingBotId ==. botid] [LimitTo 1])
+  botSettingsPerChat   <- map entityVal <$> runMeowDB (selectList [BotSettingPerChatBotId ==. botid] [])
+  inUserGroups         <- map entityVal <$> runMeowDB (selectList [InUserGroupBotId ==. botid] [])
+  inGroupGroups        <- map entityVal <$> runMeowDB (selectList [InGroupGroupBotId ==. botid] [])
+  commandRulesDB       <- map entityVal <$> runMeowDB (selectList [CommandRuleDBBotId ==. botid] [])
+  savedAdditionalDatas <- map entityVal <$> runMeowDB (selectList [SavedAdditionalDataBotId ==. botid] [])
+  bookDBs              <- map entityVal <$> runMeowDB (selectList [] [])
   let
       chatIds_chatSettings =
         [( botSettingPerChatChatId c, def
@@ -333,7 +357,7 @@ loadSavedDataDB botid = do
     , savedAdditional = savedAdditionalData
     }
 
-newSavedDataDB :: BotConfig -> SavedData -> EffT '[MeowDatabase, LoggingModule] '[] IO ()
+newSavedDataDB :: BotConfig -> SavedData -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "meowdb"] IO ()
 newSavedDataDB botconfig sd = do
   let botname = nameOfBot (botModules botconfig)
       botid = botId $ botModules botconfig

@@ -98,7 +98,7 @@ commandAokana = BotCommand Aokana $ botT $ do
                                   [ simplify jp ranBlock
                                   , simplify zh ranBlock
                                   ]
-          charPrompt <- mT $ (`aokanaCharacterPrompts` aokana other_data) <$> scriptCharacter ranBlock
+          charPrompt <- maybe (pure Nothing) (fmap Just . lift) $ (`aokanaCharacterPrompts` aokana other_data) <$> scriptCharacter ranBlock
           case charPrompt of
             Nothing -> return ()
             Just charPrompt -> lift $ putStrLn $ T.unpack $ content charPrompt

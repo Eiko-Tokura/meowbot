@@ -187,9 +187,6 @@ library meowbot-lib
                    , Command.Statistics
                    , Command.User
                    , Command.Updater
-                   , Control.Monad.ExceptionReturn
-                   , Control.Monad.IOe
-                   , Control.Monad.MaybeHints
                    , Data.Additional
                    , Data.Additional.Default
                    , Data.Additional.Saved
@@ -324,6 +321,7 @@ library meowbot-lib
                  , item
                  , linear
                  , lens
+                 , monad-control
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
@@ -393,6 +391,7 @@ executable meowbot
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
+                 , monad-effect-prometheus
                  , monad-logger
                  , mtl
                  , parallel

@@ -23,7 +23,6 @@ import Control.Exception (try, SomeException)
 import Control.Monad.Trans
 import Control.Monad.Effect
 import Control.Monad.Except
-import Control.Monad.ExceptionReturn
 import Control.Monad.Logger
 import Data.Aeson as A
 import Data.Bifunctor
@@ -42,9 +41,10 @@ import Module.Logging
 
 import Parser.Run
 
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Utils.TokenEstimator (estimateTokens)
+import Utils.Text
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -561,12 +561,7 @@ data ChatStatus = ChatStatus
   , chatEstimateTokens       :: !EstimateTokens
   } deriving (Show, Eq, Generic, NFData)
 
--- | Remember that ExceptT is right monad transformer, it composes inside out
--- to preserve state, it should be inner than StateT
 type ChatT md tools m = EffT '[RModule (ChatParams md tools), SModule ChatStatus, LoggingModule] '[ErrorText "chat-error"] m
-
-liftE :: Monad m => ExceptT Text m a -> ChatT md tools m a
-liftE = baseEitherInWith (ErrorText @_ @"chat-error") . runExceptT
 
 -- | Enhanced message chat with tool handling
 agent :: forall md ts m. (MonadIO m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
@@ -577,21 +572,21 @@ agent = do
   toolDepth <- getsS chatStatusToolDepth
   mapiKeys  <- asksR @(ChatParams md ts) (systemApiKeys . chatSetting)
   mSys      <- lift $ generateSystemPrompt def params
-  apiKeys   <- liftE $ pureEMsg "No API key found!" mapiKeys
+  apiKeys   <- pureMaybeInWith @(ErrorText "chat-error") "No API key found!" mapiKeys
   let man     = chatManager params
       timeOut = chatTimeout params
   if fromMaybe defaultSystemMaxToolDepth (systemMaxToolDepth (chatSetting params)) <= toolDepth
-  then liftE $ throwE "Maximum tool depth exceeded"
+  then effThrow @(ErrorText "chat-error") "Maximum tool depth exceeded"
   else do
     let getAmsg = do
           (response, usage) <- embedMods $ fetchChatCompletionResponse man timeOut apiKeys params mSys prevMsgs
-          amsg <- liftE . pureE $ getMessage response
+          amsg <- pureEitherInWith (errorText @"chat-error") $ getMessage response
           if T.null (content amsg)
           then return Nothing
           else return $ Just (amsg, usage)
 
     mAmsg' <- getAmsg
-    (amsg', usage) <- liftE $ pureEMsg "No assistant message found!" mAmsg'
+    (amsg', usage) <- pureMaybeInWith @(ErrorText "chat-error") "No assistant message found!" mAmsg'
     modifyS $ \st -> st { chatEstimateTokens = chatEstimateTokens st <> usage }
     $(logInfo) $ showMessage amsg'
     case parseToolCall (content amsg') of
@@ -609,7 +604,7 @@ agent = do
               case skip_toolmsg of
                 Left Skipped -> do
                   modifyS $ \st -> st { chatEstimateTokens = st.chatEstimateTokens {apiSkips = st.chatEstimateTokens.apiSkips + 1 }}
-                  liftE $ throwE "Skipped"
+                  effThrow @(ErrorText "chat-error") "Skipped"
                 Right toolmsg -> do
                   $(logInfo) $ showMessage toolmsg
                   modifyS $ \st -> st
@@ -724,15 +719,15 @@ handleToolCall toolCallName args md = do
   -- Find matching tool
   eOutput <-
     case pickConstraint (Proxy @(ToolClass m)) (Proxy @ts) ((== toolCallName) . toolName (Proxy @m)) of
-      Just toolCont -> toolCont $ \tool -> do
-        toolOutput <- lift $ runExceptT $ do
-          input  <- ExceptT $ pure (jsonToInput (Proxy @m) tool args          )
+      Just toolCont -> embedEffT . toolCont $ \tool -> do
+        toolOutput <- errorToEither $ do
+          input <- pureEitherInWith id $ jsonToInput (Proxy @m) tool args
           toolHandlerTextError (Proxy @m) tool input
         case toolOutput of
           Left "Tool Returned Error: SkipOutput" -> return $ Left Skipped
           _ -> return $ Right $ wrapToolOutput toolOutput
         -- Execute tool, tool error is caught and wrapped for agent to handle
-      Nothing       -> liftE . throwE $ "Unknown tool: " <> toolCallName
+      Nothing       -> effThrowIn $ (errorText @"chat-error") $ "Unknown tool: " <> toolCallName
 
   case eOutput of
     Left Skipped -> return $ Left Skipped

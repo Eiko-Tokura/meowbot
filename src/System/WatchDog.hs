@@ -4,7 +4,6 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad (forever, unless)
 import Control.Monad.Effect
-import Module.RS.QQ
 import Data.Kind (Type)
 
 -- watch dog has its own thread

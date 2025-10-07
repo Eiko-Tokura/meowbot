@@ -1,6 +1,6 @@
 module Module.MeowConnection where
 
-import Control.Monad.Effect
+import Control.System
 import Module.RS.QQ
 import Network.WebSockets (Connection)
 
@@ -8,3 +8,5 @@ import Network.WebSockets (Connection)
 MeowConnection
   meowConnection :: !Connection
 |]
+
+instance EventLoop c MeowConnection mods es

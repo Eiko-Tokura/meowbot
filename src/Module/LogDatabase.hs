@@ -36,9 +36,11 @@ withLogDatabase :: (Monad m, ConsFDataList FData (LogDatabase : mods)) => EffT (
 withLogDatabase = runEffTOuter_ LogDatabaseRead LogDatabaseState
 
 instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDatabase] mods
-  => Loadable c LogDatabase mods where
-  initModule _ = return (LogDatabaseRead, LogDatabaseState)
+  => Loadable c LogDatabase mods ies where
+  withModule _ = runEffTOuter_ LogDatabaseRead LogDatabaseState
 
+instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDatabase] mods
+  => EventLoop c LogDatabase mods es where
   afterEvent = do
     RecvSentCQRead {..} <- queryModule @RecvSentCQ
     mrcq <- liftIO $ readTVarIO meowRecvCQ

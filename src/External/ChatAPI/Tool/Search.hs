@@ -4,8 +4,7 @@ module External.ChatAPI.Tool.Search where
 import External.ChatAPI.Tool
 import Search
 import Utils.Text as T
-import Control.Monad.Except
-import Control.Monad.ExceptionReturn
+import Control.Monad.Effect
 import Control.Monad.IO.Class
 
 readGoogleApiKey :: IO (Maybe GoogleSearchApi)
@@ -24,8 +23,8 @@ instance MonadIO m => ToolClass m SearchTool where
   toolName _ _ = "search"
   toolDescription _ _ = "Search the web using Google Search API"
   toolHandler _ _ ((StringT query) :%* ObjT0Nil) = do
-    api  <- effectEWith' (const $ SearchError "no google api key found") $ liftIO readGoogleApiKey
+    api  <- effMaybeInWith (SearchError "no google api key found") $ liftIO readGoogleApiKey
     res  <- liftIO $ search api 7 query
     case res of
-      Left err -> throwError $ SearchError $ "search failed: " <> toText err
+      Left err -> effThrow $ SearchError $ "search failed: " <> toText err
       Right r  -> return $ StringT r :%* ObjT0Nil

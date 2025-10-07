@@ -3,15 +3,11 @@
 -- it is then passed to specific Meow handler to handle the ticks and cron jobs
 module Module.CronTabTickInstance where
 
-import Control.Applicative
 import Control.Concurrent
-import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Monad.Logger
 import Control.Monad
 import Module.RS
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Data.Time
 import MeowBot.BotStructure
 import MeowBot.CronTab
@@ -34,10 +30,21 @@ instance SystemModule CronTabTickModule where
   data ModuleInitData CronTabTickModule = CronTabTickModuleInitData
   data ModuleEvent CronTabTickModule = CronTabTickModuleEvent { cronTabTick :: CronTabTick }
 
-instance Dependency' c CronTabTickModule '[MeowActionQueue] mods => Loadable c CronTabTickModule mods where
-  initModule _ = do
-    recvTick <- liftIO newEmptyTMVarIO
-    return (CronTabTickModuleRead recvTick, CronTabTickModuleState)
+instance Dependency' c CronTabTickModule '[MeowActionQueue] mods => Loadable c CronTabTickModule mods ies where
+  withModule _ act = bracketEffT
+    (do
+      recvTick <- liftIO newEmptyTMVarIO
+      thread <- liftIO $ newCronTabTick recvTick
+      return (recvTick, thread)
+    )
+    ( \(_, thread) -> liftIO $ killThread thread
+    )
+    (\(recvTick, _) -> runEffTOuter_ (CronTabTickModuleRead recvTick) CronTabTickModuleState act
+    )
+
+instance Dependency' c CronTabTickModule '[MeowActionQueue] mods
+  => EventLoop c CronTabTickModule mods es where
+
 
 withCronTabTick :: (MonadMask m, MonadIO m, MeowActionQueue `In` mods, ConsFDataList FData (CronTabTickModule : mods))
   => EffT (CronTabTickModule : mods) es m a

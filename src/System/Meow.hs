@@ -7,6 +7,7 @@ import Module.RS
 
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.System
 
 import MeowBot.BotStructure
 import MeowBot.CommandRule
@@ -48,8 +49,10 @@ type Mods =
   ]
   -- '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
+type MeowErrs = '[SystemError]
+
 -- | The monads the commands run in
-type MeowT mods m = EffT mods '[] m
+type MeowT mods m = EffT mods MeowErrs m
 
 type Meow = MeowT Mods IO
 
@@ -85,6 +88,12 @@ MeowActionQueue
   meowReadsQueries :: TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )]
 |]
 
+instance SystemModule MeowActionQueue where
+  data ModuleInitData MeowActionQueue = MeowActionQueueInitData
+  data ModuleEvent    MeowActionQueue = MeowActionQueueEvent
+
+instance EventLoop c MeowActionQueue mods es where
+
 withMeowActionQueue :: MonadIO m => EffT (MeowActionQueue : mods) es m a -> EffT mods es m a
 withMeowActionQueue = undefined
 
@@ -99,7 +108,3 @@ data BotCommand = BotCommand
   { identifier :: CommandId
   , command    :: Meow [BotAction]
   }
-
----
-
-

@@ -2,11 +2,7 @@
 module External.ChatAPI.Tool.Scrape where
 
 import Control.Monad.Effect
-import Control.Monad.Except
-import Control.Monad.IO.Class
 import Control.Monad.Reader
-import Data.Bifunctor
-import Data.HList hiding (In)
 import External.ChatAPI.MeowToolEnv
 import External.ChatAPI.Tool
 import Module.ConnectionManager
@@ -27,5 +23,5 @@ instance ConnectionManagerModule `In` mods
   toolHandler _ _ ((StringT url) :%* ObjT0Nil) = do
     man <- lift $ asksModule manager
     --asks (manager . getF @ConnectionManagerModule . fst . snd . fst)
-    res <- ExceptT . liftIO $ first ScrapeError <$> scrapeTextRemoveScriptsAndStylesE man (unpack url)
+    res <- baseEitherInWith ScrapeError $ liftIO (scrapeTextRemoveScriptsAndStylesE man (unpack url))
     return $ StringT (TL.toStrict res) :%* ObjT0Nil

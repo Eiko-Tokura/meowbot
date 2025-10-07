@@ -20,11 +20,9 @@ import qualified Data.Text as T
 import qualified Data.Foldable as Foldable
 
 import Control.Applicative
-import Control.Monad.IO.Unlift
 import Control.Monad.Logger
 import Module.RS
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Command.Cat.CatSet
 import Command.Hangman
 
@@ -320,7 +318,15 @@ commandChat = BotCommand Chat $ botT $ do
 
       logger <- askLoggerIO
 
-      asyncAction <- fmap (fmap (\(RSuccess a, _) -> a)) . lift . asyncEffT $
+      asyncAction <- lift
+                      . embedError
+                      . fmap (fmap
+                         (\case
+                           (RSuccess a, _) -> a
+                           (RFailure (EHead e), _) -> effThrow e
+                         )
+                        )
+                      . asyncEffT $
         (do
           (eNewMsg, newStatus) <- ioeResponse
           case eNewMsg of

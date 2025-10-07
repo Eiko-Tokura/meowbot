@@ -33,9 +33,11 @@ instance SystemModule AsyncModule where
 
 
 instance Dependency' c AsyncModule '[MeowActionQueue, LoggingModule] mods
-  => Loadable c AsyncModule mods where
-  initModule _ = return (AsyncRead, AsyncState S.empty)
+  => Loadable c AsyncModule mods ies where
+  withModule _ = runEffTOuter_ AsyncRead (AsyncState S.empty)
 
+instance Dependency' c AsyncModule '[MeowActionQueue, LoggingModule] mods
+  => EventLoop c AsyncModule mods es where
   moduleEvent = do
     asyncs <- getsModule asyncSet
     return $ asum [ AsyncEvent ba <$> waitSTM ba | ba <- S.toList asyncs ]

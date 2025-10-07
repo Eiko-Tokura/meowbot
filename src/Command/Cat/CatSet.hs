@@ -17,10 +17,8 @@ import Data.Proxy
 import Data.Maybe
 import qualified Data.BSeq as BSeq
 import Control.Monad.Trans.Maybe
-import Module.RS
 import Module.MeowTypes
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Control.Monad.Trans
 import Control.Monad
 import Utils.RunDB

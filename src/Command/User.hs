@@ -4,15 +4,12 @@ module Command.User where
 import Command
 import MeowBot.Parser (Parser, (<|>))
 import qualified MeowBot.Parser as MP
-import Control.Monad.IOe
 import MeowBot
 import MeowBot.CommandRule
 import qualified Data.Text as T
 import qualified Data.List as L
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Module.RS
-import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Utils.RunDB hiding (Add)
 import Data.PersistModel
@@ -84,16 +81,16 @@ userParser =
         ruleParser = MP.parseByRead
 
 checkIfIsGroupNeedBeAllowedUsers :: SavedData -> (ChatId, UserId) -> Maybe ()
-checkIfIsGroupNeedBeAllowedUsers sd (GroupChat _, uid) = mIf ((uid, Allowed) `elem` userGroups sd) ()
+checkIfIsGroupNeedBeAllowedUsers sd (GroupChat _, uid) = if (uid, Allowed) `elem` userGroups sd then Just () else Nothing
 checkIfIsGroupNeedBeAllowedUsers _ _ = Nothing
 
 checkUidIn :: SavedData -> UserId -> UserGroup -> Maybe UserId
-checkUidIn sd uid ug = mIf ((uid, ug) `elem` userGroups sd) uid
+checkUidIn sd uid ug = if (uid, ug) `elem` userGroups sd then Just uid else Nothing
 
 checkGroupIn :: SavedData -> ChatId -> GroupGroup -> Maybe ChatId
 checkGroupIn _ (PrivateChat uid) _ = Just (PrivateChat uid)
-checkGroupIn sd g@(GroupChat gid) gg = mIf ((gid, gg) `elem` groupGroups sd) g
+checkGroupIn sd g@(GroupChat gid) gg = if (gid, gg) `elem` groupGroups sd then Just g else Nothing
 
 checkAdminUsers :: SavedData -> UserId -> Maybe UserId
-checkAdminUsers sd uid = mIf ((uid, Admin) `elem` userGroups sd) uid
+checkAdminUsers sd uid = if (uid, Admin) `elem` userGroups sd then Just uid else Nothing
 

@@ -18,14 +18,14 @@ instance SystemModule RecvSentCQ where
   data ModuleInitData RecvSentCQ = RecvSentCQInitData
   data ModuleEvent    RecvSentCQ = RecvSentCQEvent
 
-instance Loadable c RecvSentCQ mods where
-  initModule _ = do
+instance Loadable c RecvSentCQ mods ies where
+  withModule _ act = do
     sentCQVar <- liftIO $ newTVarIO Nothing
     recvCQVar <- liftIO $ newTVarIO Nothing
     rawBSVar  <- liftIO $ newTVarIO Nothing
-    return ( RecvSentCQRead sentCQVar recvCQVar rawBSVar
-           , RecvSentCQState
-           )
+    runEffTOuter_ (RecvSentCQRead sentCQVar recvCQVar rawBSVar) RecvSentCQState act
+
+instance EventLoop c RecvSentCQ mods es where
 
 withRecvSentCQ :: (MonadIO m, ConsFDataList FData (RecvSentCQ : mods)) => EffT (RecvSentCQ : mods) es m a -> EffT mods es m a
 withRecvSentCQ act = do

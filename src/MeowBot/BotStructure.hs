@@ -7,7 +7,6 @@
 module MeowBot.BotStructure
   ( module MeowBot.Data
   , MonadReadOnly(..), MonadReadable(..)
-  , module Control.Monad.IOe
   , module MeowBot.BotStructure
 
   , BotModules(..), BotConfig(..), OverrideSettings(..)
@@ -22,7 +21,6 @@ module MeowBot.BotStructure
   ) where
 
 import Command.Aokana.Scripts
-import Control.Monad.IOe
 import Control.Monad.RS.Class
 import Module.RS
 import Control.Monad.Effect

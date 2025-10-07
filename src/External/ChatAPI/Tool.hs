@@ -19,6 +19,7 @@ module External.ChatAPI.Tool where
 
 -- ... existing imports ...
 import Control.Monad.State
+import Control.Monad.Effect
 import Control.Applicative
 import Data.Maybe
 import Data.Aeson.Types
@@ -429,16 +430,13 @@ class
   {-# MINIMAL toolName, toolDescription, toolHandler #-}
   toolName          :: Proxy m -> Proxy a -> Text
   toolDescription   :: Proxy m -> Proxy a -> Text
-  toolHandler       :: Proxy m -> Proxy a -> ToolInput a -> ExceptT (ToolError a) m (ToolOutput a)
+  toolHandler       :: Proxy m -> Proxy a -> ToolInput a -> EffT '[] '[ToolError a] m (ToolOutput a)
 
   -- | Default tool handler with text error, defined by toolHandler, will also catch unhandled exceptions
-  toolHandlerTextError :: Proxy m -> Proxy a -> ToolInput a -> ExceptT Text m (ToolOutput a)
-  toolHandlerTextError tm t i = ExceptT $ do
-    runExceptT (toolHandler tm t i) >>= \case
-      --Left someEx       -> return $ Left $ "Tool Unhandled Exception: " <> toText someEx
-      Left err  -> return $ Left $ toolErrorHint <> toText err
-      Right val -> return $ Right val
-
+  toolHandlerTextError :: Proxy m -> Proxy a -> ToolInput a -> EffT '[] '[Text] m (ToolOutput a)
+  toolHandlerTextError tm t i = (\case
+      err  -> toolErrorHint <> toText err
+    ) `mapError` toolHandler tm t i
   jsonToInput :: Proxy m -> Proxy a -> Value -> Either Text (ToolInput a)
   jsonToInput _ _ = first toText . parseEither parseJSON
 
@@ -610,10 +608,10 @@ instance MonadIO m => ToolClass m FibonacciTool where
   toolHandler _ _ ((IntT n) :%* ObjT0Nil)
     | n < 0     = do
         liftIO $ putTextLn $ "[TOOL]Negative Fibonacci number " <> tshow n
-        throwE $ FibonacciError "Negative Fibonacci number"
+        effThrow $ FibonacciError "Negative Fibonacci number"
     | n > 10000 = do
         liftIO $ putTextLn $ "[TOOL]Fibonacci number " <> tshow n <> " too large"
-        throwE $ FibonacciError "Fibonacci number too large"
+        effThrow $ FibonacciError "Fibonacci number too large"
     | otherwise = do
         liftIO $ putTextLn $ "[TOOL]Calculating Fibonacci number " <> tshow n
         liftIO $ putTextLn $ "[TOOL]The result is " <> tshow (fib n)
@@ -631,7 +629,7 @@ sanityCheckFibonacciTool = do
   case inputVal of
     IntT 10 :%* ObjT0Nil -> putStrLn "input ok"
     _ -> error "input not ok"
-  res <- runExceptT $ toolHandlerTextError (Proxy @IO) (Proxy @FibonacciTool) inputVal
+  res <- runEffT00 . errorToEither $ toolHandlerTextError (Proxy @IO) (Proxy @FibonacciTool) inputVal
   case res of
     Right v -> -- print its json
       TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
@@ -658,7 +656,7 @@ sanityCheckTimeTool = do
   case inputVal of
     IntT 8 :%* ObjT0Nil -> putStrLn "input ok"
     _ -> error "input not ok"
-  res <- runExceptT $ toolHandlerTextError (Proxy @IO) (Proxy @TimeTool) inputVal
+  res <- runEffT00 . errorToEither $ toolHandlerTextError (Proxy @IO) (Proxy @TimeTool) inputVal
   case res of
     Right v -> -- print its json
       TIO.putStrLn $ TL.toStrict $ TLE.decodeUtf8 $ encode $ toJSON v
@@ -674,4 +672,4 @@ instance MonadIO m => ToolClass m SkipTool where
   data ToolError  SkipTool = SkipOutput deriving (Show)
   toolName _ _ = "skip"
   toolDescription _ _ = "You can skip response using the skip tool, if you think there isn't anything interesting to say. Example output: {\"tool\": \"skip\", \"args\": {}}"
-  toolHandler _ _ ObjT0Nil = ExceptT $ return $ Left SkipOutput
+  toolHandler _ _ ObjT0Nil = effThrow SkipOutput

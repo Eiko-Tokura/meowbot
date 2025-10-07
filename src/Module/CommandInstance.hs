@@ -2,7 +2,6 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.CommandInstance where
 
-import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
@@ -12,7 +11,6 @@ import Module.RecvSentCQ
 import Module.MeowConnection
 import Control.System
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Control.Parallel.Strategies
 import Data.Time
 import Data.UpdateMaybe
@@ -78,12 +76,20 @@ instance SystemModule CommandModule where
 instance Dependency CommandModule 
   '[MeowActionQueue, RecvSentCQ, MeowConnection
   , SModule WholeChat, SModule OtherData, SModule BotConfig
-  , LoggingModule] mods => Loadable FData CommandModule mods where
-  initModule _ = do
+  , LoggingModule] mods => Loadable FData CommandModule mods ies where
+  -- initModule _ = do
+  --   conn <- asksModule meowConnection
+  --   asyncMessage <- liftIO $ async ( receiveData conn )
+  --   return (CommandModuleRead, CommandModuleState asyncMessage)
+  withModule _ act = do
     conn <- asksModule meowConnection
     asyncMessage <- liftIO $ async ( receiveData conn )
-    return (CommandModuleRead, CommandModuleState asyncMessage)
+    runEffTOuter_ CommandModuleRead (CommandModuleState asyncMessage) act
 
+instance Dependency CommandModule 
+  '[MeowActionQueue, RecvSentCQ, MeowConnection
+  , SModule WholeChat, SModule OtherData, SModule BotConfig
+  , LoggingModule] mods => EventLoop FData CommandModule mods es where
   beforeEvent = do -- ^ clear the tvars in each loop
     tvarRCQmsg <- asksModule meowRecvCQ
     tvarSCQmsg <- asksModule meowSentCQ
