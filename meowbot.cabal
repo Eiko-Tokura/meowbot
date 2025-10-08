@@ -193,7 +193,6 @@ library meowbot-lib
                    , Data.BSeq
                    , Data.FilePathFor
                    , Data.HList
-                   , Data.Maybe.Union
                    , Data.PersistModel
                    , Data.Template
                    , Data.UpdateMaybe

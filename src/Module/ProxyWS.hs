@@ -12,15 +12,13 @@ import Module.RecvSentCQ
 import MeowBot.BotStructure
 import MeowBot.Update
 import MeowBot.CQMessage.Convert
-import External.ProxyWS
+import External.ProxyWS as Proxy
 import Network.WebSockets
 import qualified Data.ByteString.Lazy as BL
 import Utils.ByteString
 import Control.Monad.Logger
-import Control.Monad.Trans
 import Control.Monad
 import Parser.Run
-import Parser.Except
 import Data.Maybe
 import Data.Coerce
 import Data.Aeson
@@ -28,8 +26,8 @@ import Control.Concurrent.STM
 
 [makeRSModule|
 ProxyWS
-  State proxyDatas     :: [ProxyData]
-  State pendingProxies :: [ProxyData]
+  State proxyDatas     :: ![ProxyData]
+  State pendingProxies :: ![ProxyData]
 |]
 
 instance SystemModule ProxyWS where
@@ -42,9 +40,49 @@ instance Dependency' c ProxyWS '[SModule WholeChat, SModule BotConfig, SModule O
     proxyDatas <- liftIO $ mapM (uncurry createProxyData) addressesAndIps
     runEffTOuter_ ProxyWSRead (ProxyWSState proxyDatas proxyDatas) act
 
-instance Dependency' c ProxyWS '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, MeowConnection, LoggingModule] mods
+instance
+  ( c ~ FData
+  , Dependency' c ProxyWS '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, MeowConnection, LoggingModule] mods)
   => EventLoop c ProxyWS mods es where
-  -- TODO
+
+  moduleEvent = do
+    proxyDatas' <- getsModule proxyDatas
+    return $ ProxyWSEvent <$> asum [ receiveFromProxy pd | pd <- proxyDatas' ]
+
+  handleEvent (ProxyWSEvent bs) = do
+    conn <- asksModule meowConnection
+    name <- getsS (nameOfBot . botModules)
+    $(logInfo) $ pack $ fromMaybe "喵喵" (maybeBotName name) <> " <- Proxy : " <> take 512 (bsToString bs)
+    liftIO $ sendTextData conn bs
+
+  afterEvent = do
+    mcqmsg <- asksModule meowRecvCQ >>= liftIO . atomically . fmap coerce . readTVar
+    mbs    <- asksModule meowRawByteString >>= liftIO . readTVarIO
+    name  <- getsS (nameOfBot . botModules)
+    proxyDatas' <- getsModule proxyDatas
+    case (mcqmsg, mbs) of
+      (Just cqmsg, Just bs) ->
+        if eventType cqmsg `elem` [LifeCycle] ||
+           eventType cqmsg `elem` [PrivateMessage, GroupMessage] && filterMsg cqmsg
+          then do
+            let cqmsgTyped = decode bs :: Maybe CQMessageObject
+                convertedToArrayStyle = fmap stringToArray cqmsgTyped
+                mbs' = encode <$> convertedToArrayStyle
+            when (eventType cqmsg `elem` [PrivateMessage, GroupMessage]) $ do
+              $(logInfo) $ pack $ fromMaybe "喵喵" (maybeBotName name) <> " -> Proxy : " <> take 512 (bsToString bs)
+              case mbs' of
+                Nothing -> $(logWarn) $ "Failed to convert CQMessageObject to array style: " <> pack (show cqmsgTyped)
+                Just bs' -> do
+                  liftIO $ mapM_ (`sendToProxy` bs') proxyDatas'
+            makeHeader >>= \case
+              Nothing -> return ()
+              Just headers -> do
+                pending <- getsModule pendingProxies
+                mapM_ (\pd -> embedEffT $ Proxy.runProxyWS pd headers) $ pending
+                unless (null pending) $ modifyModule $ \s -> s { pendingProxies = [] }
+          else return ()
+      _ -> return ()
+    where filterMsg cqmsg = isJust $ runParser ($(itemInQ ['!', '！', '/']) >> getItem) (fromMaybe "" $ message cqmsg)
 
 withProxyWS ::
   ( SModule WholeChat `In` mods
@@ -60,6 +98,7 @@ withProxyWS ::
 withProxyWS (ProxyWSInitData {addressesAndIps}) act = do
   proxyDatas <- liftIO $ mapM (uncurry createProxyData) addressesAndIps
   runProxyWS_ ProxyWSRead (ProxyWSState proxyDatas proxyDatas) act
+
 -- data ProxyWS
 -- instance
 --   ( HasSystemRead (TVar (Maybe ReceCQMessage)) r

@@ -2,31 +2,22 @@
 -- | This is a module that provides the function of logging messages into database.
 module Module.LogDatabase where
 
-import Module.RS
-import Control.Monad.Effect
-import Control.Monad.RS.Class
+import Control.Applicative
 import Control.Concurrent.STM
-import Control.Monad.Logger
 import Control.Monad
-import Database.Persist.Sqlite
-import Data.PersistModel
-import Data.Pool
-import Data.Coerce
-import MeowBot.BotStructure
-
-import Module.RecvSentCQ
-import Module.Database
-import Module.Logging
-
 import Control.Monad.Effect
+import Control.Monad.Logger
 import Control.System
-import Module.RS.QQ
-import Module.RS
+import Data.Coerce
+import Data.PersistModel
+import Database.Persist.Sqlite
+import MeowBot.BotStructure
+import Module.Logging
 import Module.MeowTypes
+import Module.RS
+import Module.RS.QQ
+import Module.RecvSentCQ
 
-import Debug.Trace
-import Parser.Run
-import Parser.Except
 
 [makeRModule|
 LogDatabase
@@ -57,10 +48,3 @@ instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModu
           )
       _    -> do
         return ()
-
--- | A tracing function that will only print the message when the flag is in the list.
-traceModeWith :: DebugFlag -> RunningMode -> (a -> String) -> a -> a
-traceModeWith flag ls f a
-  | flag `elem` ls = trace (f a) a
-  | otherwise      = a
-

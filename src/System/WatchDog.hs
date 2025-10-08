@@ -2,7 +2,7 @@ module System.WatchDog where
 
 import Control.Concurrent
 import Control.Concurrent.STM
-import Control.Monad (forever, unless)
+import Control.Monad
 import Control.Monad.Effect
 import Data.Kind (Type)
 
@@ -30,55 +30,72 @@ data WatchDog (a :: Type)
 
 instance Module (WatchDog a) where
   data ModuleRead (WatchDog a) = WatchDogRead
-    { wdExtraState    :: TVar a
-    , wdCheckInterval :: Int -- in seconds
-    , wdCheckCount    :: TVar WatchDogStatus
-    , wdCheckHandle   :: IO Bool
-    , wdAction        :: IO ()
+    { wdExtraStateTVar :: TVar a
+    , wdCheckCountTVar :: TVar WatchDogStatus
     }
   data ModuleState (WatchDog a) = WatchDogState
 
+instance SystemModule (WatchDog a) where
+  data ModuleEvent (WatchDog a)    = WatchDogEvent
+  data ModuleInitData (WatchDog a) = WatchDogInitData
+    { wdExtraState    :: TVar a
+    , wdCheckInterval :: Int -- in seconds
+    , wdCheckHandle   :: TVar a -> IO Bool
+    , wdAction        :: IO ()
+    }
+
 type WatchDogRead a = ModuleRead (WatchDog a)
 
+withWatchDog
+  :: ( MonadIO m
+     , MonadMask m
+     , ConsFDataList FData (WatchDog a : mods)
+     )
+  => ModuleInitData (WatchDog a)
+  -> (WatchDogRead a -> EffT mods es m b)
+  -> EffT mods es m b
+withWatchDog init act = bracketEffT
+  (do
+    wd  <- liftIO $ initWatchDog  init
+    tid <- liftIO $ startWatchDog init wd
+    return (wd, tid)
+  )
+  (\(_, tid) -> liftIO $ killThread tid)
+  (\(wd, _) -> act wd)
+
 -- Function to start the watchdog
-startWatchDog :: WatchDogRead a -> IO ThreadId
-startWatchDog wd = forkIO $ forever $ do
-  threadDelay (wdCheckInterval wd * 1_000_000) -- Convert seconds to microseconds
-  checkStatus wd
+startWatchDog :: ModuleInitData (WatchDog a) -> WatchDogRead a -> IO ThreadId
+startWatchDog init wd = forkIO $ forever $ do
+  threadDelay (wdCheckInterval init * 1_000_000) -- Convert seconds to microseconds
+  checkStatus init wd
 
 -- Function to check the status
-checkStatus :: WatchDogRead a -> IO ()
-checkStatus wd = do
-  statusCount <- readTVarIO (wdCheckCount wd)
-  currentGood <- wdCheckHandle wd
+checkStatus :: ModuleInitData (WatchDog a) -> WatchDogRead a -> IO ()
+checkStatus init wd = do
+  statusCount <- readTVarIO (wdCheckCountTVar wd)
+  currentGood <- wdCheckHandle init init.wdExtraState
   unless currentGood $ do
     putStrLn "WatchDog: Bad Status Detected"
     putStrLn $ "Current Status Count: " ++ show statusCount
   case (statusCount, currentGood) of
     (CountBad n, False) | n == 5  -> do
-        atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
+        atomically $ writeTVar (wdCheckCountTVar wd) (CountBad (n + 1))
         putStrLn $ "WatchDog: Bad Status Detected for " <> show n <> " times, taking action"
-        wdAction wd
+        wdAction init
 
-    (CountGood n, True)           -> atomically $ writeTVar (wdCheckCount wd) (CountGood (n + 1))
-    (CountBad n, False)           -> atomically $ writeTVar (wdCheckCount wd) (CountBad (n + 1))
+    (CountGood n, True)           -> atomically $ writeTVar (wdCheckCountTVar wd) (CountGood (n + 1))
+    (CountBad n, False)           -> atomically $ writeTVar (wdCheckCountTVar wd) (CountBad (n + 1))
 
-    (CountGood _, False)          -> atomically $ writeTVar (wdCheckCount wd) (CountBad 1)
-    (CountBad _, True)            -> atomically $ writeTVar (wdCheckCount wd) (CountGood 1)
+    (CountGood _, False)          -> atomically $ writeTVar (wdCheckCountTVar wd) (CountBad 1)
+    (CountBad _, True)            -> atomically $ writeTVar (wdCheckCountTVar wd) (CountGood 1)
 
 -- Function to initialize the watchdog
 initWatchDog
-  :: TVar a
-  -> Int
-  -> (TVar a -> IO Bool) -- ^ Check handle, using the extra state, and possibly reads other things, determine good or bad
-  -> IO ()
+  :: ModuleInitData (WatchDog a)
   -> IO (WatchDogRead a)
-initWatchDog extraState interval checkHandle action = do
+initWatchDog (WatchDogInitData {wdExtraState}) = do
   checkCount   <- newTVarIO (CountGood 0)
   return $ WatchDogRead
-            { wdExtraState    = extraState
-            , wdCheckInterval = interval
-            , wdCheckCount    = checkCount
-            , wdCheckHandle   = checkHandle extraState
-            , wdAction        = action
+            { wdExtraStateTVar = wdExtraState
+            , wdCheckCountTVar = checkCount
             }

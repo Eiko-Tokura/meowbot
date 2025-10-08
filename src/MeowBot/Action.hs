@@ -1,25 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 module MeowBot.Action where
 
-import MeowBot.BotStructure
-import MeowBot.Update
-import System.Meow
-import Utils.RunDB
-import Control.Concurrent.Async (Async, async)
-import Control.Concurrent.STM
 import Control.Concurrent
-import Control.Monad.Logger
+import Control.Concurrent.Async (Async, async)
 import Control.Monad
 import Control.Monad.Effect
-import Control.Monad.Trans.Maybe
+import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe
 import Data.Maybe
 import Data.PersistModel
+import MeowBot.BotStructure
 import MeowBot.Data.CQHttp.CQCode
+import MeowBot.Update
+import Module.RecvSentCQ
+import System.Meow
 import Utils.Base64
 import Utils.ByteString
-import Module.RecvSentCQ
+import Utils.RunDB
 
 -- | Abstract representation of sending a message to a chat id.
 -- will NOT insert the message into the history.

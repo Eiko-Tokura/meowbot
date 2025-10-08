@@ -40,7 +40,6 @@ import qualified Data.Text.Lazy as TL
 import qualified Data.Vector as V
 import Data.ByteString.Lazy (ByteString)
 import GHC.Generics
-import Control.Monad.Trans.Except
 import Control.DeepSeq (NFData)
 -- import Control.Exception
 import Utils.Text

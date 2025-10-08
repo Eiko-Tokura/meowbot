@@ -1,7 +1,6 @@
 module Module.MeowTypes where
 
 import Module.Database
-import Control.Monad.IO.Class
 import Control.Monad.Effect
 import Control.Monad.Reader
 import Control.Exception

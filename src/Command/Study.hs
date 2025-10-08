@@ -17,8 +17,6 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
-import Module.RS
-import Control.Monad.Effect
 import Control.Monad.RS.Class
 
 import Data.Maybe (listToMaybe, fromMaybe, catMaybes, mapMaybe)

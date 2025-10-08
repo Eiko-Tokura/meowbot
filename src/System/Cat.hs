@@ -8,12 +8,18 @@ import Command.Aokana
 import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
+import Control.Monad.Effect
 import Control.Monad.Trans
 import Control.Monad.Trans.Control
-import Control.Monad.Effect
+import Control.System
+import Data.Coerce
 import Data.Default
+import Data.Maybe
+import Data.PersistModel
+import External.ChatAPI
 import MeowBot
 import MeowBot.CommandRule
+import MeowBot.Data.Book
 import Module.AsyncInstance
 import Module.CommandInstance
 import Module.ConnectionManager
@@ -21,29 +27,21 @@ import Module.CronTabTickInstance
 import Module.Database
 import Module.LogDatabase
 import Module.Logging
+import Module.MeowConnection
 import Module.MeowTypes
+import Module.Prometheus
 import Module.ProxyWS
 import Module.RS
 import Module.RecvSentCQ
-import Module.MeowConnection
-import Module.Prometheus
+import Module.StatusMonitor
 import Network.WebSockets
+import System.Directory
+import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Process (system)
 import System.WatchDog
-import System.Meow
-import Utils.Logging
-import System.IO.Unsafe (unsafeInterleaveIO)
-
-import System.Directory
-import Data.Coerce
-import Data.Maybe
 import Text.Read (readMaybe)
-
-import Control.System
-import Data.PersistModel
-import External.ChatAPI
+import Utils.Logging
 import Utils.Persist
-import MeowBot.Data.Book
 
 botLoop :: Meow never_returns
 botLoop = do
@@ -111,16 +109,28 @@ pingpongOptions = defaultPingPongOptions
 
 runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
-  botm <- embedEffT $ botInstanceToModule bot
+  botm     <- embedEffT $ botInstanceToModule bot
+  meowStat <- liftIO $ initTVarMeowStatus
   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
+      watchDog  = listToMaybe $ botWatchDogFlags bot
+
+      checkHandle = fmap (== MeowOnline) . readTVarIO
+      mWatchDogInit = (\(WatchDogFlag interval action) -> WatchDogInitData meowStat interval checkHandle (void $ system action)) <$> watchDog
+
   AllData wc bc od <- embedEffT $ initAllData botconfig
-  embedError $ runSModule_ od $ runSModule_ wc $ runSModule_ bc
+  embedNoError
+    $ effAddLogCat' (LogCat botm.botId)
+    $ runSModule_ od
+    $ runSModule_ wc
+    $ runSModule_ bc
     $ ( case botRunFlag bot of
           RunClient addr port -> void . withClientConnection addr port
           RunServer addr port ->        withServerConnection addr port
       )
     $ withMeowActionQueue
     $ withRecvSentCQ
+    $ withModule (StatusMonitorModuleInitData meowStat)
+    $ maybe id (\init -> withWatchDog init . const) mWatchDogInit
     $ withCronTabTick
     $ withProxyWS (ProxyWSInitData [(add, ip) | ProxyFlag add ip <- bot.botProxyFlags])
     $ withConnectionManager

@@ -47,7 +47,7 @@ commandUpdater = BotCommand Updater $ botT $ do
                                 (updateGroupListInMapWith gids NothingYet)
               modify $ _selfInfo ?~ s'
               return []
-        return $ pure $ BAQueryAPI [fmap nextStep . parseResponse]
+        return $ pure $ BARawQueryCallBack [fmap nextStep . parseResponse]
 
   withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
     utcTime <- liftIO getCurrentTime
@@ -77,7 +77,7 @@ commandUpdater = BotCommand Updater $ botT $ do
                                            } }
 
     parsers <- queryAPI conn `mapM` [GetGroupMemberInfo gid selfId False | gid <- fst <$> updateNeeded]
-    return $ pure $ BAQueryAPI [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
+    return $ pure $ BARawQueryCallBack [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
 
 withExpireTimeDo
   :: (MonadIO m)

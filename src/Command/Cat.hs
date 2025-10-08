@@ -21,10 +21,8 @@ import Control.Applicative
 import Control.Monad.Trans
 import Control.Monad.Logger
 import Control.Monad.Trans.Maybe
-import Module.RS
 import Module.Logging
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Control.Monad.Except
 import Control.Concurrent
 

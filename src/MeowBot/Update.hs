@@ -8,16 +8,10 @@ import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Concurrent.STM
 import Control.Lens
-import Control.Monad
-import Control.Monad.Effect
-import Control.Monad.IO.Class
-import Control.Monad.Logger
-import Module.RS
 import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Control.Parallel.Strategies
 import Data.Additional
-import Data.Bifunctor
 import Data.Coerce
 import Data.Time.Clock
 import Data.UpdateMaybe
@@ -45,9 +39,9 @@ savedDataPath :: BotName -> FilePath
 savedDataPath (BotName Nothing)  = "savedData"
 savedDataPath (BotName (Just n)) = "savedData-" ++ n
 
-makeHeader :: MonadReadable AllData m => m (Maybe Headers)
+makeHeader :: MonadReadable OtherData m => m (Maybe Headers)
 makeHeader = do
-  sid <- queries (fmap selfId . selfInfo . otherdata)
+  sid <- queries (fmap selfId . selfInfo)
   return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
 
 increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m Int

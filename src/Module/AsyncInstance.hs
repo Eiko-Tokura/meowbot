@@ -2,24 +2,17 @@
 {-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.AsyncInstance where
 
-import Module.RS
-import Control.Monad.Effect
-import Control.Monad.RS.Class
+import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
-import Control.Monad.Logger
-import Control.Applicative
-import qualified Data.Set as S
-
 import Control.Monad.Effect
+import Control.Monad.Logger
 import Control.System
-import Module.Logging
-import Module.RS.QQ
 import Module.Async
+import Module.Logging
 import System.Meow
-import MeowBot.BotStructure
 import Utils.Lens
-import Language.Haskell.TH
+import qualified Data.Set as S
 
 instance Module AsyncModule where
   data    ModuleRead  AsyncModule = AsyncRead
@@ -56,36 +49,3 @@ withAsyncModule ::
   )
   => EffT (AsyncModule : mods) es m a -> EffT mods es m a
 withAsyncModule = runEffTOuter_ AsyncRead (AsyncState S.empty)
-
--- instance HasSystemRead (TVar [Meow [BotAction]]) r => MeowModule r AllData AsyncModule where
---   data ModuleLocalState AsyncModule  = AsyncModuleL { asyncSet :: S.Set (Async (Meow [BotAction])) }
---   data ModuleEarlyLocalState AsyncModule = AsyncEarlyLocalState
---   data ModuleGlobalState AsyncModule = AsyncModuleG
---   data ModuleEvent AsyncModule       = AsyncEvent { completedAsync :: Async (Meow [BotAction]), meowAction :: Meow [BotAction] } -- ^ the (completed) async handle and the action to run
---   data ModuleInitDataG AsyncModule   = AsyncInitDataG
---   data ModuleInitDataL AsyncModule   = AsyncInitDataL
--- 
---   getInitDataG _ = (Just AsyncInitDataG, empty)
--- 
---   getInitDataL _ = (Just AsyncInitDataL, empty)
--- 
---   initModule _ _ = return AsyncModuleG
--- 
---   initModuleLocal _ _ _ _ _ = return $ AsyncModuleL S.empty
--- 
---   initModuleEarlyLocal _ _ _ = return AsyncEarlyLocalState
--- 
---   quitModule _ = do
---     AsyncModuleL asyncs <- readModuleStateL (Proxy @AsyncModule)
---     liftIO $ mapM_ cancel asyncs
--- 
---   moduleEvent _ = do
---     AsyncModuleL asyncs <- readModuleStateL (Proxy @AsyncModule)
---     return $ asum [ AsyncEvent ba <$> waitSTM ba | ba <- S.toList asyncs ]
--- 
---   moduleEventHandler p (AsyncEvent completedAsync meowAct) = do
---     $(logDebug) "Async Event Completed"
---     modifyModuleState p $ AsyncModuleL . S.delete completedAsync . asyncSet
---     meowList <- asks (readSystem . snd)
---     liftIO $ atomically $ modifyTVar meowList (++ [meowAct])
--- 

@@ -380,8 +380,8 @@ weightPairsToPoints ws =
 innerTo2D :: LA.Vector Double -> LA.Herm Double -> (LA.Vector Double, LA.Vector Double)
 innerTo2D d w =
   let diagDSqrtInv = LA.diag (LA.cmap sqrt d)
-      dimension = LA.size d
-      identity = LA.ident dimension
+      -- dimension = LA.size d
+      -- identity = LA.ident dimension
       l_sym = LA.sym $ diagDSqrtInv LA.<> LA.unSym w LA.<> diagDSqrtInv
       --- identity
       (_eigenVals, eigenVects) = LA.eigSH l_sym

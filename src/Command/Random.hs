@@ -6,10 +6,7 @@ import MeowBot
 import Probability.Foundation
 import MeowBot.Parser as MP
 import qualified Data.Text as T
-import Module.RS
 import Control.Monad.Trans
-import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Control.Monad.Trans.Maybe
 
 data RandomQuery

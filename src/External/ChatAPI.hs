@@ -22,7 +22,6 @@ import Control.DeepSeq
 import Control.Exception (try, SomeException)
 import Control.Monad.Trans
 import Control.Monad.Effect
-import Control.Monad.Except
 import Control.Monad.Logger
 import Data.Aeson as A
 import Data.Bifunctor
@@ -41,7 +40,6 @@ import Module.Logging
 
 import Parser.Run
 
-import Data.Text (Text)
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Utils.TokenEstimator (estimateTokens)
 import Utils.Text
@@ -469,7 +467,7 @@ fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (Tool
 fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
   utcTime <- liftIO getCurrentTime
-  let tokenPrice = modelPrice (chatModel @md) utcTime
+  let tokenPrice  = modelPrice (chatModel @md) utcTime
       requestBody = generateRequestBody @md @ts @m model mSys msg --promptMessage prompt
   $(logInfo) $ T.intercalate "\n" $
     [ ""

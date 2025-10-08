@@ -3,9 +3,7 @@ module External.ChatAPI.MeowToolEnv where
 import Control.Applicative
 import Control.Monad.Trans.Maybe
 import Control.Monad
-import Control.Monad.IO.Unlift
 import Control.Monad.Reader (ReaderT(..))
-import Control.Monad.Logger
 import Module.RS
 import Data.TypeList
 import Control.Lens

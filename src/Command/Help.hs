@@ -14,9 +14,6 @@ import qualified MeowBot.Parser as MP
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Module.RS
-import Control.Monad.Effect
-import Control.Monad.RS.Class
 
 commandHelp :: BotCommand
 commandHelp = BotCommand Help $ botT $ do

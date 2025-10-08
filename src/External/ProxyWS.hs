@@ -19,11 +19,13 @@ import Control.Concurrent.STM.TBQueue
 import Control.Concurrent.STM
 import Control.Concurrent
 import Control.Monad
-import Control.Monad.IO.Class
+import Control.Monad.Effect
+import Control.Monad.Trans.Control
 import Control.Exception
 import Control.Applicative
 import Data.Maybe (fromMaybe)
 import Utils.Logging
+import Module.Logging
 
 -- import qualified Data.ByteString.Lazy as BL
 import qualified Data.ByteString.Char8 as B8
@@ -114,7 +116,7 @@ createProxyData addr port = do
 
 -- | Create a proxy client thread for a WebSocket connection, using the provided headers. It will avoid creating multiple proxies.
 -- wraps 'proxyClientForWS' and starts a new thread for it.
-runProxyWS :: ProxyData -> Headers -> LoggingT IO ()
+runProxyWS :: ProxyData -> Headers -> EffT '[LoggingModule] '[] IO ()
 runProxyWS (ProxyData addr port chans running) headers = do
   alreadyRunning <- liftIO . atomically $ readTVar running
   unless alreadyRunning $ do
@@ -122,36 +124,37 @@ runProxyWS (ProxyData addr port chans running) headers = do
     void $ proxyClientForWS (Just chans) headers addr port
 
 -- | Create a proxy client for a WebSocket connection, using the provided headers and TBQueues.
-proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> LoggingT IO (TBQueue a, TBQueue a)
+proxyClientForWS :: a ~ ByteString => Maybe (TBQueue a, TBQueue a) -> Headers -> AddressString -> PortInt -> EffT '[LoggingModule] '[] IO (TBQueue a, TBQueue a)
 proxyClientForWS ioChans headers address port = do
   chanIn  <- maybe (liftIO $ newTBQueueIO tbQueueBound) (return . fst) ioChans
   chanOut <- maybe (liftIO $ newTBQueueIO tbQueueBound) (return . snd) ioChans
-  proxyClient Nothing chanIn chanOut `logForkFinally` \case
-    Left e  -> do
+  proxyClient Nothing chanIn chanOut `forkEffTFinally` \case
+    (RFailure e, _)  -> do
       $(logWarn) $ "Connection to " <> T.pack address <> ":" <> T.pack (show port) <> " broken: " <> T.pack (show e)
       $(logWarn) "Restarting in 30 seconds owo"
       asyncDelay <- liftIO $ async $ threadDelay 30_000_000
       let discardWhileWaiting wait = do
-            delayEnded <- atomically $ pure True <* waitSTM wait <|> pure False <* readTBQueue chanIn
+            delayEnded <- atomically $ (True <$ waitSTM wait) <|> False <$ readTBQueue chanIn
             unless delayEnded $ discardWhileWaiting wait
       liftIO $ discardWhileWaiting asyncDelay
       void $ proxyClientForWS (Just (chanIn, chanOut)) headers address port
-    Right _ -> return ()
+    (RSuccess _, _) -> return ()
   return (chanIn, chanOut)
   where
+    proxyClient :: a ~ ByteString => Maybe (Async a) -> TBQueue a -> TBQueue a -> EffT '[LoggingModule] '[] IO ()
     proxyClient masync chanIn chanOut = do
-      logThroughCont (runClientWith address port "" defaultConnectionOptions headers) $ \conn -> do
+      liftBaseWith $ \runInBase -> runClientWith address port "" defaultConnectionOptions headers $ \conn -> void . runInBase $ do
         $(logInfo) $ "Connected to " <> T.pack address <> ":" <> T.pack (show port)
         $(logInfo) $ "Headers: " <> T.pack (show headers)
         clientLoop masync conn (chanIn, chanOut)
-    clientLoop :: a ~ ByteString => Maybe (Async a) -> Connection -> (TBQueue a ,TBQueue a) -> LoggingT IO never_returns
+    clientLoop :: a ~ ByteString => Maybe (Async a) -> Connection -> (TBQueue a ,TBQueue a) -> EffT '[LoggingModule] '[] IO never_returns
     clientLoop asyncReceiveData conn (chanIn, chanOut) = do
       asyncReceiveData' <- fromMaybe (liftIO . async $ receiveData conn) (return <$> asyncReceiveData)
       inOrOut <- liftIO . atomically $ Left <$> readTBQueue chanIn <|> Right <$> waitSTM asyncReceiveData'
       case inOrOut of
         Left  msg -> do
           -- putStrLn "Sending message to proxy : " >> putStr (bsToString msg)
-          liftIO (sendTextData conn msg) `logCatch` \e -> do
+          liftIOAt (sendTextData conn msg) `effCatch` \e -> do
             $(logError) $ "Error sending message to proxy: " <> T.pack (show (e :: SomeException))
             liftIO $ uninterruptibleCancel asyncReceiveData' -- cancel the async receive thread
             liftIO $ throwIO e

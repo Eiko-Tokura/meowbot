@@ -20,8 +20,6 @@ import Control.Monad.Logger
 import Control.Monad.RS.Class
 import Control.Monad.Effect
 import Data.Aeson
-import Data.Bifunctor
-import Data.HList
 import Data.PersistModel
 import Data.UpdateMaybe
 import MeowBot.API
@@ -30,7 +28,6 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
 import MeowBot.Prelude
-import MeowBot.Update
 import Module.Logging
 import Module.Async
 import Module.AsyncInstance
@@ -38,7 +35,6 @@ import Network.WebSockets (Connection, sendTextData)
 import System.Meow
 import Utils.ListComp
 import Utils.RunDB
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.List.NonEmpty   as NE
 import qualified Data.Set             as S
 import qualified Data.Text            as T
@@ -73,7 +69,10 @@ doBotAction _    (BAAsync act)           = do
 --modify $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct)      = doBotAction conn (BAAsync $ return <$> pAct)
 doBotAction _    (BASimpleAction meow)   = meow
-doBotAction _    (BAQueryAPI contMaybes) = do
+doBotAction conn (BAQueryAPI (SomeQueryAPI query cont)) = do
+  cont' <- queryAPI conn query
+  doBotAction conn (BARawQueryCallBack $ pure $ fmap cont . cont')
+doBotAction _    (BARawQueryCallBack contMaybes) = do
   tvarQueries <- asksModule meowReadsQueries
   utcTime <- liftIO getCurrentTime
   liftIO . atomically $ do

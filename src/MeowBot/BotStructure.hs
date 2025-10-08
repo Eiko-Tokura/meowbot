@@ -10,7 +10,7 @@ module MeowBot.BotStructure
   , module MeowBot.BotStructure
 
   , BotModules(..), BotConfig(..), OverrideSettings(..)
-  , GroupId(..), UserId(..), unUserId, ChatId(..)
+  , GroupId(..), UserId(..), ChatId(..)
 
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
   , UserGroup(..), GroupGroup(..)
@@ -24,7 +24,6 @@ import Command.Aokana.Scripts
 import Control.Monad.RS.Class
 import Module.RS
 import Control.Monad.Effect
-import Control.Monad.RS.Class
 import Control.Parallel.Strategies
 import Data.Additional
 import Data.Additional.Saved

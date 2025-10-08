@@ -11,12 +11,10 @@ import Control.System
 
 import MeowBot.BotStructure
 import MeowBot.CommandRule
-import Network.WebSockets hiding (Response)
 import qualified Data.ByteString.Lazy as BL
 
 import Module.Logging
 import Module.LogDatabase
-import Module.Command
 import Module.Async
 import Module.ProxyWS
 import Module.ConnectionManager
@@ -28,7 +26,7 @@ import Module.MeowConnection
 import Module.Prometheus
 
 import Data.UpdateMaybe
-import Data.Kind
+import Data.Aeson
 
 -- | The modules loaded into the bot
 type Mods =
@@ -37,6 +35,7 @@ type Mods =
   , ConnectionManagerModule
   , ProxyWS
   , CronTabTickModule
+  , StatusMonitorModule
   , RecvSentCQ
   , MeowActionQueue
   , MeowConnection
@@ -56,6 +55,10 @@ type MeowT mods m = EffT mods MeowErrs m
 
 type Meow = MeowT Mods IO
 
+data SomeQueryAPI
+  = forall queryType. (FromJSON (WithEcho (QueryAPIResponse queryType)), ToJSON (ActionForm (QueryAPI queryType)))
+  => SomeQueryAPI (QueryAPI queryType) (QueryAPIResponse queryType -> Meow [BotAction])
+
 ------------------------------------------------------------------------
 data BotAction
   = BASendPrivate
@@ -69,6 +72,8 @@ data BotAction
   | BAActionAPI
       ActionAPI  -- ^ General actionAPI, the action to perform
   | BAQueryAPI
+      SomeQueryAPI
+  | BARawQueryCallBack
       [BL.ByteString -> Maybe (Meow [BotAction])] -- ^ run queries
   | BAAsync
       (Async (Meow [BotAction])) -- ^ the action to run asynchronously, which allows much powerful even continuously staged actions.

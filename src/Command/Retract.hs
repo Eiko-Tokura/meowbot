@@ -13,9 +13,6 @@ import qualified Data.Text as T
 
 import Control.Monad
 import Control.Monad.Trans.Maybe
-import Module.RS
-import Control.Monad.Effect
-import Control.Monad.RS.Class
 
 --data Pattern a where
 --  PString      :: String    -> Pattern String

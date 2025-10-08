@@ -15,8 +15,6 @@ import External.ChatAPI
 
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Module.RS
-import Control.Monad.Effect
 import Control.Monad.RS.Class
 
 commandSystem :: BotCommand

@@ -5,7 +5,6 @@ import External.ChatAPI.Tool
 import Search
 import Utils.Text as T
 import Control.Monad.Effect
-import Control.Monad.IO.Class
 
 readGoogleApiKey :: IO (Maybe GoogleSearchApi)
 readGoogleApiKey = do
