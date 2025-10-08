@@ -41,6 +41,10 @@ spaces0 :: (MonadZero m, Alternative m, MonadItem Char m) => m String
 spaces0 = many space
 {-# INLINE spaces0 #-}
 
+bool :: (MonadZero m, Alternative m, MonadItem Char m) => m Bool
+bool = ((string "True" <|> string "true") >> return True) <|> ((string "False" <|> string "false") >> return False)
+{-# INLINE bool #-}
+
 -- | Non-negative integer
 nint :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => m i
 nint = read <$> some digit
@@ -48,12 +52,8 @@ nint = read <$> some digit
 
 -- | Integer, possibly negative
 int :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => m i
-int = read <$> (some digit <|> just '-' <:> some digit)
+int = read <$> (digits <|> just '-' <:> digits)
 {-# INLINE int #-}
-
-bool :: (MonadZero m, Alternative m, MonadItem Char m) => m Bool
-bool = ((string "True" <|> string "true") >> return True) <|> ((string "False" <|> string "false") >> return False)
-{-# INLINE bool #-}
 
 -- | Integer in the range [a, b]
 intRange :: forall i m. (MonadZero m, Alternative m, MonadItem Char m, Integral i, Read i) => i -> i -> m i

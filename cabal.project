@@ -1,6 +1,6 @@
 packages:
   ./*.cabal
-  ./submodules/item/
+  ./item/
   ./submodules/monad-effect/
   ./submodules/monad-effect-logging/
   ./submodules/monad-effect-database/

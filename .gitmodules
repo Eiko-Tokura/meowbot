@@ -4,9 +4,6 @@
 [submodule "submodules/monad-effect-database"]
 	path = submodules/monad-effect-database
 	url = Qute:~/git/rst-database
-[submodule "submodules/item"]
-	path = submodules/item
-	url = Qute:~/git/item
 [submodule "submodules/monad-effect-logging"]
 	path = submodules/monad-effect-logging
 	url = Qute:~/git/monad-effect-logging
