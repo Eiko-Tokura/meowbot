@@ -7,6 +7,7 @@ import Parser.Run
 import Parser.Except
 
 import Data.List (isPrefixOf)
+import Data.Maybe
 import Data.Either
 
 import Control.Monad.Trans
@@ -35,14 +36,14 @@ traceModeWith flag ls f a
 
 parseArgs :: ParserE [String] String String ([String], [BotInstance])
 parseArgs = (,) <$>
-  (liftR1 just "+GLOBAL" >> liftR2 manyTill (just "-GLOBAL") getItem <* liftR1 just "-GLOBAL")
+  (fmap (fromMaybe []) . optMaybe $ (liftR1 just "+GLOBAL" >> liftR2 manyTill (just "-GLOBAL") getItem <* liftR1 just "-GLOBAL"))
   <*>
   many (do
     runFlag <- asum
       [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
       , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
       ]
-    localFlags <- liftR1 just "+LOCAL" >> liftR2 manyTill (just "-LOCAL") getItem <* liftR1 just "-LOCAL"
+    localFlags <- fmap (fromMaybe []) . optMaybe $ liftR1 just "+LOCAL" >> liftR2 manyTill (just "-LOCAL") getItem <* liftR1 just "-LOCAL"
     restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| watchDogParser |+| unrecognizedFlag)
     return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights $ rights restFlags) localFlags
   ) <* liftR end
