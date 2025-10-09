@@ -7,6 +7,7 @@ import Command
 import Command.Aokana
 import Control.Concurrent
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Control.Monad.Effect
 import Control.Monad.Trans
@@ -146,7 +147,7 @@ withServerConnection
   => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
 withServerConnection addr port act = do
   $(logInfo) $ "Running bot server, listening on " <> tshow addr <> ":" <> tshow port
-  liftWith $ \run -> runServer addr port $ \pending -> do
+  effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e)) (liftWith $ \run -> runServer addr port $ \pending -> do
     conn <- acceptRequest pending
 
     withPingPong pingpongOptions conn $ \conn -> void $ run $ do
@@ -155,7 +156,11 @@ withServerConnection addr port act = do
       runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
         (\e -> $logError $ "ERROR In connection with client : " <> tshow e)
 
-    void . run $ $logInfo $ "Disconnected from client"
+    void . run $ $logInfo $ "Disconnected from client") `effCatch` \(e :: ErrorText "uncaught") -> do
+      $logError $ "Uncaught Error In server: " <> toText e
+      $logInfo "Restarting server in 20 seconds"
+      liftIO $ threadDelay 20_000_000
+      withServerConnection addr port act
 
 withClientConnection
   :: ( ConsFDataList FData (MeowConnection : mods)
@@ -164,14 +169,18 @@ withClientConnection
   => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
 withClientConnection addr port act = do
   $(logInfo) $ "Running bot client, connecting to " <> tshow addr <> ":" <> tshow port
-  liftWith $ \run -> runClient addr port "" $ \conn -> do
+  effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e)) (liftWith $ \run -> runClient addr port "" $ \conn -> do
 
     void . run $ $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
     withPingPong pingpongOptions conn $ \conn -> void . run $ do
 
-      $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
       runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
         (\e -> $logError $ "ERROR In connection with server : " <> tshow e)
+    ) `effCatch` \(e :: ErrorText "uncaught") -> do
+      $logError $ "Uncaught Error In client: " <> toText e
+      $logInfo "Restarting client in 20 seconds"
+      liftIO $ threadDelay 20_000_000
+      withClientConnection addr port act
 
 -- runBotServer ip port bot initglobs glob el = do
 --   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
@@ -239,7 +248,7 @@ withClientConnection addr port act = do
 --   $(logInfo) $ "Bot instance finished successfully."
 
 botInstanceToModule :: BotInstance -> EffT '[LoggingModule] NoError IO BotModules
-botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags) = do
+botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags _) = do
     $(logInfo) $ "\n### Starting bot instance: " <> tshow bot
     $(logInfo) $ "Running mode: "   <> tshow mode
     $(logInfo) $ "Running flags: "  <> tshow runFlag

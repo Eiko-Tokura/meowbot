@@ -43,7 +43,8 @@ instance SystemModule StatusMonitorModule where
 
 instance Loadable c StatusMonitorModule mods ies where
   withModule (StatusMonitorModuleInitData tvar) act = do
-    runEffTOuter_ StatusMonitorModuleRead (StatusMonitorModuleState undefined Nothing tvar) act
+    asyncInit <- liftIO $ async newTick
+    runEffTOuter_ StatusMonitorModuleRead (StatusMonitorModuleState asyncInit Nothing tvar) act
 
 instance Dependency' c StatusMonitorModule '[RecvSentCQ, MeowConnection, LoggingModule] mods => EventLoop c StatusMonitorModule mods es where
   moduleEvent = do

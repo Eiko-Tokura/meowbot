@@ -99,8 +99,13 @@ instance SystemModule MeowActionQueue where
 
 instance EventLoop c MeowActionQueue mods es where
 
-withMeowActionQueue :: MonadIO m => EffT (MeowActionQueue : mods) es m a -> EffT mods es m a
-withMeowActionQueue = undefined
+withMeowActionQueue
+  :: (ConsFDataList FData (MeowActionQueue : mods), MonadIO m)
+  => EffT (MeowActionQueue : mods) es m a -> EffT mods es m a
+withMeowActionQueue act = do
+  varActions <- liftIO $ newTVarIO []
+  varQueries <- liftIO $ newTVarIO []
+  runEffTOuter_ (MeowActionQueueRead varActions varQueries) MeowActionQueueState act
 
 overrideMeow :: OverrideSettings -> Meow a -> Meow a
 overrideMeow override = localByState $ \bc -> bc { overrideSettings = Just override }

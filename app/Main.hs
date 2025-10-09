@@ -24,8 +24,6 @@ import Module.Prometheus
 import qualified Data.Text.IO as TIO
 import Data.PersistModel (migrateAll)
 
--- import GHC.Conc (forkIO)
--- import GHC.Debug.Stub
 import Debug.Trace
 
 -- | A tracing function that will only print the message when the flag is in the list.
@@ -35,14 +33,18 @@ traceModeWith flag ls f a
   | otherwise      = a
 
 
-parseArgs :: ParserE [String] String String [BotInstance]
-parseArgs = many (do
-  runFlag <- asum
-    [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
-    , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
-    ]
-  restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| watchDogParser |+| unrecognizedFlag)
-  return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights $ rights restFlags)
+parseArgs :: ParserE [String] String String ([String], [BotInstance])
+parseArgs = (,) <$>
+  (liftR1 just "+GLOBAL" >> liftR2 manyTill (just "-GLOBAL") getItem <* liftR1 just "-GLOBAL")
+  <*>
+  many (do
+    runFlag <- asum
+      [ liftR1 just "--run-client" >> RunClient <$> withE "Usage: --run-client <ip> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
+      , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
+      ]
+    localFlags <- liftR1 just "+LOCAL" >> liftR2 manyTill (just "-LOCAL") getItem <* liftR1 just "-LOCAL"
+    restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| watchDogParser |+| unrecognizedFlag)
+    return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights $ rights restFlags) localFlags
   ) <* liftR end
     where
       identityParser = asum
@@ -56,7 +58,7 @@ parseArgs = many (do
       debugParser = liftR $ asum [ just "--debug-json" >> return DebugJson, just "--debug-cqmsg" >> return DebugCQMessage, just "--debug-other" >> DebugOther <$> getItem ]
       proxyParser = do
         liftR1 just "--proxy"
-        ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> (readE "cannot read the port number" nonFlag)
+        ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
       logParser = LogFlag <$> liftR1 just "--log" >> withE "--log needs a file path argument" (LogFlag <$> nonFlag)
       watchDogParser = liftR1 just "--watchdog" >> WatchDogFlag <$> readE "--watchdog <interval> <action>" nonFlag <*> withE "--watchdog <interval> <action>" nonFlag
       unrecognizedFlag = do
@@ -73,24 +75,28 @@ parseArgs = many (do
 main :: IO ()
 main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   args       <- liftIO getArgs
+  let parsed = runParserE argumentHelp parseArgs args
+      globalFlags = either (const []) fst parsed
+
   stdoLogger <- liftIO createStdoutBaseLogger
   fileLogger <- liftIO $ createFileLogger "meowbot.log"
   let baseLogger = stdoLogger <> fileLogger
 
-  loggerInit <- pureEitherInWith id $ defaultLoadFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) args
-  dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll args
-  promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs (Just 6001) (Just ["metrics"]) args
+  loggerInit <- pureEitherInWith id $ defaultLoadFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
+  dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
+  promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs (Just 6001) (Just ["metrics"]) globalFlags
 
   flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withModule dbInit $ do
     $logDebug $ pack $ "Arguments: " ++ show args
-    case runParserE argumentHelp parseArgs args of
-      Left errMsg -> $(logError) (pack errMsg)
-      Right []    -> embedNoError $ runBots [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] [] []] >> halt
-      Right bots  -> embedNoError $ runBots bots >> halt
+    $logDebug $ pack $ "Parsed: " ++ show parsed
+    case parsed of
+      Left errMsg     -> $(logError) (pack errMsg)
+      Right (_, [])   -> embedNoError $ runBots [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] [] [] []] >> halt
+      Right (_, bots) -> embedNoError $ runBots bots >> halt
   where halt = lift (threadDelay maxBound) >> halt
         argumentHelp =
           """
-          Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]
+          Usage: MeowBot [+GLOBAL [other global flags] -GLOBAL] [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]
             --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server
             --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection
             --name <name>             : set the name of the bot, with empty default to \"喵喵\"
@@ -106,4 +112,4 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
           
           Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags.
           """
-              
+

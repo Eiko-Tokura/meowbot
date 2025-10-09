@@ -25,6 +25,9 @@ instance
     }
   data ModuleState CronTabTickModule = CronTabTickModuleState
 
+instance IsLogCat CronTabTickModule where
+  logTypeDisplay _ = "CronTab"
+
 instance SystemModule CronTabTickModule where
   data ModuleInitData CronTabTickModule = CronTabTickModuleInitData
   data ModuleEvent CronTabTickModule = CronTabTickModuleEvent { cronTabTick :: CronTabTick }
@@ -46,9 +49,9 @@ instance Dependency' c CronTabTickModule '[MeowActionQueue, LoggingModule] mods
 
   moduleEvent = do
     asyncTick <- asksModule recvTick
-    return $ CronTabTickModuleEvent <$> readTMVar asyncTick
+    return $ CronTabTickModuleEvent <$> takeTMVar asyncTick
 
-  handleEvent (CronTabTickModuleEvent tick) = do
+  handleEvent (CronTabTickModuleEvent tick) = effAddLogCat' (LogCat CronTabTickModule) $ do
     $logDebug "CronTab Event Received"
     meowList <- asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick, periodicCostHandleCronTabTick tick])

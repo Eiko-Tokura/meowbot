@@ -86,6 +86,7 @@ data BotInstance = BotInstance
   , botProxyFlags    :: [ProxyFlag]
   , botLogFlags      :: [LogFlag]
   , botWatchDogFlags :: [WatchDogFlag]
+  , botLocalFlags    :: [String] -- ^ other unrecognized local flags
   } deriving (Eq, Show)
 
 data BotModules = BotModules
