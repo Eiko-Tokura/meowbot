@@ -43,12 +43,12 @@ data BalanceAction
 type NewWalletCreated = Bool
 withCreateWalletIfNotExists :: OwnerId -> (NewWalletCreated -> WalletId -> Meow a) -> Meow a
 withCreateWalletIfNotExists oid action = do
-  mWallet <- runDB $ getBy $ UniqueOwnerId oid
+  mWallet <- runMeowDB $ getBy $ UniqueOwnerId oid
   utcTime <- liftIO getCurrentTime
   case mWallet of
     Just (Entity wid _) -> action False wid
     Nothing -> do
-      wid <- runDB $ insert $ newEmptyWallet utcTime oid
+      wid <- runMeowDB $ insert $ newEmptyWallet utcTime oid
       action True wid
 
 -- | Determine which bots and (bot, chat) pairs are owned by the wallet
@@ -99,7 +99,7 @@ balanceAction mBotName scid (AOwn oid mcm bid cid) = do
   mWarnCid <- warningIfNotInGroup bid cid
   mWarnOid <- warningIfNotInGroup bid (ownerChatId oid)
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
-    runDB $ do
+    runMeowDB $ do
       mLastRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]
       case (mLastRecord, mcm) of
         (Just (Entity _ bcm), Just cm) -> insert_ bcm
@@ -126,7 +126,7 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
   utcTime <- liftIO getCurrentTime
   mWarnOid <- warningIfNotInGroup bid (ownerChatId oid)
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
-    runDB $ do
+    runMeowDB $ do
       mLastRecord <- selectFirst [BotCostModelBotId ==. bid] [Desc BotCostModelInserted]
       case (mLastRecord, mcm) of
         (Just (Entity _ bcm), Just cm) -> insert_ bcm
@@ -151,7 +151,7 @@ balanceAction mBotName scid (AOwnBot oid mcm bid) = do
 balanceAction _ scid (AAddOwnedBy uid amt oid mDesc) = do
   withCreateWalletIfNotExists oid $ \newWallet wid -> do
     utcTime <- liftIO getCurrentTime
-    runDB $ do -- runDB is atomic
+    runMeowDB $ do -- runMeowDB is atomic
       insert $ Transaction wid amt utcTime (Just uid) mDesc
       update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
     let msg = T.unwords $ [toText amt, "is added to the wallet owned by", toText oid, "with walletId", toText wid]
@@ -159,11 +159,11 @@ balanceAction _ scid (AAddOwnedBy uid amt oid mDesc) = do
     return $ Just [baSendToChatId scid msg]
 
 balanceAction _ scid (AAddTo uid amt wid mDesc) = do
-  mWallet <- runDB $ get wid
+  mWallet <- runMeowDB $ get wid
   case mWallet of
     Just Wallet { walletOwnerId } -> do
       utcTime <- liftIO getCurrentTime
-      runDB $ do -- ^ runDB is atomic
+      runMeowDB $ do -- ^ runMeowDB is atomic
         insert $ Transaction wid amt utcTime (Just uid) mDesc
         update wid [WalletBalance +=. amt, WalletOverdueNotified =. Nothing]
       let msg = T.unwords [toText amt, "is added to the wallet owned by", toText walletOwnerId, "with walletId", toText wid]
@@ -171,10 +171,10 @@ balanceAction _ scid (AAddTo uid amt wid mDesc) = do
     Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
 
 balanceAction _ scid (ABalanceCheck oid) = do
-  mWallet <- runDB $ getBy $ UniqueOwnerId oid
+  mWallet <- runMeowDB $ getBy $ UniqueOwnerId oid
   case mWallet of
     Just (Entity wid Wallet {walletBalance}) -> do
-      owns <- runDB $ walletOwns wid
+      owns <- runMeowDB $ walletOwns wid
       let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText oid, "has balance:", toText walletBalance]
           ownsMsg = T.intercalate "\n" $ ["Associated with"]
                     <>  [ "bot" <> toText bid <> " " <> toText cm
@@ -187,13 +187,13 @@ balanceAction _ scid (ABalanceCheck oid) = do
 balanceAction _ scid (ABalanceCheckInChat cid) = do
   botid <- query
   mWarnCid <- warningIfNotInGroup botid cid
-  mCmWid <- runDB $ findWalletAssociatedToBotChat botid cid
+  mCmWid <- runMeowDB $ findWalletAssociatedToBotChat botid cid
   case mCmWid of
     Just (_, wid) -> do
-      mWallet <- runDB $ get wid
+      mWallet <- runMeowDB $ get wid
       case mWallet of
         Just Wallet { walletOwnerId, walletBalance } -> do
-          owns <- runDB $ walletOwns wid
+          owns <- runMeowDB $ walletOwns wid
           let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText walletOwnerId, "has balance:", toText walletBalance]
               ownsMsg = T.intercalate "\n" $ ["Associated with"]
                         <>  [ "bot" <> toText bid <> " " <> toText cm
@@ -205,10 +205,10 @@ balanceAction _ scid (ABalanceCheckInChat cid) = do
     Nothing -> return $ Just [baSendToChatId scid $ "No cost/wallet is associated with " <> toText cid <> "."]
 
 balanceAction _ scid (AChangeOwner wid oid) = do
-  mWallet <- runDB $ get wid
+  mWallet <- runMeowDB $ get wid
   case mWallet of
     Just _ -> do
-      runDB $ update wid [WalletOwnerId =. oid, WalletOverdueNotified =. Nothing]
+      runMeowDB $ update wid [WalletOwnerId =. oid, WalletOverdueNotified =. Nothing]
       return $ Just [baSendToChatId scid $ T.unwords ["Wallet with id", toText wid, "is now owned by", toText oid]]
     Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
 

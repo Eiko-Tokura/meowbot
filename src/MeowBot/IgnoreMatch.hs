@@ -43,5 +43,5 @@ matchIgnoredMessage cqmsg bot_ignore@BotIgnore { botIgnoreMatchType = IgnorePref
 isIgnoredMessage :: CQMessage -> Meow Bool
 isIgnoredMessage cqmsg = do
   botId <- query
-  botIgnores <- fmap (map entityVal) $ runDB $ selectList [BotIgnoreBotId ==. botId] []
+  botIgnores <- fmap (map entityVal) $ runMeowDB $ selectList [BotIgnoreBotId ==. botId] []
   return $ any (matchIgnoredMessage cqmsg) botIgnores

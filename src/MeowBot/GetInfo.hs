@@ -14,12 +14,12 @@ type IsAdmin = Bool
 newtype IsSuperUser = IsSuperUser { boolIsSuperUser :: Bool }
 isAdmin :: UserId -> Meow IsAdmin
 isAdmin uid = do
-  mRecord <- runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+  mRecord <- runMeowDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
   return $ isJust mRecord
 
 isSuperUser :: UserId -> Meow IsSuperUser
 isSuperUser uid = do
-  mRecord <- runDB $ getBy $ UniqueSuperUser uid
+  mRecord <- runMeowDB $ getBy $ UniqueSuperUser uid
   return $ IsSuperUser $ isJust mRecord
 
 -- | Whether the newest message contains @bot

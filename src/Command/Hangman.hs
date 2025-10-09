@@ -108,7 +108,7 @@ doHangman cid _ uid (Left hmact) = do
 
     (Right (HangmanEnd (txt, s)), alls) -> do
       moldUserRank <- getUserRank uid
-      runDB $ insert_ (hangmanStateToRecord uid s)
+      runMeowDB $ insert_ (hangmanStateToRecord uid s)
       nickname <- queries $ senderNickname <=< sender . getNewMsg
       (newpp, newrank, _, _) <- updateTotalPP uid nickname
       modify @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)

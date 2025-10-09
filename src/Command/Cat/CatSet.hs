@@ -135,7 +135,7 @@ insertBotSettingPerChatIfNotExists
      , MeowDatabase `In` mods
      )
   => BotId -> ChatId -> MaybeT (MeowT mods IO) ()
-insertBotSettingPerChatIfNotExists botid cid = lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
+insertBotSettingPerChatIfNotExists botid cid = lift $ runMeowDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
     True -> return ()
     False -> insert_ $ def
       { botSettingPerChatChatId = cid
@@ -152,67 +152,67 @@ catSet ::
   ) => CatSetCommand -> MaybeT (MeowT mods IO) [BotAction]
 catSet (Set Default item) = do
   (_, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
-  _ <- MaybeT $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+  _ <- MaybeT $ runMeowDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
   botid <- query
   let selector = [BotSettingBotId ==. botid]
   case item of
     DisplayThinking      mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingDisplayThinking =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingDisplayThinking =. mdt])
       return [ baSendToChatId cid $ "DisplayThinking set to " <> tshow mdt ]
     DisplayToolMessage   mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingDisplayToolMessage =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingDisplayToolMessage =. mdt])
       return [ baSendToChatId cid $ "DisplayToolMessage set to " <> tshow mdt ]
     DefaultModel         mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingDefaultModel =. fmap PersistUseShow mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingDefaultModel =. fmap PersistUseShow mdt])
       return [ baSendToChatId cid $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingDefaultModelS =. fmap PersistUseShow mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingDefaultModelS =. fmap PersistUseShow mdt])
       return [ baSendToChatId cid $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemMessage =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemMessage =. mdt])
       return [ baSendToChatId cid $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemTemp =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemTemp =. mdt])
       return [ baSendToChatId cid $ "SystemTemp set to " <> tshow mdt ]
     SystemMaxToolDepth   mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemMaxToolDepth =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemMaxToolDepth =. mdt])
       return [ baSendToChatId cid $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyOpenAI =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemAPIKeyOpenAI =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyOpenAI set to " <> tshow mdt ]
     SystemAPIKeyDeepSeek mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyDeepSeek =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemAPIKeyDeepSeek =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyDeepSeek set to " <> tshow mdt ]
     SystemAPIKeyOpenRouter mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeyOpenRouter =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemAPIKeyOpenRouter =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeyOpenRouter set to " <> tshow mdt ]
     SystemAPIKeySiliconFlow mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingSystemAPIKeySiliconFlow =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingSystemAPIKeySiliconFlow =. mdt])
       return [ baSendToChatId cid $ "SystemAPIKeySiliconFlow set to " <> tshow mdt ]
     ActiveChat           mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingActiveChat =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingActiveChat =. mdt])
       return [ baSendToChatId cid $ "ActiveChat set to " <> tshow mdt ]
     AtReply              mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingAtReply =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingAtReply =. mdt])
       return [ baSendToChatId cid $ "AtReply set to " <> tshow mdt ]
     MentionReply         mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingMentionReply =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingMentionReply =. mdt])
       return [ baSendToChatId cid $ "MentionReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingActiveProbability =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
     MaxMessageInState mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingMaxMessageInState =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingMaxMessageInState =. mdt])
       return [ baSendToChatId cid $ "MaxMessageInState set to " <> tshow mdt ]
     Note                 _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     CronTab              _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     EnableNotes         mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingEnableNotes =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingEnableNotes =. mdt])
       return [ baSendToChatId cid $ "EnableNotes set to " <> tshow mdt ]
     EnableCronTab       mdt -> do
-      lift $ runDB (updateWhere selector [BotSettingEnableCronTab =. mdt])
+      lift $ runMeowDB (updateWhere selector [BotSettingEnableCronTab =. mdt])
       return [ baSendToChatId cid $ "EnableCronTab set to " <> tshow mdt ]
 
 
@@ -226,8 +226,8 @@ catSet (Set (PerChatWithChatId cid) item) = do
   -- | If the cid to be set matches the cid of the current chat, we allow it
   -- otherwise you must be an Admin to set it
   _ <- MaybeT $ (<|> if cid == cid' then Just () else Nothing) . void
-       <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
-  lift $ runDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
+       <$> runMeowDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+  lift $ runMeowDB $ exists [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] >>= \case
     True -> return ()
     False -> insert_ $ def
       { botSettingPerChatChatId = cid
@@ -236,65 +236,65 @@ catSet (Set (PerChatWithChatId cid) item) = do
   let selector = [BotSettingPerChatBotId ==. botid, BotSettingPerChatChatId ==. cid]
   case item of
     DisplayThinking      mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayThinking =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatDisplayThinking =. mdt]
       return [ baSendToChatId cid' $ "DisplayThinking set to " <> tshow mdt ]
     DisplayToolMessage   mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatDisplayToolMessage =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatDisplayToolMessage =. mdt]
       return [ baSendToChatId cid' $ "DisplayToolMessage set to " <> tshow mdt ]
     DefaultModel         mdt -> do
       _ <- MaybeT $ if mdt `elem` fmap Just adminRestrictedModels -- requre Admin to set restricted models
-          then fmap void $ runDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
+          then fmap void $ runMeowDB $ selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] []
           else return $ Just ()
-      lift $ runDB $ updateWhere selector [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatDefaultModel =. fmap PersistUseShow mdt]
       return [ baSendToChatId cid' $ "DefaultModel set to " <> tshow mdt ]
     DefaultModelSuper    mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatDefaultModelS =. fmap PersistUseShow mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatDefaultModelS =. fmap PersistUseShow mdt]
       return [ baSendToChatId cid' $ "DefaultModelSuper set to " <> tshow mdt ]
     SystemMessage        mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemMessage =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemMessage =. mdt]
       return [ baSendToChatId cid' $ "SystemMessage set to " <> toText mdt ]
     SystemTemp           mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemTemp =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemTemp =. mdt]
       return [ baSendToChatId cid' $ "SystemTemp set to " <> tshow mdt ]
     SystemMaxToolDepth   mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemMaxToolDepth =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemMaxToolDepth =. mdt]
       return [ baSendToChatId cid' $ "SystemMaxToolDepth set to " <> tshow mdt ]
     SystemAPIKeyOpenAI   mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenAI =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyOpenAI set to " <> redacted mdt ]
     SystemAPIKeyDeepSeek mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyDeepSeek =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyDeepSeek set to " <> redacted mdt ]
     SystemAPIKeyOpenRouter mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenRouter =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemAPIKeyOpenRouter =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeyOpenRouter set to " <> redacted mdt ]
     SystemAPIKeySiliconFlow mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatSystemAPIKeySiliconFlow =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatSystemAPIKeySiliconFlow =. mdt]
       return [ baSendToChatId cid' $ "SystemAPIKeySiliconFlow set to " <> redacted mdt ]
     ActiveChat           mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatActiveChat =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatActiveChat =. mdt]
       return [ baSendToChatId cid' $ "ActiveChat set to " <> tshow mdt ]
     AtReply              mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatAtReply =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatAtReply =. mdt]
       return [ baSendToChatId cid' $ "AtReply set to " <> tshow mdt ]
     MentionReply         mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatMentionReply =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatMentionReply =. mdt]
       return [ baSendToChatId cid' $ "MentionReply set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
     MaxMessageInState mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatMaxMessageInState =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatMaxMessageInState =. mdt]
       return [ baSendToChatId cid' $ "MaxMessageInState set to " <> tshow mdt ]
     Note                 _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     CronTab              _   -> do
       return [ baSendToChatId cid $ "Not available" ]
     EnableNotes         mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatEnableNotes =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatEnableNotes =. mdt]
       return [ baSendToChatId cid' $ "EnableNotes set to " <> tshow mdt ]
     EnableCronTab       mdt -> do
-      lift $ runDB $ updateWhere selector [BotSettingPerChatEnableCronTab =. mdt]
+      lift $ runMeowDB $ updateWhere selector [BotSettingPerChatEnableCronTab =. mdt]
       return [ baSendToChatId cid' $ "EnableCronTab set to " <> tshow mdt ]
 
 catSet (UnSet range item) = do
@@ -329,30 +329,30 @@ catSet (UnSet range item) = do
       -- | If the cid to be set matches the cid of the current chat, we allow it
       -- otherwise you must be an Admin to set it
       _ <- MaybeT $ (<|> if Just cid == cidOperate then Just () else Nothing) . void
-           <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+           <$> runMeowDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
 
       case item of
         Note           (Just nid) | Just cid' <- cidOperate -> do
-          lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
+          lift $ runMeowDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "Note with id " <> tshow nid <> " in chat " <> tshow cid' <> " deleted"]
         Note           (Just nid) | Nothing <- cidOperate -> do
-          lift $ runDB $ deleteWhere [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
+          lift $ runMeowDB $ deleteWhere [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "Note with id " <> tshow nid <> " deleted"]
         Note           Nothing    | Just cid' <- cidOperate -> do
-          lift $ runDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteBotName ==. botname]
+          lift $ runMeowDB $ deleteWhere [AssistantNoteChatId ==. cid', AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " in chat " <> tshow cid' <> " deleted"]
         Note           Nothing    | Nothing <- cidOperate -> do
-          lift $ runDB $ deleteWhere [AssistantNoteBotName ==. botname]
+          lift $ runMeowDB $ deleteWhere [AssistantNoteBotName ==. botname]
           return [baSendToChatId cid $ "All notes for bot " <> toText botname <> " deleted"]
 
         CronTab       (Just ctid) -> do
-          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobId ==. intToKey ctid]
+          lift $ runMeowDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobId ==. intToKey ctid]
           return [baSendToChatId cid $ "CronTab with id " <> tshow ctid <> " deleted"]
         CronTab       Nothing     | Just cid' <- cidOperate -> do
-          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobChatId ==. Just cid']
+          lift $ runMeowDB $ deleteWhere [BotCronJobBotId ==. botid, BotCronJobChatId ==. Just cid']
           return [baSendToChatId cid $ "All CronTabs for bot " <> toText botname <> " in chat " <> tshow cid' <> " deleted"]
         CronTab       Nothing     | Nothing <- cidOperate -> do
-          lift $ runDB $ deleteWhere [BotCronJobBotId ==. botid]
+          lift $ runMeowDB $ deleteWhere [BotCronJobBotId ==. botid]
           return [baSendToChatId cid $ "All CronTabs for bot " <> toText botname <> " deleted"]
 
 catSet (View Default item) = do
@@ -361,62 +361,62 @@ catSet (View Default item) = do
   let selector = [BotSettingBotId ==. botid]
   case item of
     DisplayThinking      _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDisplayThinking . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DisplayThinking: " <> tshow mdt]
     DisplayToolMessage   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDisplayToolMessage . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingDisplayToolMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DisplayToolMessage: " <> tshow mdt]
     DefaultModel         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDefaultModel . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingDefaultModelS . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingDefaultModelS . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemMessage . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemTemp . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemTemp . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemMaxToolDepth . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemMaxToolDepth . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
     SystemAPIKeyOpenRouter _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
     SystemAPIKeySiliconFlow _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingActiveChat . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveChat: " <> tshow mdt]
     AtReply              _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "AtReply: " <> tshow mdt]
     MentionReply         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingMentionReply . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingMentionReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "MentionReply: " <> tshow mdt]
     ActiveProbability    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "ActiveProbability: " <> tshow mdt]
     MaxMessageInState    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingMaxMessageInState . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingMaxMessageInState . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "MaxMessageInState: " <> tshow mdt]
     CronTab        Nothing -> do
-      cronJobs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
+      cronJobs <- lift $ runMeowDB $ selectList [BotCronJobBotId ==. botid] []
       let cronJobTexts = fmap cronTabDisplayText cronJobs
       return [baSendToChatId cid $ T.intercalate "\n\n" cronJobTexts]
     EnableNotes         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingEnableNotes . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingEnableNotes . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "EnableNotes: " <> tshow mdt]
     EnableCronTab       _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingEnableCronTab . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingEnableCronTab . entityVal) <$> selectFirst selector []
       return [baSendToChatId cid $ "EnableCronTab: " <> tshow mdt]
     _ -> do
       return [baSendToChatId cid $ "Not available"]
@@ -432,75 +432,75 @@ catSet (View (PerChatWithChatId cid) item) = do
   -- | If the cid to be set matches the cid of the current chat, we allow it
   -- otherwise you must be an Admin to set it
   _ <- MaybeT $ (<|> if cid == cidOrigin then Just () else Nothing) . void
-          <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+          <$> runMeowDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
   let selector = [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid]
   case item of
     DisplayThinking      _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatDisplayThinking . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "DisplayThinking: " <> tshow mdt]
     DisplayToolMessage   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDisplayToolMessage . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatDisplayToolMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "DisplayToolMessage: " <> tshow mdt]
     DefaultModel         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatDefaultModel . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "DefaultModel: " <> tshow mdt]
     DefaultModelSuper    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatDefaultModelS . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "DefaultModelSuper: " <> tshow mdt]
     SystemMessage        _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemMessage . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemMessage: " <> toText mdt]
     SystemTemp           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemTemp . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemTemp: " <> tshow mdt]
     SystemMaxToolDepth   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemMaxToolDepth . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemMaxToolDepth: " <> tshow mdt]
     SystemAPIKeyOpenAI   _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemAPIKeyOpenAI . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemAPIKeyOpenAI: " <> redacted mdt]
     SystemAPIKeyDeepSeek _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemAPIKeyDeepSeek . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemAPIKeyDeepSeek: " <> redacted mdt]
     SystemAPIKeyOpenRouter _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemAPIKeyOpenRouter . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemAPIKeyOpenRouter: " <> redacted mdt]
     SystemAPIKeySiliconFlow _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatSystemAPIKeySiliconFlow . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "SystemAPIKeySiliconFlow: " <> redacted mdt]
     ActiveChat           _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatActiveChat . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "ActiveChat: " <> tshow mdt]
     AtReply              _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatAtReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "AtReply: " <> tshow mdt]
     MentionReply         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatMentionReply . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatMentionReply . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "MentionReply: " <> tshow mdt]
     ActiveProbability    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatActiveProbability . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "ActiveProbability: " <> tshow mdt]
     MaxMessageInState    _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatMaxMessageInState . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatMaxMessageInState . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "MaxMessageInState: " <> tshow mdt]
     Note           Nothing -> do
-      notes <- lift $ runDB $ selectList [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
+      notes <- lift $ runMeowDB $ selectList [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
       let noteTexts = fmap (noteDisplayText . entityVal) notes
       return [baSendToChatId cidOrigin $ "Notes: " <> T.intercalate "\n\n" noteTexts]
     Note          (Just nid) -> do
-      note <- lift $ runDB $ selectFirst [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
+      note <- lift $ runMeowDB $ selectFirst [AssistantNoteNoteId ==. nid, AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] []
       case note of
         Just n  -> return [baSendToChatId cidOrigin $ noteDisplayText (entityVal n)]
         Nothing -> return [baSendToChatId cidOrigin $ "No note with id " <> tshow nid <> " found."]
     CronTab         Nothing -> do
-      cronTabs <- lift $ runDB $ selectList [BotCronJobBotId ==. botid] []
+      cronTabs <- lift $ runMeowDB $ selectList [BotCronJobBotId ==. botid] []
       let cronTabTexts = fmap (cronTabDisplayTextWithCid cid) cronTabs
       return [baSendToChatId cidOrigin $ T.intercalate "\n\n" $ catMaybes cronTabTexts]
     EnableNotes         _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatEnableNotes . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatEnableNotes . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "EnableNotes: " <> tshow mdt]
     EnableCronTab       _ -> do
-      mdt <- lift $ runDB $ fmap (botSettingPerChatEnableCronTab . entityVal) <$> selectFirst selector []
+      mdt <- lift $ runMeowDB $ fmap (botSettingPerChatEnableCronTab . entityVal) <$> selectFirst selector []
       return [baSendToChatId cidOrigin $ "EnableCronTab: " <> tshow mdt]
     _                       -> do
       return [baSendToChatId cidOrigin $ "Unavailable item & mode combination."]
@@ -531,7 +531,7 @@ catSet (Clear range) = do
       return [baSendToChatId original_cid $ "Error: " <> T.pack err]
     Right cid -> do
       _ <- MaybeT $ (<|> if cid == original_cid then Just () else Nothing) . void
-          <$> runDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
+          <$> runMeowDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
       allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
       -- ^ get the chat state and clear it
     

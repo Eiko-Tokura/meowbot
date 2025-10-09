@@ -41,15 +41,15 @@ meowHandleCronTabTick (CronTabTick time) = do
           if newTimes == Just 0
             then do
               $(logInfo) $ "CronJob reapeat finished, removing from database : " <> toText job
-              runDB $ delete key
+              runMeowDB $ delete key
             else do
               $(logInfo) $ "CronJob repeat count reduced: " <> toText newJob
-              runDB $ replace key newJob
+              runMeowDB $ replace key newJob
 
 getCronSchedulesDb :: Meow [(Entity BotCronJob, CronSchedule, CronMeowAction)]
 getCronSchedulesDb = do
   botId <- query
-  botCronJobs <- runDB $ selectList [BotCronJobBotId ==. botId] []
+  botCronJobs <- runMeowDB $ selectList [BotCronJobBotId ==. botId] []
   return $
     (\en@(Entity _ job) -> let cronMeowAction = botCronJobCronMeowAction job in
       ( en

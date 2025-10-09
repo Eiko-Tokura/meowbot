@@ -26,7 +26,7 @@ logBotStatistics :: ChatId -> StatType -> Meow ()
 logBotStatistics chatId StatRecv = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
-  runDB $ do
+  runMeowDB $ do
     let apiKey' = "STATISTICS"
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
@@ -61,7 +61,7 @@ logBotStatistics chatId StatSent = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
   let apiKey' = "STATISTICS"
-  runDB $ do
+  runMeowDB $ do
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
@@ -97,7 +97,7 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
   botId <- query
   let apiKey' = maybe "NO_API_KEY" apiKey apiInfo
       consumption = TokenConsumption inputTokens outputTokens $ Just meowBotCacheHitRate
-  runDB $ do
+  runMeowDB $ do
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
@@ -157,4 +157,4 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
       , BotStatisticsTotalApiCallSkips +=. apiSkips
       ]
     pure ()
-  void . runDB $ insertApiCostRecord utcTime botId chatId (model <$> apiInfo) (apiKey <$> apiInfo) consumption
+  void . runMeowDB $ insertApiCostRecord utcTime botId chatId (model <$> apiInfo) (apiKey <$> apiInfo) consumption

@@ -15,7 +15,6 @@ import MeowBot.BotStructure
 import MeowBot.GetSelfInfo ( isSelfAdminInGroup )
 import System.Meow
 import Module.MeowTypes
-import Utils.RunDB (runDB)
 
 type MeowToolEnvDefault = MeowToolEnv Mods
 type MeowToolEnv mods = MeowT mods IO
@@ -97,5 +96,5 @@ embedMeowToolEnv :: (SubList FData mods Mods, MeowAllData mods) => MeowToolEnv m
 embedMeowToolEnv = embedEffT
 {-# INLINE embedMeowToolEnv #-}
 
-runDBMeowTool :: (MeowDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv mods b
-runDBMeowTool = runDB
+runMeowDBMeowTool :: (MeowDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv mods b
+runMeowDBMeowTool = runMeowDB

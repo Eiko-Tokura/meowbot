@@ -63,8 +63,8 @@ commandCat = BotCommand Cat $ botT $ do
   case mcatSetCommand of
     Just catSetCommand -> catSet catSetCommand
     Nothing -> do
-      botSetting        <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingBotId ==. botid] []
-      botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
+      botSetting        <- lift $ fmap (fmap entityVal) . runMeowDB $ selectFirst [BotSettingBotId ==. botid] []
+      botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowDB $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botid] []
       let sd = savedData other_data
       let activeChat = fromMaybe False $ asum
             [ botSettingPerChatActiveChat =<< botSettingPerChat
@@ -114,7 +114,7 @@ commandCat = BotCommand Cat $ botT $ do
         then MaybeT . pure $ Nothing  -- disable cat command when active chat, we will use chat command instead
         else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
 
-      needAction <- lift . runDB $ serviceBalanceActionCheck botid cid
+      needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
       breakAction <- case needAction of
         Nothing -> return $ Right []
         Just (DoNothing notis, winfo) -> do

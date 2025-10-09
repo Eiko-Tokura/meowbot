@@ -21,17 +21,17 @@ periodicCostHandleCronTabTick (CronTabTick now) = botT $ do
 
 checkAndUpdatePeriodicCost :: BotId -> UTCTime -> Meow ()
 checkAndUpdatePeriodicCost botId now = do
-  mBotCostModel        <- runDB $ getBotPeriodicCostModel        botId
-  lBotCostModelPerChat <- runDB $ getBotPerChatPeriodicCostModel botId
+  mBotCostModel        <- runMeowDB $ getBotPeriodicCostModel        botId
+  lBotCostModelPerChat <- runMeowDB $ getBotPerChatPeriodicCostModel botId
   let listCosts = [ (p, Left  bcm)  | Just (p, bcm) <- [mBotCostModel] ] ++
                   [ (p, Right bcmc) | (p, bcmc) <- lBotCostModelPerChat ]
   _inserted <- forM listCosts $ \(p, bcm) -> do
     let bcm'  = either (Left . entityKey) (Right . entityKey) bcm
         bcm'' = either (Left . entityVal) (Right . entityVal) bcm
         mCap  = hasCap $ either botCostModelCostModel botCostModelPerChatCostModel bcm''
-    mLastRecord <- runDB $ findLastCostRecord bcm'
-    countRecords <- runDB $ countCostRecords bcm'
-    receivedMessageToday <- runDB $ receivedMessageToday bcm'' (utctDay now)
+    mLastRecord <- runMeowDB $ findLastCostRecord bcm'
+    countRecords <- runMeowDB $ countCostRecords bcm'
+    receivedMessageToday <- runMeowDB $ receivedMessageToday bcm'' (utctDay now)
 
     let notCapped = maybe True (countRecords <) mCap
         needAction =  receivedMessageToday > 0
@@ -39,7 +39,7 @@ checkAndUpdatePeriodicCost botId now = do
                    && periodicLogic Daily now (fmap periodicCostRecordTime mLastRecord)
 
     when needAction $ do
-      res <- runDB $ insertNewCostRecord (dailyCost p) bcm now
+      res <- runMeowDB $ insertNewCostRecord (dailyCost p) bcm now
       case res of
         Just () -> $logInfo  $ "Inserted daily basic cost record for " <> toText bcm
         Nothing -> $logError $ "Failed to insert daily basic cost record for " <> toText bcm

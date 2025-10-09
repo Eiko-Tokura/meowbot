@@ -54,7 +54,7 @@ generateCostRecord chatModel apiKey time mcm bid cid wid consumption mActualCost
 -- | For a specific (bot, chat) pair, find the associated cost model and wallet
 -- first finds chat-specific ownership, then global ownership, otherwise Nothing
 --
--- can be wrapped in runDB as atomic if needed
+-- can be wrapped in runMeowDB as atomic if needed
 findWalletAssociatedToBotChat :: BotId -> ChatId -> DB (Maybe (CostModel, WalletId))
 findWalletAssociatedToBotChat bid cid = do
   mBotChatRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]
@@ -211,7 +211,7 @@ checkSendNotis botname botid cid noti winfo =
           ]
     if not notified
     then do
-      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId notifyCid text]
     else return []
   NotifyChatIdInAdvance notifyCid -> do
@@ -227,7 +227,7 @@ checkSendNotis botname botid cid noti winfo =
           ]
     if not notified
     then do
-      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId notifyCid text]
     else return []
   NotifyBillOwner          -> do
@@ -246,7 +246,7 @@ checkSendNotis botname botid cid noti winfo =
         ownerCid = ownerChatId winfo.entityVal.walletOwnerId
     if not notified
     then do
-      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId ownerCid text]
     else return []
   NotifyBillOwnerInAdvance -> do
@@ -265,6 +265,6 @@ checkSendNotis botname botid cid noti winfo =
         ownerCid = ownerChatId winfo.entityVal.walletOwnerId
     if not notified
     then do
-      runDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId ownerCid text]
     else return []

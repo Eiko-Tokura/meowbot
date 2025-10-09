@@ -115,8 +115,8 @@ commandChat = BotCommand Chat $ botT $ do
   utcTime    <- liftIO getCurrentTime
   ConnectionManagerModuleRead man timeout <- lift askModule
   noteListing <- lift $ getNoteListing botname cid
-  botSetting        <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotId botid)
-  botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotIdChatId botid cid)
+  botSetting        <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotId botid)
+  botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotIdChatId botid cid)
   let appendNoteListing :: Text -> Text
       appendNoteListing t = case noteListing of
         Nothing       -> t
@@ -296,7 +296,7 @@ commandChat = BotCommand Chat $ botT $ do
   determineIfReply oneOffActive atReply mentionReply activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
   $(logInfo) "Replying"
 
-  needAction <- lift . runDB $ serviceBalanceActionCheck botid cid
+  needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
   breakAction <- case needAction of
     Nothing -> return $ Right []
     Just (DoNothing notis, winfo) -> do

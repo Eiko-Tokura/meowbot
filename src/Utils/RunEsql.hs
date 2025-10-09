@@ -1,5 +1,5 @@
 module Utils.RunEsql
-  ( runDB, askDB, DB
+  ( runMeowDB, DB, askDB
   , module Database.Esqueleto.Experimental
   ) where
 

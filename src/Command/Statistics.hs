@@ -2,6 +2,7 @@
 -- | This command generates interesting statistics about the current chat.
 module Command.Statistics where
 
+import Control.Monad.Effect
 import Command
 import Data.List (sortOn)
 import Data.Ord (Down(..))

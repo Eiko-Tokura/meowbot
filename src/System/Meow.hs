@@ -48,9 +48,9 @@ type Mods =
   , Prometheus
   , LoggingModule
   ]
-  -- '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
-type MeowErrs = '[ErrorText "recv_connection", ErrorText "send_connection"]
+-- | These exceptions needs restarting the bot
+type MeowErrs = '[ErrorText "recv_connection", ErrorText "send_connection", ErrorText "meowdb"]
 
 -- | The monads the commands run in
 type MeowT mods m = EffT mods MeowErrs m

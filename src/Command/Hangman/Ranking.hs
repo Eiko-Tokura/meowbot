@@ -22,15 +22,15 @@ updateTotalPP
   -> Maybe Text         -- ^ user nickname
   -> Meow (Double, Int, AccPair, PlayCount) -- ^ returns total pp and rank
 updateTotalPP uid mnick = do
-  listScores <- runDB $ selectList [HangmanRecordUserId ==. uid] [Desc HangmanRecordId]
+  listScores <- runMeowDB $ selectList [HangmanRecordUserId ==. uid] [Desc HangmanRecordId]
   let totalPP = computePP (fromMaybe 0 . hangmanRecordScore . entityVal <$> listScores)
-  rank <- fmap (+1) . runDB $ count [HangmanRankingTotalPP >. totalPP, HangmanRankingUserId !=. uid]
+  rank <- fmap (+1) . runMeowDB $ count [HangmanRankingTotalPP >. totalPP, HangmanRankingUserId !=. uid]
   let pc = length listScores
       pass = length $ filter (completedPlay . hangmanRecordToState . entityVal) listScores
       accPairs@(totalMiss, totalGuess)
         = foldl' (\(x,y) (x',y') -> (x+x', y+y')) (0, 0)
         $ accuracyPair . hangmanRecordToState . entityVal <$> listScores
-  runDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc)
+  runMeowDB $ upsert (HangmanRanking uid (fromMaybe "" mnick) totalPP rank totalMiss totalGuess pass pc)
           ( [ HangmanRankingTotalPP    =. totalPP
             , HangmanRankingRank       =. rank
             , HangmanRankingTotalMiss  =. totalMiss
@@ -44,13 +44,13 @@ updateTotalPP uid mnick = do
 
 recalculateAllScores :: Meow ()
 recalculateAllScores = do
-  allScores <- runDB $ selectList [] [Desc HangmanRecordId]
+  allScores <- runMeowDB $ selectList [] [Desc HangmanRecordId]
   let newAllScores = (\score ->
         let scoreRec = entityVal $ score
             state = hangmanRecordToState scoreRec
         in (scoreRec { hangmanRecordScore = Just $ hangmanScoring state }, entityKey score)
         ) <$> allScores
-  runDB $ forM_ newAllScores $ \(score, key) -> replace key score
+  runMeowDB $ forM_ newAllScores $ \(score, key) -> replace key score
 
 computePP :: [Double] -> Double
 computePP = (c *) . weightedSum lambda . map fst . greedyGrouping g
@@ -81,15 +81,15 @@ getMaxSumGroup groupSize l = maximumBy (comparing (\(_,(s,_),_) -> s)) $
 
 -- | get the ranking of the hangman game
 getRanking :: Meow [HangmanRanking]
-getRanking = fmap (fmap entityVal) . runDB $ selectList [] [Desc HangmanRankingTotalPP]
+getRanking = fmap (fmap entityVal) . runMeowDB $ selectList [] [Desc HangmanRankingTotalPP]
 
 -- | get the ranking of a user, no update performed
 getUserRank :: UserId -> Meow (Maybe (Double, Int))
-getUserRank uid = fmap (fmap $ (\h -> (hangmanRankingTotalPP h, hangmanRankingRank h)) . entityVal) . runDB $ getBy (UniqueUserId uid)
+getUserRank uid = fmap (fmap $ (\h -> (hangmanRankingTotalPP h, hangmanRankingRank h)) . entityVal) . runMeowDB $ getBy (UniqueUserId uid)
 
 updateAllRanking :: Meow ()
 updateAllRanking = do
-  allScores <- runDB $ selectList [] [Desc HangmanRecordId]
+  allScores <- runMeowDB $ selectList [] [Desc HangmanRecordId]
   let allUsers = S.toList . S.fromList $ map (hangmanRecordUserId . entityVal) allScores
   forM_ allUsers $ \uid -> do
     updateTotalPP uid Nothing
