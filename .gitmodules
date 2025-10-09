@@ -10,3 +10,6 @@
 [submodule "submodules/monad-effect-logging"]
 	path = submodules/monad-effect-logging
 	url = Qute:~/git/monad-effect-logging
+[submodule "submodules/monad-effect-prometheus"]
+	path = submodules/monad-effect-prometheus
+	url = Qute:~/git/monad-effect-prometheus

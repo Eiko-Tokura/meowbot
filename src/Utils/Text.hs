@@ -144,9 +144,9 @@ instance ToText a LazyText => ToText (Maybe a) LazyText where
   {-# INLINE toText #-}
 
 instance {-# OVERLAPPABLE #-} Show a => ToText a Text where
-  toText = TL.toStrict . PP.pShow
+  toText = TL.toStrict . PP.pShowNoColor
   {-# INLINE toText #-}
 
 instance {-# OVERLAPPABLE #-} Show a => ToText a LazyText where
-  toText = PP.pShow
+  toText = PP.pShowNoColor
   {-# INLINE toText #-}

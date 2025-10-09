@@ -322,6 +322,7 @@ library meowbot-lib
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
+                 , monad-effect-prometheus
                  , monad-logger
                  , mtl
                  , parallel

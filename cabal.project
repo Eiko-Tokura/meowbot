@@ -4,6 +4,7 @@ packages:
   ./submodules/monad-effect/
   ./submodules/monad-effect-logging/
   ./submodules/monad-effect-database/
+  ./submodules/monad-effect-prometheus/
   ./diagram-rasterific/
 with-compiler: ghc-9.12.2
 tests: True
