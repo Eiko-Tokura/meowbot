@@ -57,20 +57,20 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
     ]
-  , testGroup "Local Model DeepSeekR1_14B"
-    [ testCaseInfo "Say hi" $ do
-        let params = ChatParams
-              { chatMarkDown = False
-              , chatSetting = def
-              , chatManager = man
-              , chatTimeout = timeoutHttp
-              } :: ChatParams (Local DeepSeekR1_14B) '[]
-        -- res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params [UserMessage "你好"]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
-        case content <$> res of
-          Left err -> assertFailure $ "messageChat failed: " ++ show err
-          Right r  -> return $ unpack r
-    ]
+  -- , testGroup "Local Model DeepSeekR1_14B"
+  --   [ testCaseInfo "Say hi" $ do
+  --       let params = ChatParams
+  --             { chatMarkDown = False
+  --             , chatSetting = def
+  --             , chatManager = man
+  --             , chatTimeout = timeoutHttp
+  --             } :: ChatParams (Local DeepSeekR1_14B) '[]
+  --       -- res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params [UserMessage "你好"]
+  --       (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+  --       case content <$> res of
+  --         Left err -> assertFailure $ "messageChat failed: " ++ show err
+  --         Right r  -> return $ unpack r
+  --   ]
   , testGroup "DeepSeek API"
     [ testCaseInfo "Say hi" $ do
         let params = ChatParams

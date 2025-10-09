@@ -14,7 +14,6 @@ import MeowBot.CronTab
 import MeowBot.CronTab.PeriodicCost
 import Module.CronTabTick
 import Module.Logging
-import Module.RS
 import System.Meow
 
 instance

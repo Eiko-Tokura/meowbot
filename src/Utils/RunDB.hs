@@ -8,7 +8,6 @@ module Utils.RunDB
 import Control.Concurrent (threadDelay)
 import Control.Exception
 import Control.Monad.Effect
-import Control.Monad.Logger
 import Control.Monad.Reader
 import Data.Pool
 import Database.Persist
@@ -27,8 +26,8 @@ runDB acts = do
   pool <- askDB
   eResult <- lift $ try $ runSqlPool acts pool
   case eResult of
-    Left (SomeException e) -> do
-      $logError $ "Database error (retry in 1s): " <> tshow e
+    Left (SomeException _e) -> do
+      -- $logError $ "Database error (retry in 1s): " <> tshow e
       liftIO $ threadDelay (1 * 1000000)
       -- wait for 1 seconds before retrying
       -- retry at most once
