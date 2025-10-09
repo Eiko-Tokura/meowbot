@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.4.7.1
+version:             1.0.0.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -67,8 +67,10 @@ common extensions
       OverloadedRecordDot
       OrPatterns
       ParallelListComp
+      QuasiQuotes
       DuplicateRecordFields
       RecordWildCards
+      ImpredicativeTypes
 
 library crontab
     -- Modules exported by the library.
@@ -185,19 +187,12 @@ library meowbot-lib
                    , Command.Statistics
                    , Command.User
                    , Command.Updater
-                   , Control.Monad.Effect
-                   , Control.Monad.ExceptionReturn
-                   , Control.Monad.IOe
-                   , Control.Monad.MaybeHints
-                   , Control.Monad.Readable
-                   , Control.Monad.Trans.ReaderState
                    , Data.Additional
                    , Data.Additional.Default
                    , Data.Additional.Saved
                    , Data.BSeq
                    , Data.FilePathFor
                    , Data.HList
-                   , Data.Maybe.Union
                    , Data.PersistModel
                    , Data.Template
                    , Data.UpdateMaybe
@@ -247,7 +242,7 @@ library meowbot-lib
                    , MeowBot.Parser
                    , MeowBot.Prelude
                    , MeowBot.Update
-                   , Module
+                   -- , Module
                    , Module.Async
                    , Module.AsyncInstance
                    , Module.CronTabTick
@@ -258,11 +253,17 @@ library meowbot-lib
                    , Module.LogDatabase
                    , Module.StatusMonitor
                    , Module.ProxyWS
+
+                   --
+                   , Module.MeowTypes
+                   , Module.MeowConnection
+                   , Module.RecvSentCQ
+                   , Module.RawMessage
                    , Probability.Foundation
-                   , System
+                   -- , System
                    , System.Cat
-                   , System.General
-                   , System.Logging
+                   -- , System.General
+                   -- , System.Logging
                    , System.Meow
                    , System.WatchDog
                    , Utils.Base64
@@ -319,6 +320,7 @@ library meowbot-lib
                  , item
                  , linear
                  , lens
+                 , monad-control
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
@@ -330,6 +332,7 @@ library meowbot-lib
                  , persistent-sqlite
                  , persistent-template
                  , pretty-simple
+                 , probabilist
                  , process
                  , random
                  , resource-pool
@@ -388,6 +391,7 @@ executable meowbot
                  , monad-effect
                  , monad-effect-logging
                  , monad-effect-database
+                 , monad-effect-prometheus
                  , monad-logger
                  , mtl
                  , parallel
@@ -429,6 +433,8 @@ test-suite meowbot-test
                  , tasty
                  , tasty-hunit
                  , mtl
+                 , monad-effect
+                 , monad-effect-logging
                  , meowbot-lib
                  , http-client
                  , http-client-tls

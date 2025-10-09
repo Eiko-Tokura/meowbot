@@ -12,6 +12,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.State
 import Data.Maybe
+import Data.List.NonEmpty (NonEmpty(..))
 
 -- | A class of monad that can provide items. (possibly from a stream)
 class Monad m => MonadItem i m | m -> i where
@@ -115,7 +116,7 @@ itemsIn :: (Alternative m, MonadZero m, MonadItem i m, Eq i) => [i] -> m [i]
 itemsIn = some . itemIn
 {-# INLINE itemsIn #-}
 
--- | one item not in the list
+-- | one or more items not in the list
 itemNotIn :: (MonadZero m, MonadItem i m, Eq i) => [i] -> m i
 itemNotIn is = satisfy (`notElemE` is)
 {-# INLINE itemNotIn #-}
@@ -152,7 +153,10 @@ string = mapM just
 infixr 5 <:>
 {-# INLINE (<:>) #-}
 
--- | Alternative options packed into Either,
+(<:|>) :: Applicative f => f a -> f [a] -> f (NonEmpty a)
+(<:|>) = liftA2 (:|)
+
+-- | Alternative options packed into Either, 
 (|+|) :: Alternative m => m a -> m b -> m (Either a b)
 (|+|) p q = fmap Left p <|> fmap Right q
 infixr 3 |+|
@@ -190,6 +194,16 @@ someTill pt p = do
   if end then zero else p <:> manyTill pt p
 {-# INLINE someTill #-}
 
+someTillNE :: (MonadTry m, MonadZero m) => m t -> m a -> m (NonEmpty a)
+someTillNE pt p = do
+  end <- tryBool pt
+  if end then zero else p <:|> manyTill pt p
+{-# INLINE someTillNE #-}
+
+someNE :: (Alternative m) => m a -> m (NonEmpty a)
+someNE p = p <:|> many p
+{-# INLINE someNE #-}
+
 -- | parse zero or more items until the till-parser succeeds
 manyTill :: (MonadTry m) => m t -> m a -> m [a]
 manyTill pt p = do
@@ -218,7 +232,7 @@ insideBracketsWith (l, r) item = just l *> manyTill (just r) item <* just r
 {-# INLINE insideBracketsWith #-}
 
 -- | A type constraint on m that looks like a parser, with reasonable constraints
--- reasonably assumes MonadZero, Alternative, MonadTry, MonadItem, Eq
+-- reasonably assumes MonadZero, Alternative, MonadTry, MonadItem, Eq 
 type MonadIZT i m = (MonadZero m, Alternative m, MonadTry m, MonadItem i m, Eq i)
 -- | A type constraint on m that looks like a parser, with reasonable constraints
 -- reasonably assumes MonadZero, Alternative, MonadItem, Eq

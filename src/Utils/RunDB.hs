@@ -5,22 +5,24 @@ module Utils.RunDB
   , askDB
   ) where
 
+import Control.Concurrent (threadDelay)
+import Control.Exception
+import Control.Monad.Effect
 import Control.Monad.Logger
 import Control.Monad.Reader
-import Control.Concurrent (threadDelay)
+import Data.Pool
 import Database.Persist
 import Database.Persist.Sql hiding (In)
-import Data.HList
-import Module.LogDatabase
-import System.General
 import MeowBot.Prelude
-import Data.Pool
-import Control.Exception
+import Module.Database.Sqlite
+import Module.MeowTypes
 
-askDB :: (LogDatabase `In` mods) => MeowT r mods IO (Pool SqlBackend)
-askDB = asks (databasePool . getF @LogDatabase . fst . snd)
+askDB :: (MeowDatabase `In` mods) => EffT mods es IO (Pool SqlBackend)
+askDB = do
+  r <- askModule @MeowDatabase
+  return $ dbPool r
 
-runDB :: (LogDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowT r mods IO b
+runDB :: (MeowDatabase `In` mods) => ReaderT SqlBackend IO b -> EffT mods es IO b
 runDB acts = do
   pool <- askDB
   eResult <- lift $ try $ runSqlPool acts pool

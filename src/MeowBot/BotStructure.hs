@@ -3,14 +3,14 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, DerivingVia #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module MeowBot.BotStructure
   ( module MeowBot.Data
-  , module Control.Monad.Readable
-  , module Control.Monad.IOe
+  , MonadReadOnly(..), MonadReadable(..)
   , module MeowBot.BotStructure
 
   , BotModules(..), BotConfig(..), OverrideSettings(..)
-  , GroupId(..), UserId(..), unUserId, ChatId(..)
+  , GroupId(..), UserId(..), ChatId(..)
 
   , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
   , UserGroup(..), GroupGroup(..)
@@ -21,9 +21,9 @@ module MeowBot.BotStructure
   ) where
 
 import Command.Aokana.Scripts
-import Control.Monad.IOe
-import Control.Monad.Readable
-import Control.Monad.Trans.ReaderState
+import Control.Monad.RS.Class
+import Module.RS
+import Control.Monad.Effect
 import Control.Parallel.Strategies
 import Data.Additional
 import Data.Additional.Saved
@@ -33,6 +33,7 @@ import Data.Map.Strict (Map)
 import Data.Maybe
 import Data.Ord (comparing, Down(..))
 import Data.UpdateMaybe
+import Module.Logging
 import MeowBot.CommandRule
 import MeowBot.Data
 import MeowBot.Data.Book
@@ -91,13 +92,61 @@ makeLenses_ ''AllData
 makeLenses_ ''SelfInfo
 makeLenses_ ''GroupInfo
 
-instance {-# OVERLAPPABLE #-} Monad m => MonadReadable OtherData (ReaderStateT r (s0, AllData) m) where
-  query = gets (otherdata . snd)
+instance {-# OVERLAPPABLE #-} (SModule OtherData `In` mods, Monad m) => MonadReadOnly OtherData (EffT mods es m) where
+  query = getS
+  {-# INLINE query #-}
+instance {-# OVERLAPPABLE #-} (SModule OtherData `In` mods, Monad m) => MonadReadable OtherData (EffT mods es m) where
+  local = localByState
+  {-# INLINE local #-}
+
+localByState :: (SModule a `In` mods, Monad m) => (a -> a) -> EffT mods es m b -> EffT mods es m b
+localByState f act = do
+    a0 <- getS
+    putS (f a0)
+    r <- act
+    putS a0
+    pure r
+{-# INLINE localByState #-}
+
+instance {-# OVERLAPPABLE #-} (SModule OtherData `In` mods, Monad m) => MonadStateful OtherData (EffT mods es m) where
+  get = getS
+  {-# INLINE get #-}
+  put = putS
+  {-# INLINE put #-}
+  modify = modifyS
+  {-# INLINE modify #-}
+
+type MeowAllData mods = (In (SModule BotConfig) mods, In (SModule WholeChat) mods, In (SModule OtherData) mods, In LoggingModule mods)
+
+instance (Monad m, MeowAllData mods) => MonadReadOnly BotConfig (EffT mods es m) where
+  query = getS
+  {-# INLINE query #-}
+instance (Monad m, MeowAllData mods) => MonadReadable BotConfig (EffT mods es m) where
+  local = localByState
+  {-# INLINE local #-}
+
+instance (Monad m, MeowAllData mods) => MonadReadOnly BotModules (EffT mods es m) where
+  query = queries botModules
   {-# INLINE query #-}
 
-instance {-# OVERLAPPABLE #-} Monad m => MonadModifiable OtherData (ReaderStateT r (s0, AllData) m) where
-  change f = modify $ second $ \ad -> ad {otherdata = f $ otherdata ad}
-  {-# INLINE change #-}
+instance (Monad m, MeowAllData mods) => MonadReadOnly RunningMode (EffT mods es m) where
+  query = queries runningMode
+  {-# INLINE query #-}
+
+instance (Monad m, MeowAllData mods) => MonadReadOnly WholeChat (EffT mods es m) where
+  query = getS
+  {-# INLINE query #-}
+instance (Monad m, MeowAllData mods) => MonadReadable WholeChat (EffT mods es m) where
+  local = localByState
+  {-# INLINE local #-}
+
+instance (Monad m, MeowAllData mods) => MonadReadOnly BotName (EffT mods es m) where
+  query = queries nameOfBot
+  {-# INLINE query #-}
+
+instance (Monad m, MeowAllData mods) => MonadReadOnly BotId (EffT mods es m) where
+  query = queries botId
+  {-# INLINE query #-}
 
 rseqSavedData :: Strategy SavedData
 rseqSavedData (SavedData cs ug gg cr b sa) = do
@@ -116,11 +165,8 @@ instance HasAdditionalData OtherData where
   getAdditionalData = runningData
   modifyAdditionalData f od = od {runningData = f $ runningData od}
 
-rseqWholeChat :: Strategy AllData
-rseqWholeChat (AllData wc m od) = do
-  wc' <- evalList (evalTuple2 r0 (evalTuple2 rseq rseq)) wc
-  od' <- rseq od
-  return $ AllData wc' m od'
+rseqWholeChat :: Strategy WholeChat
+rseqWholeChat = evalList (evalTuple2 r0 (evalTuple2 rseq rseq))
 
 getNewMsg :: WholeChat -> CQMessage
 getNewMsg [] = emptyCQMessage
@@ -173,3 +219,7 @@ largestInTree f (Node a children) =
               [] -> currentValue
               _  -> maximumBy (comparing fst) $ currentValue:childValues
 largestInTree _ EmptyTree = error "largestInTree : EmptyTree"
+
+
+makeLenses_ ''BotConfig
+makeLenses_ ''OverrideSettings

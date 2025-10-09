@@ -1,25 +1,24 @@
 {-# LANGUAGE OverloadedStrings #-}
 module MeowBot.Action where
 
-import MeowBot.BotStructure
-import MeowBot.Update
-import System.Meow
-import System.General
-import Module
-import Utils.RunDB
-import Control.Concurrent.Async (Async, async)
-import Control.Concurrent.STM
 import Control.Concurrent
-import Control.Monad.Logger
+import Control.Concurrent.Async (Async, async)
 import Control.Monad
-import Control.Monad.Trans.Maybe
+import Control.Monad.Effect
+import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe
 import Data.Maybe
 import Data.PersistModel
+import MeowBot.BotStructure
 import MeowBot.Data.CQHttp.CQCode
+import MeowBot.Update
+import Module.RecvSentCQ
+import System.Meow
 import Utils.Base64
 import Utils.ByteString
+import Utils.RunDB
 
 -- | Abstract representation of sending a message to a chat id.
 -- will NOT insert the message into the history.
@@ -37,7 +36,7 @@ sendIOeToChatId (_, cid, _, mid, _) ioess = do
   ess <- lift $ runExceptT ioess
   case ess of
     Right str -> do
-      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      embedEffT $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
@@ -49,28 +48,28 @@ sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
   ess <- runExceptT ioess
   case ess of
     Right str -> return $ do
-      insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
+      embedEffT $ insertMyResponseHistory cid (generateMetaMessage str [] [MReplyTo mid])
       return [ baSendToChatId cid str ]
     Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 -- | send message to a chat id, recording the message as reply.
-sendToChatId :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m) => EssentialContent -> Text -> MeowT r mods m [BotAction]
-sendToChatId (_, cid, _, mid, _) str = meowSendToChatIdFull cid (Just mid) [] [] str
+sendToChatId :: (MeowAllData mods, In RecvSentCQ mods, MonadIO m) => EssentialContent -> Text -> MeowT mods m [BotAction]
+sendToChatId (_, cid, _, mid, _) = meowSendToChatIdFull cid (Just mid) [] []
 --([baSendToChatId cid str], insertMyResponseHistory utc cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply in meta message (optional in Maybe CQMessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
 -- will insert the message into the history.
-meowSendToChatIdFull :: (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
+meowSendToChatIdFull :: (MeowAllData mods, In RecvSentCQ mods, MonadIO m)
   => ChatId            -- ^ chat id to send to
   -> Maybe CQMessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Text              -- ^ message content
-  -> MeowT r mods m [BotAction]
+  -> MeowT mods m [BotAction]
 meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- [mid] ] ++ items)
-  insertMyResponseHistory cid meta
+  embedEffT $ insertMyResponseHistory cid meta
   return [ baSendToChatId cid str ]
 
 meowAsyncSplitSendToChatIdFull
@@ -111,7 +110,7 @@ botHandleRequestEvent cqmsg str = do
       uid <- MaybeT $ return $ userId cqmsg
       $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
       $(logInfo) $ " -> Approving the request."
-      return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag "" 
+      return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag ""
     Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
       mBotReqSetting <- lift $ runDB $ getBy $ UniqueBotRequestSettingBotId botId
       guard ((botRequestSettingApproveGroupRequest =<< fmap entityVal mBotReqSetting) /= Just False)

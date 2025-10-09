@@ -1,10 +1,11 @@
 packages:
   ./*.cabal
-  ./submodules/item/
+  ./item/
   ./submodules/monad-effect/
   ./submodules/monad-effect-logging/
   ./submodules/monad-effect-database/
   ./submodules/monad-effect-prometheus/
+  ./submodules/probabilist/
   ./diagram-rasterific/
 with-compiler: ghc-9.12.2
 tests: True

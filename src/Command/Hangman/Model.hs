@@ -29,10 +29,15 @@ import qualified Data.Vector as V
 import Command.Hangman.Data
 import Control.Monad.IO.Class
 import Control.Monad.State
+import Control.Monad.Effect
+import Module.RS
 
 import Utils.Persist
 
 import Probability.Foundation
+
+hangmanErrorText :: (Monad m) => Text -> EffT mods '[ErrorText "hangman-error"] m a
+hangmanErrorText = effThrowIn . errorText @"hangman-error"
 
 -- | the initial HP of the hangman game
 hangmanInitialHP :: S.Set HangmanMod -> Int
@@ -104,12 +109,12 @@ data HangmanPrompt
   | HangmanEnd (Text, HangmanState) -- ^ can be used to update to database
 
 -- | The only funciton you should use to update AllHangmanStates
-updateHangman :: (Ord u, MonadIO m, MonadUniform m) => (u, HangmanAction) -> StateT (AllHangmanStates u) m (Either Text HangmanPrompt)
-updateHangman (u, HangmanGuess c) = gets (M.lookup u) >>= \case
-  Nothing -> return $ Left "You have not started a game yet o.o"
+updateHangman :: forall u m. (Ord u, MonadIO m, MonadUniform m) => (u, HangmanAction) -> EffT '[SModule (AllHangmanStates u)] '[ErrorText "hangman-error"] m HangmanPrompt
+updateHangman (u, HangmanGuess c) = getsS (M.lookup u) >>= \case
+  Nothing -> effThrowIn $ errorText @"hangman-error" "You have not started a game yet o.o"
   Just s  -> do
     case guessChar c s of
-      Left  e -> return $ Left e
+      Left  e -> effThrowIn $ errorText @"hangman-error" e
       Right s -> do
         if gameEnded s
         then do
@@ -117,23 +122,23 @@ updateHangman (u, HangmanGuess c) = gets (M.lookup u) >>= \case
               win = not $ uncompletedPlay s
               text | win       = "好厉害！猜对啦！这个单词是" <> hangmanWord s <> "!\n" <> "你的分数是" <> T.pack (printf "%.2f" score) <> " owo"
                    | otherwise = "Oh no, 机会用光了>.< 这个单词其实是" <> hangmanWord s <> "哦 owo" <> "\n" <> "不过你仍然获得了" <> T.pack (printf "%.2f" score) <> "分！"
-          modify $ M.delete u
-          return $ Right $ HangmanEnd (text, s { hangmanScore = Just score })
+          modifyS @(AllHangmanStates u) $ M.delete u
+          return $ HangmanEnd (text, s { hangmanScore = Just score })
         else do
-          modify $ M.insert u s
-          Right . HangmanContinue <$> generateDisplayText s
-updateHangman (u, HangmanGiveup) = gets (M.lookup u) >>= \case
-  Nothing -> return $ Left "You have not started a game yet o.o"
+          modifyS $ M.insert u s
+          HangmanContinue <$> generateDisplayText s
+updateHangman (u, HangmanGiveup) = getsS (M.lookup u) >>= \case
+  Nothing -> hangmanErrorText "You have not started a game yet o.o"
   Just s  -> do
-    modify $ M.delete u
+    modifyS @(AllHangmanStates u) $ M.delete u
     let s' = s { hangmanEnded = True, hangmanScore = Just (hangmanScoring s) }
-    return $ Right $ HangmanEnd ("好可惜，你放弃了owo 这个单词是" <> hangmanWord s, s')
-updateHangman (u, HangmanNewGame mods) = gets (M.lookup u) >>= \case
+    return $ HangmanEnd ("好可惜，你放弃了owo 这个单词是" <> hangmanWord s, s')
+updateHangman (u, HangmanNewGame mods) = getsS @(AllHangmanStates u) (M.lookup u) >>= \case
   Nothing -> do
     s <- lift $ newHangman mods
-    modify $ M.insert u s
-    Right . HangmanContinue <$> generateDisplayText s
-  Just _  -> return $ Left "You have already started a game o.o"
+    modifyS $ M.insert u s
+    HangmanContinue <$> generateDisplayText s
+  Just _  -> hangmanErrorText "You have already started a game o.o"
 
 guessChar :: Char -> HangmanState -> Either Text HangmanState
 guessChar c s

@@ -8,117 +8,91 @@ import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Concurrent.STM
 import Control.Lens
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Logger
-import Control.Monad.Trans.ReaderState
+import Control.Monad.Effect
+import Control.Monad.RS.Class
 import Control.Parallel.Strategies
 import Data.Additional
-import Data.Bifunctor
 import Data.Coerce
 import Data.Time.Clock
 import Data.UpdateMaybe
 import Debug.Trace
 import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
-import Module
-import System.General
 import Utils.List
 import qualified MeowBot.Parser as MP
+import Module.RS
+import Module.RecvSentCQ
 
 forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
-updateSelfInfo :: (MonadReadable AllData m, MonadModifiable AllData m) => CQMessage -> m ()
+updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m ()
 updateSelfInfo cqmsg = do
-  mselfInfo <- queries (selfInfo . otherdata)
+  mselfInfo <- gets selfInfo
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> change $ _otherdata . _selfInfo ?~ SelfInfo (coerce sid) NothingYet
+    (Nothing, Just sid) -> modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet
     _ -> return ()
-
--- | if savedData changed, save it to file
-saveData :: MonadIO m => AllData -> CatT r mods m ()
-saveData prev_data = do
-  new_data <- query @AllData
-  when (savedData (otherdata new_data) /= savedData (otherdata prev_data)) $ do
-    $(logDebug) "Saved data changed, I'm saving it to file! owo"
-    liftIO $ writeFile (savedDataPath . nameOfBot . botModules . botConfig $ new_data) $ show $ savedData (otherdata new_data)
 
 -- | Specify the path to save the data according to the bot name.
 savedDataPath :: BotName -> FilePath
 savedDataPath (BotName Nothing)  = "savedData"
 savedDataPath (BotName (Just n)) = "savedData-" ++ n
 
-makeHeader :: MonadReadable AllData m => m (Maybe Headers)
+makeHeader :: MonadReadable OtherData m => m (Maybe Headers)
 makeHeader = do
-  sid <- queries (fmap selfId . selfInfo . otherdata)
+  sid <- queries (fmap selfId . selfInfo)
   return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
 
--- | globalize MeowT to CatT r mods m a = SystemT r AllData mods m a
-globalizeMeow :: (Monad m) => MeowT r mods m a -> CatT r mods m a
-globalizeMeow
-  = CatT . ReaderStateT
-  . (\wbaraoo (allglob, r) (allloc, alld) ->
-      let (wc, bc) = (wholechat alld, botConfig alld)
-      in second (second (\o -> AllData wc bc o)) <$> wbaraoo ((wc, bc), (allglob, r)) (allloc, otherdata alld)
-    )
-  . runReaderStateT . runMeowT
-
-gIncreaseAbsoluteId :: (Monad m) => CatT r mods m Int
-gIncreaseAbsoluteId = globalizeMeow increaseAbsoluteId
-
-increaseAbsoluteId :: (MonadModifiable OtherData m) => m Int
+increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m Int
 increaseAbsoluteId = do
-  change $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
-  queries message_number
+  modifyS $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
+  getsS message_number
 
-updateSavedAdditionalData :: (MonadModifiable AllData m) => m ()
-updateSavedAdditionalData = change $ \ad ->
-  let od = otherdata ad
-      sd = savedData od
+updateSavedAdditionalData :: (MonadStateful OtherData m) => m ()
+updateSavedAdditionalData = modify $ \od ->
+  let sd = savedData od
       rd = runningData od
       sd' = sd { savedAdditional = coerce filterSavedAdditional rd } `using` rseqSavedData
-  in ad { otherdata = od { savedData = sd' } }
+  in od { savedData = sd' }
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
-updateAllDataByMessage :: CQMessage -> AllData -> AllData
-updateAllDataByMessage cqmsg (AllData whole_chat m other_data) =
+updateWholeChatByMessage :: Monad m => CQMessage -> EffT '[SModule WholeChat, SModule OtherData] NoError m ()
+updateWholeChatByMessage cqmsg =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
-      Just gid -> AllData
-        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg)
-        m
-        other_data
-      Nothing -> AllData whole_chat m other_data
+      Just gid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg
+      Nothing -> return ()
 
     PrivateMessage -> case userId cqmsg of
-      Just uid -> AllData
-        (updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg)
-        m
-        other_data
-      Nothing -> AllData whole_chat m other_data
+      Just uid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg
+      Nothing -> return ()
 
     Response -> let (rdata, mecho) = (responseData cqmsg, echoR cqmsg) in
       case rdata of
-        Nothing     -> AllData whole_chat m other_data
-        Just rsdata -> updateAllDataByResponse (rsdata, mecho) (AllData whole_chat m other_data)
-    _ -> AllData whole_chat m other_data
+        Nothing     -> return ()
+        Just rsdata -> updateAllDataByResponse (rsdata, mecho)
+    _ -> return ()
 
 
-updateAllDataByResponse :: (ResponseData, Maybe Text) -> AllData -> AllData
-updateAllDataByResponse (rdata, mecho) alldata =
-  case (message_id rdata, (sent_messages . otherdata) alldata) of
-    (Nothing,_) -> alldata
-    (_, []) -> alldata
+updateAllDataByResponse :: Monad m => (ResponseData, Maybe Text) -> EffT '[SModule WholeChat, SModule OtherData] NoError m ()
+updateAllDataByResponse (rdata, mecho) = do
+  otherdata <- getS
+  case (message_id rdata, sent_messages otherdata) of
+    (Nothing,_) -> pure ()
+    (_, []) -> pure ()
     (Just mid, sentMessageList@(headSentMessageList:_)) ->
       let m0 = fromMaybe headSentMessageList $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
           ms = filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of -- attach to the message id that the bot is replying to
-        (Just gid, _) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        (Nothing, Just uid) -> alldata {wholechat = updateListByFuncKeyElement (wholechat alldata) id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}, otherdata = (otherdata alldata){sent_messages = ms}}
-        _ -> alldata
+        (Just gid, _) -> do
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}
+          modifyS $ \od -> od { sent_messages = ms }
+        (Nothing, Just uid) -> do
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}
+          modifyS $ \od -> od { sent_messages = ms }
+        _ -> pure ()
 
 type End a = a -> a
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
@@ -167,15 +141,12 @@ attachRule msg1 = do
   repId <- MP.replyTo mtm
   return $ (Just repId ==) . messageId
 
--- | A constraint on the monad that we can insert a message into the chat history.
-type InsertHistory r m = (HasSystemRead (TVar (Maybe SentCQMessage)) r, MonadIO m)
-
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 -- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
-insertMyResponseHistory :: InsertHistory r m => ChatId -> MetaMessage -> MeowT r mods m ()
+insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> EffT '[SModule OtherData, RecvSentCQ] NoError m ()
 insertMyResponseHistory (GroupChat gid) meta = do
-  utc <- query
-  other_data <- query
+  utc <- liftIO getCurrentTime
+  other_data <- getS
   let my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
@@ -185,12 +156,12 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
-  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
-  utc <- query
-  other_data <- query
+  utc <- liftIO getCurrentTime
+  other_data <- getS
   let my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
@@ -200,8 +171,8 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  change $ const $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
-  tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
+  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 
 -- | Filter out the messages that are not within 60 seconds of the current time.

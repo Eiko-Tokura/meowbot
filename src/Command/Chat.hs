@@ -7,7 +7,6 @@ import MeowBot
 import MeowBot.Prelude
 import MeowBot.GetInfo
 import MeowBot.BotStatistics
-import System.General (MeowT)
 import External.ChatAPI as API
 import External.ChatAPI.Tool
 import External.ChatAPI.Tool.Search
@@ -21,17 +20,19 @@ import qualified Data.Text as T
 import qualified Data.Foldable as Foldable
 
 import Control.Applicative
-import Control.Monad.IO.Unlift
 import Control.Monad.Logger
-import Control.Monad.Trans.ReaderState
+import Module.RS
+import Control.Monad.Effect
 import Command.Cat.CatSet
 import Command.Hangman
 
 import Module.ConnectionManager
+import Module.Logging
 import Data.PersistModel
 import Data.Proxy
 import Data.HList
 import Data.Coerce
+import Data.Bifunctor
 import MeowBot.CostModel
 import MeowBot.Data.CQHttp.CQCode
 import Utils.RunDB
@@ -97,7 +98,7 @@ commandChat = BotCommand Chat $ botT $ do
             ignoredPatterns = liftM2 (<|>)
               (fmap Left  . MP.runParser hangmanParser')
               (fmap Right . MP.runParser commandHead')
-        _ <- pureMaybe $ invertMaybe_ $ ignoredPatterns msg
+        _ <- MaybeT . pure $ invertMaybe_ $ ignoredPatterns msg
         guard $ uid /= qGroupManagerId
         return (Just msg, cid, Just mid)
       Just (cid, _) -> do
@@ -112,7 +113,7 @@ commandChat = BotCommand Chat $ botT $ do
   botname    <- query
   botid      <- query
   utcTime    <- liftIO getCurrentTime
-  ConnectionManagerModuleG man timeout <- query
+  ConnectionManagerModuleRead man timeout <- lift askModule
   noteListing <- lift $ getNoteListing botname cid
   botSetting        <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotId botid)
   botSettingPerChat <- lift $ fmap (fmap entityVal) . runDB $ getBy (UniqueBotIdChatId botid cid)
@@ -286,7 +287,7 @@ commandChat = BotCommand Chat $ botT $ do
   lift $ putType allChatState
   -- ^ update in the state
 
-  chatState <- pureMaybe $ SM.lookup cid allChatState
+  chatState <- MaybeT . pure $ SM.lookup cid allChatState
 
   when oneOffActive $ $(logInfo) $ "One off active, replying to " <> tshow cid
 
@@ -307,17 +308,26 @@ commandChat = BotCommand Chat $ botT $ do
       $logInfo "Service disabled due to insufficient balance"
       return disableAndNofity
     Right extraAction -> do
-      ioeResponse <- lift . embedMeowToolEnv . toIO $
+      LoggingRead logger <- lift askModule
+      ioeResponse <- pure . runEffT00 . runLogging logger . runSModule (chatStatus chatState) . fmap (first $ toText @_ @Text) . errorToEitherAll $
         case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
           Nothing ->
-            statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params) $ chatStatus chatState
+            statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params)
           Just proxyCont -> proxyCont $ \(Proxy :: Proxy a) ->
-            statusChatReadAPIKey @a @MeowTools (coerce params) $ chatStatus chatState
+            statusChatReadAPIKey @a @MeowTools (coerce params)
 
       logger <- askLoggerIO
 
-      asyncAction <- liftIO $ do
-        async $ do
+      asyncAction <- lift
+                      . embedError
+                      . fmap (fmap
+                         (\case
+                           (RSuccess a, _) -> a
+                           (RFailure (EHead e), _) -> effThrow e
+                         )
+                        )
+                      . asyncEffT $
+        (do
           (eNewMsg, newStatus) <- ioeResponse
           case eNewMsg of
             Left err -> do -- responded with error message
@@ -357,7 +367,7 @@ commandChat = BotCommand Chat $ botT $ do
                 meowAsyncSplitSendToChatIdFull cid mMid []
                   ([MReplyTo mid | Just mid <- pure mMid] <> [MMessage (last newMsgs)])
                   2_000_000 splitedMessageToSend
-
+        )
       -- update busy status
       lift $ markMeow cid MeowBusy
       -- record the reply time
@@ -400,8 +410,8 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT MeowData Mods IO) ()
-determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = pureMaybe $ Just ()
+determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
+determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
 determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
@@ -443,10 +453,10 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
         boolMaybe $ chance <= prob
         boolMaybe $ notAllNoText cqmsgs
       parsed = void $ MP.runParser (catParser bn cs) msg
-  pureMaybe $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
-  pureMaybe notRateLimited
+  MaybeT . pure $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
+  MaybeT . pure $ notRateLimited
 determineIfReply _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
-  then pureMaybe Nothing
-  else pureMaybe $ Just ()
+  then MaybeT . pure $ Nothing
+  else MaybeT . pure $ Just ()
 determineIfReply _ _ _ _ _ _ _ _ _ _ _ = empty

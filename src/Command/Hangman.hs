@@ -12,9 +12,11 @@ import Data.Additional
 import Data.Additional.Default
 import Command
 import Control.Monad
-import Control.Monad.State
-import Control.Monad.Readable
+import Control.Monad.Trans
+import Control.Monad.RS.Class
 import Control.Monad.Trans.Maybe
+import Control.Monad.Effect
+import Module.RS
 import Data.Coerce
 import MeowBot.Data
 import MeowBot
@@ -96,12 +98,12 @@ commandHangman = BotCommand Hangman $ botT $ do
 doHangman :: ChatId -> Text -> UserId -> Either HangmanAction ViewRanking -> Meow [BotAction]
 doHangman cid _ uid (Left hmact) = do
   allHangman <- getTypeWithDef (M.empty :: AllHangmanStates UserId)
-  runStateT (updateHangman (uid, hmact)) allHangman >>= \case
+  (runEffT00 . runSModuleIn allHangman . errorToEither $ updateHangman (uid, hmact) ) >>= \case
 
-    (Left  txt, _) -> return [baSendToChatId cid txt]
+    (Left  hmErr, _) -> return [baSendToChatId cid (toText hmErr)]
 
     (Right (HangmanContinue txt), alls) -> do
-      change @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
+      modifyS @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
       meowSendToChatIdFull cid Nothing [AdditionalData HangmanUnit] [] txt
 
     (Right (HangmanEnd (txt, s)), alls) -> do
@@ -109,7 +111,7 @@ doHangman cid _ uid (Left hmact) = do
       runDB $ insert_ (hangmanStateToRecord uid s)
       nickname <- queries $ senderNickname <=< sender . getNewMsg
       (newpp, newrank, _, _) <- updateTotalPP uid nickname
-      change @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
+      modify @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
       return [baSendToChatId cid (txt <> rankChange moldUserRank newpp newrank)]
 
 doHangman cid _ _ (Right ViewGlobalRanking) = do

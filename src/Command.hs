@@ -17,10 +17,9 @@ module Command
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad.Logger
-import Control.Monad.State
+import Control.Monad.RS.Class
+import Control.Monad.Effect
 import Data.Aeson
-import Data.Bifunctor
-import Data.HList
 import Data.PersistModel
 import Data.UpdateMaybe
 import MeowBot.API
@@ -29,22 +28,19 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
 import MeowBot.Prelude
-import MeowBot.Update
-import Module
+import Module.Logging
 import Module.Async
 import Module.AsyncInstance
 import Network.WebSockets (Connection, sendTextData)
-import System.General
 import System.Meow
 import Utils.ListComp
 import Utils.RunDB
-import qualified Data.ByteString.Lazy as BL
 import qualified Data.List.NonEmpty   as NE
 import qualified Data.Set             as S
 import qualified Data.Text            as T
 import qualified MeowBot.Parser       as MP
 
-commandParserTransformByBotName :: (MP.Chars sb, Monad m) => MP.Parser sb Char a -> MeowT r mods m (MP.Parser sb Char a)
+commandParserTransformByBotName :: (MP.Chars sb, Monad m, MeowAllData mods) => MP.Parser sb Char a -> MeowT mods m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
   botname <- maybeBotName <$> query
   return $ case botname of
@@ -58,23 +54,26 @@ restrictNumber _ [] = ["什么也没找到 o.o"]
 restrictNumber n xs =  [tshow i <> " " <> x | (i, x) <- zip [1 :: Int ..] $ take n xs]
                     <> ["(显示了前" <> tshow (min n (length xs)) <> "/" <> tshow (length xs) <> "条)" | length xs > n]
 
-botT :: Monad m => MaybeT (MeowT r mods m) [a] -> MeowT r mods m [a]
+botT :: Monad m => MaybeT (MeowT mods m) [a] -> MeowT mods m [a]
 botT = fmap (fromMaybe []) . runMaybeT
 
 -- | Execute a BotAction, if it is a BAAsync, then put it into the asyncActions instead of waiting for it
 doBotAction :: Connection -> BotAction -> Meow ()
-doBotAction conn (BASendPrivate uid txt) = query >>= MeowT . lift . sendPrivate conn uid txt . Just . pack . show . message_number
-doBotAction conn (BASendGroup gid txt)   = query >>= MeowT . lift . sendGroup   conn gid txt . Just . pack . show . message_number
-doBotAction conn (BARetractMsg mid)      = MeowT . lift $ deleteMsg conn mid
-doBotAction conn (BAActionAPI af)        = query >>= MeowT . lift . actionAPI conn . ActionForm af . Just . pack . show . message_number
+doBotAction conn (BASendPrivate uid txt) = query >>= embedEffT . sendPrivate conn uid txt . Just . pack . show . message_number
+doBotAction conn (BASendGroup gid txt)   = query >>= embedEffT . sendGroup   conn gid txt . Just . pack . show . message_number
+doBotAction conn (BARetractMsg mid)      = embedEffT $ deleteMsg conn mid
+doBotAction conn (BAActionAPI af)        = query >>= embedEffT . actionAPI conn . ActionForm af . Just . pack . show . message_number
 doBotAction _    (BAAsync act)           = do
   $(logDebug) "BAAsync put into set"
-  modify . first $ modifyF @AsyncModule (AsyncModuleL . S.insert act . asyncSet)
---change $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
+  modifyModule @AsyncModule (AsyncState . S.insert act . asyncSet)
+--modify $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
 doBotAction conn (BAPureAsync pAct)      = doBotAction conn (BAAsync $ return <$> pAct)
 doBotAction _    (BASimpleAction meow)   = meow
-doBotAction _    (BAQueryAPI contMaybes) = do
-  tvarQueries <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) ) ])
+doBotAction conn (BAQueryAPI (SomeQueryAPI query cont)) = do
+  cont' <- queryAPI conn query
+  doBotAction conn (BARawQueryCallBack $ pure $ fmap cont . cont')
+doBotAction _    (BARawQueryCallBack contMaybes) = do
+  tvarQueries <- asksModule meowReadsQueries
   utcTime <- liftIO getCurrentTime
   liftIO . atomically $ do
     list <- readTVar tvarQueries
@@ -92,19 +91,19 @@ doBotAction conn (BADelayedPureAction ms acts) = doBotAction conn (BADelayedActi
 doBotAction conn (BADelayedPureAction1 ms act) = doBotAction conn (BADelayedPureAction ms [act])
 
 -- | Low-level functions to send private messages
-sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> LoggingT IO ()
+sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> EffT '[LoggingModule] '[] IO ()
 sendPrivate conn uid text mecho = do
   lift . sendTextData conn $ encode (ActionForm (SendPrivateMessage uid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to send group messages
-sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> LoggingT IO ()
+sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> EffT '[LoggingModule] '[] IO ()
 sendGroup conn gid text mecho = do
   lift . sendTextData conn $ encode (ActionForm (SendGroupMessage gid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to delete messages
-deleteMsg :: Connection -> CQMessageId -> LoggingT IO ()
+deleteMsg :: Connection -> CQMessageId -> EffT '[LoggingModule] '[] IO ()
 deleteMsg conn mid = do
   lift . sendTextData conn $ encode (ActionForm (DeleteMessage mid) Nothing)
   $(logInfo) $ "=> Delete message: " <> tshow mid
@@ -150,8 +149,8 @@ permissionCheck botCommand = botT $ do
 
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
 -- if there are any async bot actions, put them into the asyncActions instead of waiting for them
-doBotCommands ::  Connection -> [BotCommand] -> Cat ()
-doBotCommands conn commands = globalizeMeow $ do
+doBotCommands ::  Connection -> [BotCommand] -> Meow ()
+doBotCommands conn commands = do
   actions <- permissionCheck `mapM` commands
   doBotAction conn `mapM_` concat actions
 
@@ -190,7 +189,7 @@ updateSavedDataDB = do
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
       commandRules         = [commandRuleDBCommandRule c | c <- commandRulesDB]
-  change $ \od -> od { savedData = (savedData od)
+  modify $ \od -> od { savedData = (savedData od)
                         { userGroups   = userIds_userGroups
                         , groupGroups  = groupIds_groupGroups
                         , commandRules = commandRules

@@ -10,6 +10,7 @@ module Parser.Except
   , liftR, liftR1, liftR2
   , lift0, lift1, lift2
   , withE, readE, addE
+  , modifyE, prependE
   , runParserE
   , mergeEither
   , module Control.Monad.Trans.Except
@@ -82,6 +83,19 @@ withE e p = liftR p <|> lift (throwE e)
 addE :: (Monad m, Alternative m) => e -> ParserExceptT sb b e m a -> ParserExceptT sb b e m a
 addE e p = p <|> lift (throwE e)
 {-# INLINE addE #-}
+
+-- | Change error message
+modifyE :: (Monad m) => (e -> e') -> ParserExceptT sb b e m a -> ParserExceptT sb b e' m a
+modifyE fe p = packParserExceptT $ \sb -> do
+  r <- runParserExceptT p sb
+  case r of
+    Left e' -> return . Left $ fe e'
+    Right a -> return $ Right a
+{-# INLINE modifyE #-}
+
+prependE :: (Monad m, Semigroup e) => e -> ParserExceptT sb b e m a -> ParserExceptT sb b e m a
+prependE e = modifyE (e <>)
+{-# INLINE prependE #-}
 
 -- | Run a ParserE and return the result or the error message
 runParserE :: e -> ParserE sb b e a -> sb -> Either e a

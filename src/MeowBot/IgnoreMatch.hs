@@ -1,6 +1,6 @@
 module MeowBot.IgnoreMatch where
 
-import Control.Monad.Readable
+import Control.Monad.RS.Class
 import Data.Maybe
 import Data.PersistModel
 import Database.Persist

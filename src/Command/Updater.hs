@@ -3,6 +3,7 @@ module Command.Updater where
 
 import Command
 import Control.Lens
+import Control.Monad.Effect
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
@@ -10,7 +11,8 @@ import Data.Map.Strict (Map)
 import Data.Time.Clock
 import Data.UpdateMaybe
 import MeowBot
-import Module
+import Module.MeowConnection
+import Control.Monad.RS.Class
 import qualified Data.Map.Strict as Map
 
 anHour :: NominalDiffTime
@@ -21,8 +23,8 @@ commandUpdater = BotCommand Updater $ botT $ do
   botid :: BotId <- query
   s@SelfInfo {selfId, selfInGroups} <- MaybeT $ queries selfInfo
   $logDebug $ "Bot ID: " <> toText botid <> ", SelfInfo: " <> toText s
-  conn <- lift askSystem
-  let updateLensSelfInGroups u = change $ _selfInfo ?~ s { selfInGroups = u }
+  conn <- lift $ asksModule meowConnection
+  let updateLensSelfInGroups u = modify $ _selfInfo ?~ s { selfInGroups = u }
 
       updateGroupListInMapWith :: Ord g => [g] -> a -> Map g a -> Map g a
       updateGroupListInMapWith gids defVal mapG
@@ -43,9 +45,9 @@ commandUpdater = BotCommand Updater $ botT $ do
                             %~ updateUMaybeTime utcTime
                                 (updateGroupListInMapWith gids NothingYet Map.empty)
                                 (updateGroupListInMapWith gids NothingYet)
-              change $ _selfInfo ?~ s'
+              modify $ _selfInfo ?~ s'
               return []
-        return $ pure $ BAQueryAPI [fmap nextStep . parseResponse]
+        return $ pure $ BARawQueryCallBack [fmap nextStep . parseResponse]
 
   withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
     utcTime <- liftIO getCurrentTime
@@ -65,17 +67,17 @@ commandUpdater = BotCommand Updater $ botT $ do
                             GroupInfo
                               { selfRole = resp.getGroupMemberInfoRole }
                      }
-          change $ _selfInfo ?~ s'
+          modify $ _selfInfo ?~ s'
           return []
 
     -- | Mark all needed updates as Updating
-    change $ \od -> od { selfInfo = Just s { selfInGroups
+    modify $ \od -> od { selfInfo = Just s { selfInGroups
                                               = updateUMaybeTimeWithoutTime selfInGroups
                                               $ \m -> foldr (Map.update (Just . toUpdating) . fst) m updateNeeded
                                            } }
 
     parsers <- queryAPI conn `mapM` [GetGroupMemberInfo gid selfId False | gid <- fst <$> updateNeeded]
-    return $ pure $ BAQueryAPI [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
+    return $ pure $ BARawQueryCallBack [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
 
 withExpireTimeDo
   :: (MonadIO m)

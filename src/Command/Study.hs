@@ -17,7 +17,7 @@ import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.Maybe
-import Control.Monad.Trans.ReaderState
+import Control.Monad.RS.Class
 
 import Data.Maybe (listToMaybe, fromMaybe, catMaybes, mapMaybe)
 import Data.List
@@ -153,7 +153,7 @@ commandStudy :: BotCommand
 commandStudy = BotCommand Study $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
   studyParser' <- lift $ commandParserTransformByBotName studyParser
-  squery <- pureMaybe $ MP.runParser studyParser' msg
+  squery <- MaybeT . pure $ MP.runParser studyParser' msg
   other_data <- query
   let allBooks = books $ savedData other_data
   case squery of
@@ -162,7 +162,7 @@ commandStudy = BotCommand Study $ botT $ do
       in return [ baSendToChatId cid $ T.intercalate "\n" $ restrictNumber 5 $ map simplifiedListing searchResult ]
 
     ReadBook bookname (Right pages) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           absPageNumbersToView = map (offsetPageNumber offset `either` id) pages  :: [AbsolutePageNumber]
           pagesToView = [ page | page <- book_pages match, page_absoluteNumber page `elem` absPageNumbersToView ]
@@ -180,7 +180,7 @@ commandStudy = BotCommand Study $ botT $ do
         return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) pagesToView ]
 
     ReadBook bookname (Left (pageType, pages')) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
           pagesOfGivenType = [ page | page <- book_pages match, page_type page == Just pageType ]
           absPageNumbersToView =
@@ -190,7 +190,7 @@ commandStudy = BotCommand Study $ botT $ do
       return [ baSendToChatId cid $ T.concat $ restrictPages $ map (embedCQCode . CQImage . page_imagePath) pagesToView ]
 
     InfoEdit bookname Set (Just infoType) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
       let newInfo = case infoType of
             Author author -> (book_info match) { bookInfo_author = Just author }
@@ -206,11 +206,11 @@ commandStudy = BotCommand Study $ botT $ do
                                  }
                        else book
                      | book <- allBooks ]
-      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ modify $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Remove (Just infoType) -> do -- removing some information
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let offset = fromMaybe 0 $ bookInfo_pageNumberOffset $ book_info match
       let newInfo = case infoType of
             Author _ -> (book_info match) { bookInfo_author = Nothing }
@@ -230,11 +230,11 @@ commandStudy = BotCommand Study $ botT $ do
                                  }
                        else book
                      | book <- allBooks ]
-      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ modify $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid $ T.pack $ "修改成功！\n" ++ show newInfo ]
 
     InfoEdit bookname Show (Just infoType) -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       let info = case infoType of
             Author _ -> bookInfo_author $ book_info match
             Offset _ -> Just $ tshow $ bookInfo_pageNumberOffset $ book_info match
@@ -243,7 +243,7 @@ commandStudy = BotCommand Study $ botT $ do
       return [ baSendToChatId cid $ T.pack $ show info ]
 
     InfoEdit bookname Show Nothing -> do
-      match <- pureMaybe $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
+      match <- MaybeT . pure $ listToMaybe [ book | book <- allBooks, bookname `T.isInfixOf` book_name book ]
       return [ baSendToChatId cid $ T.pack $ show $ book_info match ]
     _ -> return [ baSendToChatId cid "o.o?" ]
 
@@ -291,7 +291,7 @@ readPageNumber = fromMaybe (error "page number un-readable") . runParser ($(stri
 commandBookMan :: BotCommand
 commandBookMan = BotCommand BookMan $ botT $ do
   (msg, cid, _, _, _) <- MaybeT $ getEssentialContent <$> query
-  bquery <- pureMaybe $ MP.runParser bookParser msg
+  bquery <- MaybeT . pure $ MP.runParser bookParser msg
   other_data <- lift $ query @OtherData
   case bquery of
     Upload _bookname _pdf -> do
@@ -306,7 +306,7 @@ commandBookMan = BotCommand BookMan $ botT $ do
       --    return [ baSendToChatId cid $ T.pack $ "上传成功！\n" ++ show book ]
     Delete bookname -> do
       let newBooks = filter ((/= bookname) . book_name) $ books (savedData other_data)
-      lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
+      lift $ modify $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
       return [ baSendToChatId cid "全部忘掉啦owo!" ]
     LocalMakeBook bookname pdf -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
@@ -315,7 +315,7 @@ commandBookMan = BotCommand BookMan $ botT $ do
         Left err -> return [ baSendToChatId cid $ "制作书书的时候出错了o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
-          lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
+          lift $ modify $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
           return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
     LocalAddBook bookname imagesDir -> do
       let bookinfo = BookInfo Nothing Nothing [] "喵喵"
@@ -324,7 +324,7 @@ commandBookMan = BotCommand BookMan $ botT $ do
         Left err -> return [ baSendToChatId cid $ "制作书书的时候遇到了麻烦o.o\n" <> tshow err ]
         Right book -> do
           let newBooks = book : books (savedData other_data)
-          lift $ change $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
+          lift $ modify $ \other_data -> other_data { savedData = (savedData other_data) {books = newBooks} }
           return [ baSendToChatId cid $ "书书制作好啦owo\n" <> bookStats book ]
   where
     bookParser :: (Chars sb) => Parser sb Char BookManagement

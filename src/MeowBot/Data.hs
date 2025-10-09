@@ -29,6 +29,7 @@ module MeowBot.Data
   , showCQ, cqmsgToEssentialContent, emptyCQMessage, cqmsgToCid
   ) where
 
+import Control.Monad.Logger
 import Control.DeepSeq (NFData)
 import Data.Default
 import External.ProxyWS (ProxyData)
@@ -45,9 +46,14 @@ import Utils.Text
 import qualified MeowBot.Parser as MP
 
 import Database.Persist.Sqlite
+import Module.Logging
 
 newtype BotId = BotId { unBotId :: Int } deriving (Show, Eq, Ord, Read, Generic)
   deriving newtype (PersistField, PersistFieldSql, NFData, Num, Default)
+
+instance IsLogCat BotId where
+  logTypeDisplay (BotId i) = "BotId=" <> toLogStr i
+  {-# INLINE logTypeDisplay #-}
 
 -- | Structured and Unstructured Chat
 -- recent messages top, older messages bottom

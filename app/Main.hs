@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings, OverloadedRecordDot, TemplateHaskell, MultilineStrings #-}
 module Main where
 
 import Command
@@ -10,11 +10,19 @@ import Data.List (isPrefixOf)
 import Data.Either
 
 import Control.Monad.Trans
+import Control.Monad.Logger
 import Control.Concurrent
+import Control.Monad.Effect
+import Control.System
 
 import System.Environment
 import System.Cat
-import System.Logging
+import Module.Logging
+import Module.Logging.Logger
+import Module.Database.Sqlite
+import Module.Prometheus
+import qualified Data.Text.IO as TIO
+import Data.PersistModel (migrateAll)
 
 -- import GHC.Conc (forkIO)
 -- import GHC.Debug.Stub
@@ -62,35 +70,40 @@ parseArgs = many (do
 --
 --  you can run a debuger on port 2077
 --  by changing to main = withGhcDebugTCP "127.0.0.1" 2077 $ do
-main :: IO () --runLoggingConcurrent (myLogger "meowbot.log")
-main = do
-  args <- getArgs
-  runLoggingConcurrent (myLogger True
-      (  [DebugCQMessage   | "--debug-cqmsg" `elem` args]
-      <> [DebugJson        | "--debug-json"  `elem` args]
-      <> [DebugOther "owo" | "--debug-other" `elem` args]
-      )
-      ["meowbot.log"]) $ do
-    $(logDebug) $ pack $ "Arguments: " ++ show args
+main :: IO ()
+main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
+  args       <- liftIO getArgs
+  stdoLogger <- liftIO createStdoutBaseLogger
+  fileLogger <- liftIO $ createFileLogger "meowbot.log"
+  let baseLogger = stdoLogger <> fileLogger
+
+  loggerInit <- pureEitherInWith id $ defaultLoadFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) args
+  dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll args
+  promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs (Just 6001) (Just ["metrics"]) args
+
+  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withModule dbInit $ do
+    $logDebug $ pack $ "Arguments: " ++ show args
     case runParserE argumentHelp parseArgs args of
       Left errMsg -> $(logError) (pack errMsg)
-      Right []    -> runBots allInitDataG [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] [] []] >> halt
-      Right bots  -> runBots allInitDataG bots >> halt
+      Right []    -> embedNoError $ runBots [BotInstance (RunClient "127.0.0.1" 3001) [] [] [] [] [] []] >> halt
+      Right bots  -> embedNoError $ runBots bots >> halt
   where halt = lift (threadDelay maxBound) >> halt
-        argumentHelp = unlines
-              [ "Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]"
-              , "  --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server"
-              , "  --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection"
-              , "  --name <name>             : set the name of the bot, with empty default to \"喵喵\""
-              , "  --id <id : int>           : set the id of the bot, necessary if running separated bots, default to 0"
-              , "  --sys-msg <msg>           : set the global system message of the bot"
-              , "  --command <commandId>     : allow the bot to use the command with the given commandId, use multiple --command flags to allow multiple commands"
-              , "                              commandId must be one of " ++ show [minBound..maxBound :: CommandId]
-              , "                              if no --command flags are given, the bot will use all commands"
-              , "  --debug-json              : print the JSON message received from the server"
-              , "  --debug-cqmsg             : print the decoded CQMessage"
-              , "  --proxy <address> <port>  : set the proxy server to connect to, use multiple --proxy flags to connect to multiple servers"
-              , "  If no arguments are given, the bot will run as a client connecting to the go-cqhttp WebSocket server on 127.0.0.1:3001"
-              , ""
-              , "Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags."
-              ]
+        argumentHelp =
+          """
+          Usage: MeowBot [--run-client <ip> <port> | --run-server <ip> <port>] [--name <name>] [--sys-msg <msg>] [--command <commandId>] [--debug-json] [--debug-cqmsg] [--proxy <address> <port>]
+            --run-client <ip> <port>  : run the bot as a client connecting to the go-cqhttp WebSocket server
+            --run-server <ip> <port>  : run the bot as a server, using reverse WebSocket connection
+            --name <name>             : set the name of the bot, with empty default to \"喵喵\"
+            --id <id : int>           : set the id of the bot, necessary if running separated bots, default to 0
+            --sys-msg <msg>           : set the global system message of the bot
+            --command <commandId>     : allow the bot to use the command with the given commandId, use multiple --command flags to allow multiple commands
+                                        commandId must be one of " ++ show [minBound..maxBound :: CommandId
+                                        if no --command flags are given, the bot will use all commands
+            --debug-json              : print the JSON message received from the server
+            --debug-cqmsg             : print the decoded CQMessage
+            --proxy <address> <port>  : set the proxy server to connect to, use multiple --proxy flags to connect to multiple servers
+            If no arguments are given, the bot will run as a client connecting to the go-cqhttp WebSocket server on 127.0.0.1:3001
+          
+          Multiple bots can be started by using multiple sets of flags, starting with a run flag followed by other flags.
+          """
+              
