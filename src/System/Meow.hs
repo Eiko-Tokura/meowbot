@@ -50,7 +50,7 @@ type Mods =
   ]
   -- '[CronTabTickModule, StatusMonitorModule, AsyncModule, CommandModule, LogDatabase, ProxyWS, ConnectionManagerModule]
 
-type MeowErrs = '[SystemError]
+type MeowErrs = '[ErrorText "recv_connection", ErrorText "send_connection"]
 
 -- | The monads the commands run in
 type MeowT mods m = EffT mods MeowErrs m

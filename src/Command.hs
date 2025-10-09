@@ -28,10 +28,10 @@ import MeowBot.BotStructure
 import MeowBot.CommandRule
 import MeowBot.IgnoreMatch
 import MeowBot.Prelude
+import Module.MeowConnection
 import Module.Logging
 import Module.Async
 import Module.AsyncInstance
-import Network.WebSockets (Connection, sendTextData)
 import System.Meow
 import Utils.ListComp
 import Utils.RunDB
@@ -58,21 +58,21 @@ botT :: Monad m => MaybeT (MeowT mods m) [a] -> MeowT mods m [a]
 botT = fmap (fromMaybe []) . runMaybeT
 
 -- | Execute a BotAction, if it is a BAAsync, then put it into the asyncActions instead of waiting for it
-doBotAction :: Connection -> BotAction -> Meow ()
-doBotAction conn (BASendPrivate uid txt) = query >>= embedEffT . sendPrivate conn uid txt . Just . pack . show . message_number
-doBotAction conn (BASendGroup gid txt)   = query >>= embedEffT . sendGroup   conn gid txt . Just . pack . show . message_number
-doBotAction conn (BARetractMsg mid)      = embedEffT $ deleteMsg conn mid
-doBotAction conn (BAActionAPI af)        = query >>= embedEffT . actionAPI conn . ActionForm af . Just . pack . show . message_number
-doBotAction _    (BAAsync act)           = do
+doBotAction :: BotAction -> Meow ()
+doBotAction (BASendPrivate uid txt) = query >>= sendPrivate uid txt . Just . pack . show . message_number
+doBotAction (BASendGroup gid txt)   = query >>= sendGroup   gid txt . Just . pack . show . message_number
+doBotAction (BARetractMsg mid)      = deleteMsg mid
+doBotAction (BAActionAPI af)        = query >>= actionAPI . ActionForm af . Just . pack . show . message_number
+doBotAction (BAAsync act)           = do
   $(logDebug) "BAAsync put into set"
   modifyModule @AsyncModule (AsyncState . S.insert act . asyncSet)
 --modify $ \other -> other { asyncActions   = S.insert act $ asyncActions other }
-doBotAction conn (BAPureAsync pAct)      = doBotAction conn (BAAsync $ return <$> pAct)
-doBotAction _    (BASimpleAction meow)   = meow
-doBotAction conn (BAQueryAPI (SomeQueryAPI query cont)) = do
-  cont' <- queryAPI conn query
-  doBotAction conn (BARawQueryCallBack $ pure $ fmap cont . cont')
-doBotAction _    (BARawQueryCallBack contMaybes) = do
+doBotAction (BAPureAsync pAct)      = doBotAction (BAAsync $ return <$> pAct)
+doBotAction (BASimpleAction meow)   = meow
+doBotAction (BAQueryAPI (SomeQueryAPI query cont)) = do
+  cont' <- queryAPI query
+  doBotAction (BARawQueryCallBack $ pure $ fmap cont . cont')
+doBotAction (BARawQueryCallBack contMaybes) = do
   tvarQueries <- asksModule meowReadsQueries
   utcTime <- liftIO getCurrentTime
   liftIO . atomically $ do
@@ -82,30 +82,32 @@ doBotAction _    (BARawQueryCallBack contMaybes) = do
                                | contMaybe <- contMaybes
                                | qid <- [qid'..]
                                ])
-doBotAction conn (BADelayedAction ms meow) = do
+doBotAction (BADelayedAction ms meow) = do
   waitMeow <- liftIO $ async $ do
     threadDelay (ms * 1000) -- milliseconds to microseconds
     return meow
-  doBotAction conn (BAAsync waitMeow)
-doBotAction conn (BADelayedPureAction ms acts) = doBotAction conn (BADelayedAction ms (return acts))
-doBotAction conn (BADelayedPureAction1 ms act) = doBotAction conn (BADelayedPureAction ms [act])
+  doBotAction (BAAsync waitMeow)
+doBotAction (BADelayedPureAction ms acts) = doBotAction (BADelayedAction ms (return acts))
+doBotAction (BADelayedPureAction1 ms act) = doBotAction (BADelayedPureAction ms [act])
 
 -- | Low-level functions to send private messages
-sendPrivate :: Connection -> UserId -> Text -> Maybe Text -> EffT '[LoggingModule] '[] IO ()
-sendPrivate conn uid text mecho = do
-  lift . sendTextData conn $ encode (ActionForm (SendPrivateMessage uid text Nothing) mecho)
+sendPrivate :: (In MeowConnection mods, In LoggingModule mods, InList (ErrorText "send_connection") es)
+  => UserId -> Text -> Maybe Text -> EffT mods es IO ()
+sendPrivate uid text mecho = do
+  sendTextData $ encode (ActionForm (SendPrivateMessage uid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> user ", tshow uid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to send group messages
-sendGroup :: Connection -> GroupId -> Text -> Maybe Text -> EffT '[LoggingModule] '[] IO ()
-sendGroup conn gid text mecho = do
-  lift . sendTextData conn $ encode (ActionForm (SendGroupMessage gid text Nothing) mecho)
+sendGroup :: (In MeowConnection mods, In LoggingModule mods, InList (ErrorText "send_connection") es)
+  => GroupId -> Text -> Maybe Text -> EffT mods es IO ()
+sendGroup gid text mecho = do
+  sendTextData $ encode (ActionForm (SendGroupMessage gid text Nothing) mecho)
   $(logInfo) $ T.concat ["-> group ", tshow gid, ": ", restrictLength 512 text]
 
 -- | Low-level functions to delete messages
-deleteMsg :: Connection -> CQMessageId -> EffT '[LoggingModule] '[] IO ()
-deleteMsg conn mid = do
-  lift . sendTextData conn $ encode (ActionForm (DeleteMessage mid) Nothing)
+deleteMsg :: (MeowSend mods es, In LoggingModule mods) => CQMessageId -> EffT mods es IO ()
+deleteMsg mid = do
+  sendTextData $ encode (ActionForm (DeleteMessage mid) Nothing)
   $(logInfo) $ "=> Delete message: " <> tshow mid
 
 -- | Check if the command is allowed, and execute it if it is
@@ -149,10 +151,10 @@ permissionCheck botCommand = botT $ do
 
 -- | Input all data, all commands, do the commands that is required by the input, then return updated data
 -- if there are any async bot actions, put them into the asyncActions instead of waiting for them
-doBotCommands ::  Connection -> [BotCommand] -> Meow ()
-doBotCommands conn commands = do
+doBotCommands :: [BotCommand] -> Meow ()
+doBotCommands commands = do
   actions <- permissionCheck `mapM` commands
-  doBotAction conn `mapM_` concat actions
+  doBotAction `mapM_` concat actions
 
 -- | Extract the bot actions from a list of bot commands, checking the permissions
 botCommandsToMeow :: [BotCommand] -> [Meow [BotAction]]

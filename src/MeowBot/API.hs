@@ -2,36 +2,43 @@ module MeowBot.API where
 
 import Control.Monad.IO.Class
 import Control.Monad.Logger
-import Control.Monad.Trans
 import Data.Aeson
 import MeowBot.Data
-import Network.WebSockets (Connection, sendTextData)
+import Module.MeowConnection
 import System.Random
 import Utils.ByteString
 import Control.Monad.Effect
 import Module.Logging
 
 -- | Low-level functions to send any action
-actionAPI :: Connection -> ActionForm ActionAPI -> EffT '[LoggingModule] '[] IO ()
-actionAPI conn af = do
-  lift . sendTextData conn $ encode af
-  $(logInfo) $ "=> Action: " <> tshow af
+actionAPI ::
+  ( MonadIO m
+  , In' c LoggingModule mods
+  , In' c MeowConnection mods
+  , InList (ErrorText "send_connection") es
+  )
+  => ActionForm ActionAPI -> EffT' c mods es m ()
+actionAPI af = do
+  sendTextData $ encode af
+  effAddLogCat' (LogCat @Text "Action") $ $(logInfo) $ "=> Action: " <> tshow af
 
 -- | This keeps the send logic and the receive logic together
 -- with continuation style passing functions around, we can enforce a lot of coupled relationships
 queryAPI
-  :: ( MonadLogger m
+  :: ( FromJSON (WithEcho (QueryAPIResponse queryType))
+     , In' c LoggingModule mods
+     , In' c MeowConnection mods
+     , InList (ErrorText "send_connection") es
      , MonadIO m
-     , FromJSON (WithEcho (QueryAPIResponse queryType))
      )
-  => Connection
-  -> QueryAPI queryType
-  -> m ( LazyByteString
+  => QueryAPI queryType
+  -> EffT' c mods es m
+       ( LazyByteString
        -> Maybe (QueryAPIResponse queryType)
        ) -- ^ the echo is captured in the returned function, force a tightly coupled relationship between the query and the response
-queryAPI conn query = do
+queryAPI query = do
   echo <- generateUniqueEcho
-  liftIO $ sendTextData conn $ encode (ActionForm query $ Just echo)
+  sendTextData $ encode (ActionForm query $ Just echo)
   $(logInfo) $ "=> Query: " <> tshow query <> " with echo: " <> echo
   return $ \received -> do
     decoded :: WithEcho (QueryAPIResponse queryType) <- decode received

@@ -64,9 +64,8 @@ botLoop = do
 performMeowActions :: Meow ()
 performMeowActions = do
   actions <- asksModule meowReadsAction
-  conn    <- asksModule meowConnection
   as <- liftIO . atomically $ readTVar actions <* writeTVar actions []
-  mapM_ (doBotAction conn) . concat =<< sequence as
+  mapM_ doBotAction . concat =<< sequence as
 
 -- the process of initialization:
 --

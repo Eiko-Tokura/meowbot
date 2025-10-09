@@ -14,7 +14,7 @@ import Control.Monad.Effect
 import Control.Parallel.Strategies
 import Data.Time
 import Data.UpdateMaybe
-import Data.Aeson
+import Data.Aeson (eitherDecode)
 import Data.Maybe
 import MeowBot.Action
 import MeowBot.BotStructure
@@ -61,35 +61,28 @@ allGroupCommands   = $(makeBotCommands [minBound .. maxBound :: CommandId])
 instance Module CommandModule where
 
   data ModuleRead CommandModule  = CommandModuleRead
-  data ModuleState CommandModule = CommandModuleState { msgAsync :: Async BL.ByteString }
+  data ModuleState CommandModule = CommandModuleState { msgAsync :: Async (Result '[ErrorText "recv_connection"] BL.ByteString) }
 
 instance SystemModule CommandModule where
   data ModuleInitData CommandModule = CommandModuleInitData
-  data ModuleEvent CommandModule = CommandModuleEvent { msgBS :: BL.ByteString }
+  data ModuleEvent CommandModule = CommandModuleEvent { msgBS :: Result '[ErrorText "recv_connection"] BL.ByteString }
 
-  -- ( HasSystemRead (TVar [Meow [BotAction]]) r    -- ^ the channel to put meow actions
-  -- , HasSystemRead (TVar (Maybe ReceCQMessage)) r -- ^ other modules can use
-  -- , HasSystemRead (TVar (Maybe SentCQMessage)) r -- ^ other modules can use
-  -- , HasSystemRead (TVar (Maybe BL.ByteString)) r -- ^ other modules can use
-  -- , HasSystemRead (TVar [ (Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) ) ]) r -- ^ the channel to put query operations
-  -- , HasSystemRead Connection r                   -- ^ the connection to the server
 instance Dependency CommandModule 
   '[MeowActionQueue, RecvSentCQ, MeowConnection
   , SModule WholeChat, SModule OtherData, SModule BotConfig
   , LoggingModule] mods => Loadable FData CommandModule mods ies where
-  -- initModule _ = do
-  --   conn <- asksModule meowConnection
-  --   asyncMessage <- liftIO $ async ( receiveData conn )
-  --   return (CommandModuleRead, CommandModuleState asyncMessage)
   withModule _ act = do
-    conn <- asksModule meowConnection
-    asyncMessage <- liftIO $ async ( receiveData conn )
+    asyncMessage <- embedError $ asyncEffT_ recvLBSData
     runEffTOuter_ CommandModuleRead (CommandModuleState asyncMessage) act
 
-instance Dependency CommandModule 
-  '[MeowActionQueue, RecvSentCQ, MeowConnection
-  , SModule WholeChat, SModule OtherData, SModule BotConfig
-  , LoggingModule] mods => EventLoop FData CommandModule mods es where
+instance
+  ( Dependency CommandModule 
+    '[MeowActionQueue, RecvSentCQ, MeowConnection
+     , SModule WholeChat, SModule OtherData, SModule BotConfig
+     , LoggingModule] mods
+  , InList (ErrorText "recv_connection") es
+  )
+  => EventLoop FData CommandModule mods es where
   beforeEvent = do -- ^ clear the tvars in each loop
     tvarRCQmsg <- asksModule meowRecvCQ
     tvarSCQmsg <- asksModule meowSentCQ
@@ -102,8 +95,12 @@ instance Dependency CommandModule
     CommandModuleState asyncMessage <- getModule
     return $ CommandModuleEvent <$> waitSTM asyncMessage
 
+  handleEvent (CommandModuleEvent (RFailure (EHead recvErr))) = do
+    $logError $ "Error in receiving data from connection: " <> pack (show recvErr)
+    effThrow recvErr
+    -- ^ rethrown to the top-level, which will restart the bot after a delay
 
-  handleEvent (CommandModuleEvent msg) = do
+  handleEvent (CommandModuleEvent (RSuccess msg)) = do
      -- | When received any raw message, put into the tvar so other modules can be notified of the message
      asksModule meowRawByteString >>= liftIO . atomically . (`writeTVar` Just msg)
 
@@ -127,11 +124,10 @@ instance Dependency CommandModule
      queriesList <- liftIO $ readTVarIO tvarQueryList
      let firstQuery = listToMaybe $ mapMaybe (\(qid, WithTime _ parser) -> (qid, ) <$> parser msg) queriesList
 
-     conn  <- asksModule meowConnection
      tmeow <- asksModule meowReadsAction
      case firstQuery of
        Just (qid, meowAction) -> do
-         $logInfo $ pack nameBot <> " <- (query " <> pack (show qid) <> ") Received response."
+         effAddLogCat' (LogCat @Text "Query") $ $logInfo $ pack nameBot <> " <- (query " <> pack (show qid) <> ") Received response."
          liftIO . atomically $ do
            modifyTVar tvarQueryList (filter ((/= qid) . fst))
            modifyTVar tmeow (<> [meowAction])
@@ -176,112 +172,8 @@ instance Dependency CommandModule
 
      -------Next Async-------------------
      -- | creating a new async to receive the next message
-     asyncNew <- liftIO $ async $ receiveData conn
+     asyncNew <- embedNoError $ asyncEffT_ recvLBSData
      putModule (CommandModuleState asyncNew)
-  -- data ModuleLocalState  CommandModule = CommandL { msgAsync :: Async BL.ByteString }
-  -- data ModuleGlobalState CommandModule = CommandG
-  -- data ModuleEvent CommandModule = CommandEvent { msgBS :: BL.ByteString }
-
-  -- data ModuleInitDataG CommandModule = CommandInitDataG
-  -- data ModuleInitDataL CommandModule = CommandInitDataL
-  -- data ModuleEarlyLocalState CommandModule = CommandEarlyLocalState
-
-  -- getInitDataG _ = (Just CommandInitDataG, empty)
-
-  -- getInitDataL _ = (Just CommandInitDataL, empty)
-
-  -- initModule _ _ = return CommandG
-
-  -- initModuleLocal _ r _ _ _ = do
-  --   let conn = readSystem r
-  --   liftIO $ CommandL <$> async ( receiveData conn )
-
-  -- initModuleEarlyLocal _ _ _ = return CommandEarlyLocalState
-
-  -- beforeMeow _ = do -- ^ clear the tvars in each loop
-  --   tvarRCQmsg <- askSystem @(TVar (Maybe ReceCQMessage))
-  --   tvarSCQmsg <- askSystem @(TVar (Maybe SentCQMessage))
-  --   tvarBS     <- askSystem @(TVar (Maybe BL.ByteString))
-  --   liftIO . atomically $ writeTVar tvarRCQmsg Nothing
-  --   liftIO . atomically $ writeTVar tvarSCQmsg Nothing
-  --   liftIO . atomically $ writeTVar tvarBS     Nothing
-
-  -- moduleEvent _ = do
-  --   CommandL asyncMessage <- readModuleStateL (Proxy @CommandModule)
-  --   return $ CommandEvent <$> waitSTM asyncMessage
-
-  -- moduleEventHandler _ (CommandEvent msg) = do
-  --   -- | When received any raw message, put into the tvar so other modules can be notified of the message
-  --   askSystem @(TVar (Maybe BL.ByteString)) >>= liftIO . atomically . (`writeTVar` Just msg)
-
-  --   botMods <- gets (botModules . botConfig . snd)
-  --   --mode <- gets (botConfig . snd)
-  --   let gcmdids = canUseGroupCommands   botMods
-  --       pcmdids = canUsePrivateCommands botMods
-  --       pcmds   = filter ((`elem` pcmdids) . identifier) allPrivateCommands
-  --       gcmds   = filter ((`elem` gcmdids) . identifier) allGroupCommands
-  --       nameBot = fromMaybe "喵喵" $ maybeBotName $ nameOfBot botMods
-  --       -- mods    = botMods
-  --       eCQmsg  = eitherDecode msg :: Either String CQMessage
-
-  --   when (DebugJson `elem` botMods.botInstance.botDebugFlags) $
-  --     $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
-
-  --   --------- Queries ----------------------
-  --   time <- liftIO getCurrentTime
-  --   tvarQueryList <- askSystem @(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )])
-  --   liftIO . atomically $ removeOutdatedQuery time tvarQueryList
-  --   queriesList <- liftIO $ readTVarIO tvarQueryList
-  --   let firstQuery = listToMaybe $ mapMaybe (\(qid, WithTime _ parser) -> (qid, ) <$> parser msg) queriesList
-
-  --   conn <- readSystem <$> asks snd
-  --   tmeow <- readSystem <$> asks snd
-  --   case firstQuery of
-  --     Just (qid, meowAction) -> do
-  --       $logInfo $ pack nameBot <> " <- (query " <> pack (show qid) <> ") Received response."
-  --       liftIO . atomically $ do
-  --         modifyTVar tvarQueryList (filter ((/= qid) . fst))
-  --         modifyTVar tmeow (<> [meowAction])
-  --     Nothing -> do
-  --   ------------Command---------------------
-  --       case eCQmsg of
-  --         Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
-  --         Right cqmsg -> do
-  --           askSystem @(TVar (Maybe ReceCQMessage)) >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
-  --           $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
-  --           case eventType cqmsg of
-  --             LifeCycle -> do
-  --               $(logDebug) "LifeCycle event."
-  --               updateSelfInfo cqmsg
-  --               $(logDebug) "self info updated."
-  --             HeartBeat -> return ()
-  --             Response -> do
-  --               modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg
-  --               updateSavedAdditionalData
-  --               $(logInfo) $ pack nameBot <> " <- response."
-  --             PrivateMessage -> do
-  --               updateStates nameBot cqmsg
-  --               tmeow   <- readSystem <$> asks snd
-  --               liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds, botMessageCounter cqmsg])
-  --             GroupMessage -> do
-  --               updateStates nameBot cqmsg
-  --               tmeow   <- readSystem <$> asks snd
-  --               liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds, botMessageCounter cqmsg])
-  --             RequestEvent -> do
-  --               tmeow <- readSystem <$> asks snd
-  --               liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
-  --             _ -> return ()
-  --           where
-  --             updateStates name cqm = do
-  --               cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> increaseAbsoluteId
-  --               modify $ (`using` rseqWholeChat) . updateAllDataByMessage cqmsg'
-  --               updateSavedAdditionalData
-  --               $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
-
-  --   -------Next Async-------------------
-  --   -- | creating a new async to receive the next message
-  --   asyncNew <- liftIO $ async $ receiveData conn
-  --   modifyModuleState (Proxy @CommandModule) $ const $ CommandL asyncNew
 
 removeOutdatedQuery :: UTCTime -> TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )] -> STM ()
 removeOutdatedQuery time tvar = do

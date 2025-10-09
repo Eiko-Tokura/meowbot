@@ -46,25 +46,27 @@ instance Loadable c StatusMonitorModule mods ies where
     asyncInit <- liftIO $ async newTick
     runEffTOuter_ StatusMonitorModuleRead (StatusMonitorModuleState asyncInit Nothing tvar) act
 
-instance Dependency' c StatusMonitorModule '[RecvSentCQ, MeowConnection, LoggingModule] mods => EventLoop c StatusMonitorModule mods es where
+instance
+  ( Dependency' c StatusMonitorModule '[RecvSentCQ, MeowConnection, LoggingModule] mods
+  , InList (ErrorText "send_connection") es
+  ) => EventLoop c StatusMonitorModule mods es where
   moduleEvent = do
     s <- getsModule monitorRefresh
     return $ StatusMonitorModuleEvent <$> waitSTM s
 
   handleEvent _ = do
     $logDebug "Tick, wake up and query Meow status"
-    conn <- asksModule meowConnection
     localState <- getModule
     case monitorStatus localState of
       Nothing -> do
         $(logDebug) "Querying Meow status"
-        wait <- queryAPI conn GetStatus
+        wait <- queryAPI GetStatus
         $(logDebug) "Querying Meow status sent, new tick started"
         continue wait
       Just _ -> do
         $(logInfo) "Last query has no response, querying meow status AGAIN"
         liftIO $ atomically $ writeTVar (monitorWatchDog localState) MeowNotResponding
-        wait <- queryAPI conn GetStatus
+        wait <- queryAPI GetStatus
         $(logDebug) "Querying Meow status sent, new tick started"
         continue wait
     where continue wait = do
