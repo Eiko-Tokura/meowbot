@@ -24,6 +24,7 @@ import Module.MeowTypes
 import Module.RecvSentCQ
 import Module.MeowConnection
 import Module.Prometheus
+import Module.Command
 
 import Data.UpdateMaybe
 import Data.Aeson
@@ -36,6 +37,7 @@ type Mods =
   , ProxyWS
   , CronTabTickModule
   , StatusMonitorModule
+  , CommandModule
   , RecvSentCQ
   , MeowActionQueue
   , MeowConnection

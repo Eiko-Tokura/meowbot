@@ -46,14 +46,19 @@ import Utils.Persist
 
 botLoop :: Meow never_returns
 botLoop = do
+  $logDebug "Before system actions"
   beforeSystem
 
+  $logDebug "Listening to events"
   listenToEvents >>= liftIO . atomically >>= handleEvents
 
+  $logDebug "Performing actions"
   performMeowActions
 
+  $logDebug "After system actions"
   afterSystem
 
+  $logDebug "Finished one loop"
   botLoop
 
 performMeowActions :: Meow ()
@@ -130,6 +135,7 @@ runBot bot meow = do
       )
     $ withMeowActionQueue
     $ withRecvSentCQ
+    $ withModule CommandModuleInitData
     $ withModule (StatusMonitorModuleInitData meowStat)
     $ maybe id (\init -> withWatchDog init . const) mWatchDogInit
     $ withCronTabTick
@@ -169,13 +175,12 @@ withClientConnection
   => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
 withClientConnection addr port act = do
   $(logInfo) $ "Running bot client, connecting to " <> tshow addr <> ":" <> tshow port
-  effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e)) (liftWith $ \run -> runClient addr port "" $ \conn -> do
+  effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e)) (liftWith $ \run -> runClient addr port "" $ \conn -> void . run $ do
+    $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
 
-    void . run $ $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
-    withPingPong pingpongOptions conn $ \conn -> void . run $ do
+    runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
+      (\e -> $logError $ "ERROR In connection with server : " <> tshow e)
 
-      runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
-        (\e -> $logError $ "ERROR In connection with server : " <> tshow e)
     ) `effCatch` \(e :: ErrorText "uncaught") -> do
       $logError $ "Uncaught Error In client: " <> toText e
       $logInfo "Restarting client in 20 seconds"
