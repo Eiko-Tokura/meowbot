@@ -44,19 +44,19 @@ import Command.Statistics
 
 import Module.Command
 import Module.Logging
+import Module.Prometheus
+import Module.Prometheus.Counter
+import Module.Prometheus.Manager
 
 import Utils.ByteString
+import Utils.LabelKeys ()
 
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = $(makeBotCommands $ filter (`notElem` [Retract]) [minBound .. maxBound :: CommandId])
 
--- [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandStudy, commandBook, commandPoll, commandHangman]--, commandHaskell]
-
 allGroupCommands :: [BotCommand]
 allGroupCommands   = $(makeBotCommands [minBound .. maxBound :: CommandId])
-
--- [commandCat, commandChat, commandMd, commandHelp, commandSetSysMessage, commandUser, commandAokana, commandRandom, commandRetract, commandStudy, commandBook, commandPoll, commandHangman]--, commandHaskell]
 
 instance Module CommandModule where
 
@@ -68,18 +68,21 @@ instance SystemModule CommandModule where
   data ModuleEvent CommandModule = CommandModuleEvent { msgBS :: Result '[ErrorText "recv_connection"] BL.ByteString }
 
 instance Dependency CommandModule 
-  '[MeowActionQueue, RecvSentCQ, MeowConnection
+  [ MeowActionQueue, RecvSentCQ, MeowConnection
   , SModule WholeChat, SModule OtherData, SModule BotConfig
-  , LoggingModule] mods => Loadable FData CommandModule mods ies where
+  , PrometheusMan, LoggingModule
+  ] mods => Loadable FData CommandModule mods ies where
   withModule _ act = do
     asyncMessage <- embedError $ asyncEffT_ recvLBSData
     runEffTOuter_ CommandModuleRead (CommandModuleState asyncMessage) act
 
 instance
   ( Dependency CommandModule 
-    '[MeowActionQueue, RecvSentCQ, MeowConnection
-     , SModule WholeChat, SModule OtherData, SModule BotConfig
-     , LoggingModule] mods
+      [MeowActionQueue, RecvSentCQ, MeowConnection
+      , SModule WholeChat, SModule OtherData, SModule BotConfig
+      , PrometheusMan
+      , LoggingModule
+      ] mods
   , InList (ErrorText "recv_connection") es
   )
   => EventLoop FData CommandModule mods es where
@@ -105,7 +108,9 @@ instance
      asksModule meowRawByteString >>= liftIO . atomically . (`writeTVar` Just msg)
 
      botMods <- getsS botModules
-     --mode <- gets (botConfig . snd)
+     
+     botId <- query
+
      let gcmdids = canUseGroupCommands   botMods
          pcmdids = canUsePrivateCommands botMods
          pcmds   = filter ((`elem` pcmdids) . identifier) allPrivateCommands
@@ -133,42 +138,54 @@ instance
            modifyTVar tmeow (<> [meowAction])
        Nothing -> do
      ------------Command---------------------
-         case eCQmsg of
-           Left errMsg -> $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
-           Right cqmsg -> do
-             asksModule meowRecvCQ >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
-             $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
-             case eventType cqmsg of
-               LifeCycle -> do
-                 $(logDebug) "LifeCycle event."
-                 updateSelfInfo cqmsg
-                 $(logDebug) "self info updated."
-               HeartBeat -> return ()
-               Response -> do
-                 embedEffT $ updateWholeChatByMessage cqmsg
-                 modifyS (`using` rseqWholeChat) 
-                 updateSavedAdditionalData
-                 $(logInfo) $ pack nameBot <> " <- response."
-               PrivateMessage -> do
-                 embedEffT $ updateStates nameBot cqmsg
-                 tmeow   <- asksModule meowReadsAction
-                 liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds, botMessageCounter cqmsg])
-               GroupMessage -> do
-                 embedEffT $ updateStates nameBot cqmsg
-                 tmeow   <- asksModule meowReadsAction
-                 liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds, botMessageCounter cqmsg])
-               RequestEvent -> do
-                 tmeow <- asksModule meowReadsAction
-                 liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
-               _ -> return ()
-             where
-               updateStates :: MonadIO m => String -> CQMessage -> EffT '[SModule WholeChat, SModule OtherData, LoggingModule] NoError m ()
-               updateStates name cqm = do
-                 cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> embedMods increaseAbsoluteId
-                 embedEffT $ updateWholeChatByMessage cqmsg'
-                 modifyS (`using` rseqWholeChat)
-                 updateSavedAdditionalData
-                 $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
+        labels <- case eCQmsg of
+          Left errMsg -> do
+            $(logError) $ pack $ nameBot ++ (" Failed to decode message: " ++ errMsg ++ "\n" ++ bsToString msg)
+            return [Label @"message_type" UnknownMessage]
+          Right cqmsg -> do
+            asksModule meowRecvCQ >>= liftIO . atomically . (`writeTVar` (Just . ReceCQMessage $ cqmsg))
+            $(logDebug) $ pack nameBot <> " <- " <> fromLazyByteString msg
+            case eventType cqmsg of
+              LifeCycle -> do
+                $(logDebug) "LifeCycle event."
+                updateSelfInfo cqmsg
+                $(logDebug) "self info updated."
+                return [Label @"message_type" LifeCycle]
+              HeartBeat -> return [Label @"message_type" HeartBeat]
+              Response -> do
+                embedEffT $ updateWholeChatByMessage cqmsg
+                modifyS (`using` rseqWholeChat) 
+                updateSavedAdditionalData
+                $(logInfo) $ pack nameBot <> " <- response."
+                return [Label @"message_type" Response]
+              PrivateMessage -> do
+                embedEffT $ updateStates nameBot cqmsg
+                tmeow   <- asksModule meowReadsAction
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds, botMessageCounter cqmsg])
+                return [ Label @"message_type" PrivateMessage
+                       , Label @"chat_id" (fromMaybe (PrivateChat 0) $ cqmsgToCid cqmsg)
+                       ]
+              GroupMessage -> do
+                embedEffT $ updateStates nameBot cqmsg
+                tmeow   <- asksModule meowReadsAction
+                liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds, botMessageCounter cqmsg])
+                return [ Label @"message_type" GroupMessage
+                       , Label @"chat_id" (fromMaybe (GroupChat 0) $ cqmsgToCid cqmsg)
+                       ]
+              RequestEvent -> do
+                tmeow <- asksModule meowReadsAction
+                liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
+                return [Label @"message_type" RequestEvent]
+              _ -> return [Label @"message_type" cqmsg.eventType]
+            where
+              updateStates :: MonadIO m => String -> CQMessage -> EffT '[SModule WholeChat, SModule OtherData, LoggingModule] NoError m ()
+              updateStates name cqm = do
+                cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> embedMods increaseAbsoluteId
+                embedEffT $ updateWholeChatByMessage cqmsg'
+                modifyS (`using` rseqWholeChat)
+                updateSavedAdditionalData
+                $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
+        managedCounter "meowbot_received_cqmessages_total" (Label @"bot_id" botId : labels) IncCounter
 
      -------Next Async-------------------
      -- | creating a new async to receive the next message

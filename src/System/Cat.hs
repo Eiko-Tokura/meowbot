@@ -31,6 +31,7 @@ import Module.Logging
 import Module.MeowConnection
 import Module.MeowTypes
 import Module.Prometheus
+import Module.Prometheus.Manager
 import Module.ProxyWS
 import Module.RS
 import Module.RecvSentCQ
@@ -112,7 +113,7 @@ pingpongOptions = defaultPingPongOptions
 --       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
 --       runBotServer ip port bot initglobs glob earlyLocal
 
-runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[ErrorText "meowdb"] IO ()
+runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
   botm     <- embedEffT $ botInstanceToModule bot
   meowStat <- liftIO $ initTVarMeowStatus
@@ -144,7 +145,7 @@ runBot bot meow = do
     $ withLogDatabase
     $ meow
 
-runBots :: [BotInstance] -> EffT '[MeowDatabase, Prometheus, LoggingModule] '[] IO ()
+runBots :: [BotInstance] -> EffT '[MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
 runBots bots = mapM_ (\bot -> forkEffT $ runBot bot botLoop) bots >> liftIO (threadDelay maxBound)
 
 withServerConnection

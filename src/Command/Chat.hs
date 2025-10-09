@@ -323,7 +323,7 @@ commandChat = BotCommand Chat $ botT $ do
                       . fmap (fmap
                          (\case
                            (RSuccess a, _) -> a
-                           (RFailure (EHead e), _) -> effThrow e
+                           (RFailure elist, _) -> effThrowEList elist
                          )
                         )
                       . asyncEffT $

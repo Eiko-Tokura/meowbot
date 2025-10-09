@@ -23,7 +23,7 @@ import Module.CronTabTick
 import Module.MeowTypes
 import Module.RecvSentCQ
 import Module.MeowConnection
-import Module.Prometheus
+import Module.Prometheus.Manager
 import Module.Command
 
 import Data.UpdateMaybe
@@ -45,7 +45,7 @@ type Mods =
   , SModule WholeChat
   , SModule OtherData
   , MeowDatabase
-  , Prometheus
+  , PrometheusMan
   , LoggingModule
   ]
 
