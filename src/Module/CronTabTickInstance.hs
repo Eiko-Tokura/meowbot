@@ -75,11 +75,14 @@ withCronTabTick act = bracketEffT
 newCronTabTick :: TMVar CronTabTick -> IO ThreadId
 newCronTabTick putHere = do
   tickTime0 <- getCurrentTime
-  forkIO $ forever $ do
-    threadDelay 1_000_000 -- 1 second
-    now <- getCurrentTime
-    let diff = diffUTCTime now (floorToMinute tickTime0)
-    when (diff >= 60) $ atomically $ writeTMVar putHere $ CronTabTick now
+  let nextTick tickTime' = do
+        threadDelay 1_000_000 -- 1 second
+        now <- getCurrentTime
+        let diff = diffUTCTime now (floorToMinute tickTime')
+        when (diff >= 60) $ do
+          atomically $ writeTMVar putHere $ CronTabTick now
+          nextTick now
+  forkIO $ nextTick tickTime0
 
 floorToMinute :: UTCTime -> UTCTime
 floorToMinute t = UTCTime (utctDay t) (secondsToDiffTime (floor (utctDayTime t / 60) * 60))
