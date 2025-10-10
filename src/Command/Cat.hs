@@ -114,13 +114,17 @@ commandCat = BotCommand Cat $ botT $ do
         then MaybeT . pure $ Nothing  -- disable cat command when active chat, we will use chat command instead
         else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
 
-      needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
-      breakAction <- case needAction of
-        Nothing -> return $ Right []
-        Just (DoNothing notis, winfo) -> do
-          lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
-        Just (DisableService notis, winfo) -> do
-          lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+      breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
+
+      -- needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
+      -- breakAction <- case needAction of
+      --   Nothing -> return $ Right []
+      --   Just (DoNothing notis, Just winfo) -> do
+      --     lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+      --   Just (DisableService notis, Just winfo) -> do
+      --     lift $ Left  . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+      --   Just (DoNothing _, Nothing) -> return $ Right []
+      --   Just (DisableService _, Nothing) -> return $ Left []
 
       LoggingRead logger <- lift askModule
 

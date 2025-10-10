@@ -89,15 +89,19 @@ determineOverdue cm w@(walletBalance . entityVal -> amt)
 -- | Migration note:
 -- After the entire system being tracked,
 -- the NoCostModelAssigned and HasCostModelButNoWalletAssociated states should respond to DisableService
--- but for now, we keep the old behavior of doing nothing
-overdueBehaviorNeedAction :: ServiceBalanceCheck -> Maybe (OverdueBehavior, WalletInfo)
-overdueBehaviorNeedAction NoCostModelAssigned                                                      = Nothing
-overdueBehaviorNeedAction (WalletUnlimited _)                                                      = Nothing
-overdueBehaviorNeedAction (WalletBalanceGood _)                                                    = Nothing
-overdueBehaviorNeedAction (WalletBalanceLow w@(walletOverdueBehavior . entityVal -> Just act))     = Just (toDoNothing $ onNotis inAdvanceNoti act, w)
-overdueBehaviorNeedAction (WalletBalanceLow _)                                                     = Nothing
-overdueBehaviorNeedAction (WalletBalanceOverdue w@(walletOverdueBehavior . entityVal -> Just act)) = Just (onNotis overdueNoti act, w)
-overdueBehaviorNeedAction (WalletBalanceOverdue _)                                                 = Nothing
+-- (this is implemented now:)
+--
+-- meaning: Nothing -> not overdued
+-- Just (b, _) -> overdued, should do b
+overdueBehaviorNeedAction :: MustHaveCostModel -> ServiceBalanceCheck -> Maybe (OverdueBehavior, Maybe WalletInfo)
+overdueBehaviorNeedAction (MustHaveCostModel True)  NoCostModelAssigned                                = Just (DisableService [], Nothing)
+overdueBehaviorNeedAction (MustHaveCostModel False) NoCostModelAssigned                                = Nothing
+overdueBehaviorNeedAction _   (WalletUnlimited _)                                                      = Nothing
+overdueBehaviorNeedAction _   (WalletBalanceGood _)                                                    = Nothing
+overdueBehaviorNeedAction _   (WalletBalanceLow w@(walletOverdueBehavior . entityVal -> Just act))     = Just (toDoNothing $ onNotis inAdvanceNoti act, Just w)
+overdueBehaviorNeedAction _   (WalletBalanceLow _)                                                     = Nothing
+overdueBehaviorNeedAction _   (WalletBalanceOverdue w@(walletOverdueBehavior . entityVal -> Just act)) = Just (onNotis overdueNoti act, Just w)
+overdueBehaviorNeedAction _   (WalletBalanceOverdue _)                                                 = Nothing
 
 overdueNoti :: [OverdueNotification] -> [OverdueNotification]
 overdueNoti = filter (\case
@@ -128,8 +132,27 @@ serviceBalanceCheck bid cid = do
     _           -> return NoCostModelAssigned
 
 -- | For internal service to check balance, not for end users
-serviceBalanceActionCheck :: BotId -> ChatId -> DB (Maybe (OverdueBehavior, WalletInfo))
-serviceBalanceActionCheck bid cid = overdueBehaviorNeedAction <$> serviceBalanceCheck bid cid
+serviceBalanceActionCheck :: BotId -> ChatId -> DB (Maybe (OverdueBehavior, Maybe WalletInfo))
+serviceBalanceActionCheck bid cid = overdueBehaviorNeedAction <$> getMustHaveCostModelSetting <*> serviceBalanceCheck bid cid
+  where getMustHaveCostModelSetting = fmap (fromMaybe (MustHaveCostModel False)) . runMaybeT $ do
+          botCostSetting <- MaybeT $ selectFirst [BotCostSettingBotId ==. bid] [Desc BotCostSettingInserted]
+          return botCostSetting.entityVal.botCostSettingMustHaveWallet
+
+-- | Application level function, will check if notification is needed, and whether should disable service.
+-- returns
+-- Left  actions -> disable service and send actions
+-- Right actions -> do not disable  and send actions
+serviceBalanceGenerateActionCheckNotification :: BotName -> BotId -> ChatId -> DB (Either [BotAction] [BotAction])
+serviceBalanceGenerateActionCheckNotification botname botid cid = do
+  needAction <- serviceBalanceActionCheck botid cid
+  case needAction of
+    Nothing -> return $ Right []
+    Just (DoNothing notis, Just winfo) -> do
+      Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+    Just (DisableService notis, Just winfo) -> do
+      Left  . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+    Just (DoNothing _     , Nothing) -> return $ Right []
+    Just (DisableService _, Nothing) -> return $ Left []
 
 getBotPerChatCostModel :: BotId -> DB [Entity BotCostModelPerChat]
 getBotPerChatCostModel botId = do
@@ -194,7 +217,7 @@ findApiPriceInfo time model = do
 
 -- | Check and send notification if needed, returns list of actions to perform
 -- checks walletOverdueNotified, when already notified, no action is taken
-checkSendNotis :: BotName -> BotId -> ChatId -> OverdueNotification -> WalletInfo -> Meow [BotAction]
+checkSendNotis :: BotName -> BotId -> ChatId -> OverdueNotification -> WalletInfo -> DB [BotAction]
 checkSendNotis botname botid cid noti winfo =
   let notified = fromMaybe False winfo.entityVal.walletOverdueNotified
   in case noti of
@@ -211,7 +234,7 @@ checkSendNotis botname botid cid noti winfo =
           ]
     if not notified
     then do
-      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId notifyCid text]
     else return []
   NotifyChatIdInAdvance notifyCid -> do
@@ -227,7 +250,7 @@ checkSendNotis botname botid cid noti winfo =
           ]
     if not notified
     then do
-      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId notifyCid text]
     else return []
   NotifyBillOwner          -> do
@@ -246,7 +269,7 @@ checkSendNotis botname botid cid noti winfo =
         ownerCid = ownerChatId winfo.entityVal.walletOwnerId
     if not notified
     then do
-      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId ownerCid text]
     else return []
   NotifyBillOwnerInAdvance -> do
@@ -265,6 +288,6 @@ checkSendNotis botname botid cid noti winfo =
         ownerCid = ownerChatId winfo.entityVal.walletOwnerId
     if not notified
     then do
-      runMeowDB $ update winfo.entityKey [ WalletOverdueNotified =. Just True ]
+      update winfo.entityKey [ WalletOverdueNotified =. Just True ]
       return [baSendToChatId ownerCid text]
     else return []

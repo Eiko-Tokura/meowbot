@@ -27,6 +27,9 @@ newtype MonthlySubscriptionFee = MonthlySubscriptionFee { unMonthlySubscriptionF
 newtype DailyBasicCost = DailyBasicCost { unDailyBasicCost :: Double }
   deriving newtype (Show, Read, Eq, Ord, Num, Fractional, PersistField, PersistFieldSql)
 
+newtype MustHaveCostModel = MustHaveCostModel { unMustHaveCostModel :: Bool }
+  deriving newtype (Show, Read, Eq, Ord, PersistField, PersistFieldSql)
+
 -- | Used for filling default
 data PricingModel = PricingModel
   { payAsYouGoFeeRate      :: PayAsYouGoFeeRate

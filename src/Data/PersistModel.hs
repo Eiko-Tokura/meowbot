@@ -156,6 +156,13 @@ PeriodicCostRecord
   time        UTCTime
   description Text      Maybe
 
+BotCostSetting
+  botName        String  Maybe
+  botId          BotId
+  mustHaveWallet MustHaveCostModel  -- ^ if True, cost-related functionalities will not respond if no wallet is set in a chat / bot. Default False
+  inserted       UTCTime
+  deriving Show
+
 -- | Meant to persist whole history of cost model / owner changes
 -- should not be deleted, must be immutable
 BotCostModel
