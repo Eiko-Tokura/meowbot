@@ -15,6 +15,7 @@ import MeowBot.CronTab.PeriodicCost
 import Module.CronTabTick
 import Module.Logging
 import System.Meow
+import Utils.Text
 
 instance
   ( -- HasSystemRead (TVar [Meow [BotAction]]) r
@@ -52,7 +53,7 @@ instance Dependency' c CronTabTickModule '[MeowActionQueue, LoggingModule] mods
     return $ CronTabTickModuleEvent <$> takeTMVar asyncTick
 
   handleEvent (CronTabTickModuleEvent tick) = effAddLogCat' (LogCat CronTabTickModule) $ do
-    $logDebug "CronTab Event Received"
+    effAddLogCat' (LogCat @Text "CronTab") $ $logDebug "CronTab Event Received"
     meowList <- asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar meowList (<> [meowHandleCronTabTick tick, periodicCostHandleCronTabTick tick])
 
@@ -79,9 +80,8 @@ newCronTabTick putHere = do
         threadDelay 1_000_000 -- 1 second
         now <- getCurrentTime
         let diff = diffUTCTime now (floorToMinute tickTime')
-        when (diff >= 60) $ do
-          atomically $ writeTMVar putHere $ CronTabTick now
-          nextTick now
+        when (diff >= 60) $ atomically $ writeTMVar putHere $ CronTabTick now
+        nextTick now
   forkIO $ nextTick tickTime0
 
 floorToMinute :: UTCTime -> UTCTime
