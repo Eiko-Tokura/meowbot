@@ -8,6 +8,10 @@ chunksOf :: Int -> [a] -> [[a]]
 chunksOf _ [] = []
 chunksOf n xs = take n xs : chunksOf n (drop n xs)
 
+rseqList :: [a] -> [a]
+rseqList = (`S.using` evalList rseq)
+{-# INLINE rseqList #-}
+
 -- | Strict take n elements from a list, whenever it gets evaluated
 -- will evaluate the entire list, dropping unused elements.
 -- This is helpful for avoiding lazy stateful thunk leak when the rest of the list is not needed.

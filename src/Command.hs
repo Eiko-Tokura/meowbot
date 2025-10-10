@@ -16,6 +16,7 @@ module Command
 
 import Control.Concurrent
 import Control.Concurrent.Async
+import qualified Control.Parallel.Strategies as PS
 import Control.Monad.Logger
 import Control.Monad.RS.Class
 import Control.Monad.Effect
@@ -192,10 +193,10 @@ updateSavedDataDB = do
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]
       commandRules         = [commandRuleDBCommandRule c | c <- commandRulesDB]
   modify $ \od -> od { savedData = (savedData od)
-                        { userGroups   = userIds_userGroups
-                        , groupGroups  = groupIds_groupGroups
-                        , commandRules = commandRules
-                        }
+                        { userGroups   = userIds_userGroups   `PS.using` PS.rdeepseq
+                        , groupGroups  = groupIds_groupGroups `PS.using` PS.rdeepseq
+                        , commandRules = commandRules         `PS.using` PS.rdeepseq
+                        } `PS.using` rseqSavedData
                      }
 
 -- | Concating the output of a command, grouping by the type of output (private/group) and mergeing the messages within each group using the first argument as intercalate text (default to "\n")

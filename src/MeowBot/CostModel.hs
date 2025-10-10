@@ -173,7 +173,7 @@ getBotCostModel botId = selectFirst [BotCostModelBotId ==. botId] [Desc BotCostM
 -- * if the wallet exists and nominalCost > 0, wallet is deducted
 --
 -- consumption is always recorded
-insertApiCostRecord :: UTCTime -> BotId -> ChatId -> Maybe ChatModel -> Maybe Text -> TokenConsumption -> DB (Maybe ())
+insertApiCostRecord :: UTCTime -> BotId -> ChatId -> Maybe ChatModel -> Maybe Text -> TokenConsumption -> DB (Maybe ApiCostRecord)
 insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ do
     cmPair <- lift $ findWalletAssociatedToBotChat botId chatId
     let mCostModel = fst <$> cmPair
@@ -192,9 +192,11 @@ insertApiCostRecord utcTime botId chatId model apiKey consumption = runMaybeT $ 
         case (mWalletId, apiCostRecord.apiCostRecordNominalCost) of
             (Just wid, Just nominalCost) | nominalCost > 0 -> lift $ update wid [ WalletBalance -=. nominalCost ]
             _                                              -> pure ()
+        return apiCostRecord
       Nothing -> do
         let apiCostRecord = generateCostRecord model apiKey utcTime mCostModel botId chatId mWalletId consumption Nothing
         lift $ insert_ apiCostRecord
+        return apiCostRecord
 
 findApiPriceInfoByKey :: UTCTime -> Text -> DB (Maybe TokenPrice)
 findApiPriceInfoByKey time key = runMaybeT $ do

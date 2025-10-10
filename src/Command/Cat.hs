@@ -9,7 +9,6 @@ import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import External.ChatAPI hiding (SystemMessage)
 import qualified External.ChatAPI as API
--- import External.ChatAPI.Tool
 import MeowBot.CostModel
 import MeowBot.Parser (Parser, Chars)
 import MeowBot.BotStatistics

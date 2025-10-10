@@ -91,8 +91,8 @@ data BotAction
 -- | Because of the reference to Meow, have to put it here
 [makeRModule__|
 MeowActionQueue
-  meowReadsAction  :: TVar [Meow [BotAction]]
-  meowReadsQueries :: TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )]
+  meowReadsAction  :: !(TVar [Meow [BotAction]])
+  meowReadsQueries :: !(TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )])
 |]
 
 instance SystemModule MeowActionQueue where

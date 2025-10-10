@@ -22,8 +22,7 @@ makeLenses_ 'AsyncState
 
 instance SystemModule AsyncModule where
   data ModuleInitData AsyncModule = AsyncInitData
-  data ModuleEvent    AsyncModule = AsyncEvent { completedAsync :: Async (Meow [BotAction]), meowAction :: Meow [BotAction] } -- ^ the (completed) async handle and the action to run
-
+  data ModuleEvent    AsyncModule = AsyncEvent { completedAsync :: !(Async (Meow [BotAction])), meowAction :: !(Meow [BotAction]) } -- ^ the (completed) async handle and the action to run
 
 instance Dependency' c AsyncModule '[MeowActionQueue, LoggingModule] mods
   => Loadable c AsyncModule mods ies where

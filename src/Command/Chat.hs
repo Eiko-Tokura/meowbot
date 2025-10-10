@@ -297,13 +297,7 @@ commandChat = BotCommand Chat $ botT $ do
   $(logInfo) "Replying"
 
   breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
-  -- needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
-  -- breakAction <- case needAction of
-  --   Nothing -> return $ Right []
-  --   Just (DoNothing notis, winfo) -> do
-  --     lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
-  --   Just (DisableService notis, winfo) -> do
-  --     lift $ Left . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
+
   case breakAction of
     Left disableAndNofity -> do
       $logInfo "Service disabled due to insufficient balance"

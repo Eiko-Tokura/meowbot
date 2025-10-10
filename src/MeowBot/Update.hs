@@ -46,14 +46,14 @@ makeHeader = do
 
 increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m Int
 increaseAbsoluteId = do
-  modifyS $ \other_data -> let mid = message_number other_data in other_data {message_number = mid + 1}
+  modifyS $ \other_data -> let !mid = message_number other_data in other_data {message_number = mid + 1}
   getsS message_number
 
 updateSavedAdditionalData :: (MonadStateful OtherData m) => m ()
 updateSavedAdditionalData = modify $ \od ->
   let sd = savedData od
       rd = runningData od
-      sd' = sd { savedAdditional = coerce filterSavedAdditional rd } `using` rseqSavedData
+      !sd' = sd { savedAdditional = coerce filterSavedAdditional rd } `using` rseqSavedData
   in od { savedData = sd' }
 
 -- The following should be listed as a separate module that is referenced by all bot command modules.
@@ -147,7 +147,7 @@ insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> EffT '[SModule 
 insertMyResponseHistory (GroupChat gid) meta = do
   utc <- liftIO getCurrentTime
   other_data <- getS
-  let my = emptyCQMessage
+  let !my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
             , absoluteId  = Just aid
@@ -162,7 +162,7 @@ insertMyResponseHistory (GroupChat gid) meta = do
 insertMyResponseHistory (PrivateChat uid) meta = do
   utc <- liftIO getCurrentTime
   other_data <- getS
-  let my = emptyCQMessage
+  let !my = emptyCQMessage
             { eventType   = SelfMessage
             , utcTime     = Just utc
             , absoluteId  = Just aid

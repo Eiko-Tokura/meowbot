@@ -1,8 +1,10 @@
 {-# LANGUAGE DerivingVia#-}
 module MeowBot.CommandRule where
 
+import Control.DeepSeq
 import Database.Persist
 import Database.Persist.Sqlite
+import GHC.Generics (Generic)
 import Language.Haskell.TH
 import MeowBot.Data.ChatId
 import Utils.Persist
@@ -10,7 +12,7 @@ import Utils.Persist
 -- | When adding new commands, add at the last to preserve Enum
 -- do not change the names of existing commands because they are used in the database
 data CommandId = Aokana | Balance | Cat | Chat | Help | Md | Random | Retract | System | User | Study | BookMan | Poll | Hangman | Updater | Statistics -- | Haskell
-  deriving (Show, Eq, Ord, Read, Enum, Bounded)
+  deriving (Show, Eq, Ord, Read, Enum, Bounded, Generic, NFData)
 
 -- | show each command id into string, and prepend "command" to each. return a list of these functions
 makeBotCommands :: [CommandId] -> Q Exp
@@ -20,15 +22,15 @@ makeBotCommands cmdIds = do
   return $ ListE cmdExps
 
 data UserGroup  = Admin | Allowed | Denied | CustomUserGroup String
-  deriving (Show, Eq, Ord, Read)
+  deriving (Show, Eq, Ord, Read, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow UserGroup)
 
 data GroupGroup = AllowedGroup | CustomGroupGroup String
-  deriving (Show, Eq, Ord, Read)
+  deriving (Show, Eq, Ord, Read, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow GroupGroup)
 
 data CommandRule = Allow UserObject CommandObject | Deny UserObject CommandObject
-  deriving (Show, Eq, Ord, Read)
+  deriving (Show, Eq, Ord, Read, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CommandRule)
 
 data UserObject
@@ -41,7 +43,7 @@ data UserObject
   | SingleGroup GroupId
   | SubtractUserObject UserObject UserObject
   | ExceptUserObject UserObject
-  deriving (Show, Eq, Ord, Read)
+  deriving (Show, Eq, Ord, Read, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow UserObject)
 
 data CommandObject
@@ -50,7 +52,7 @@ data CommandObject
   | SingleCommand CommandId
   | SubtractCommand CommandObject CommandObject
   | ExceptCommands [CommandId]
-  deriving (Show, Eq, Ord, Read)
+  deriving (Show, Eq, Ord, Read, Generic, NFData)
   deriving (PersistField, PersistFieldSql) via (PersistUseShow CommandObject)
 
 safeCommandGroup :: CommandObject

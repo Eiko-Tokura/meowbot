@@ -30,7 +30,6 @@ import Module.LogDatabase
 import Module.Logging
 import Module.MeowConnection
 import Module.MeowTypes
-import Module.Prometheus
 import Module.Prometheus.Manager
 import Module.ProxyWS
 import Module.RS
@@ -160,7 +159,10 @@ withServerConnection addr port act = do
       $logInfo "Connected to client"
 
       runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
-        (\e -> $logError $ "ERROR In connection with client : " <> tshow e)
+        (\e -> do
+          $logError $ "ERROR In connection with client : " <> tshow e
+          error (show e) -- ^ need to restart the loop
+        )
 
     void . run $ $logInfo $ "Disconnected from client") `effCatch` \(e :: ErrorText "uncaught") -> do
       $logError $ "Uncaught Error In server: " <> toText e
@@ -178,14 +180,20 @@ withClientConnection addr port act = do
   effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e)) (liftWith $ \run -> runClient addr port "" $ \conn -> void . run $ do
     $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
 
-    runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
-      (\e -> $logError $ "ERROR In connection with server : " <> tshow e)
+    liftIO $ withPingPong pingpongOptions conn $ \conn -> void $ run $ do
+      $logInfo "Connected to client"
+      runMeowConnection (MeowConnectionRead conn) (void act)
+        `effCatchAll` (\(e :: EList es) -> do
+          $logError $ "ERROR In connection with client : " <> tshow e
+          error (show e) -- ^ need to restart the loop
+        )
 
     ) `effCatch` \(e :: ErrorText "uncaught") -> do
-      $logError $ "Uncaught Error In client: " <> toText e
-      $logInfo "Restarting client in 20 seconds"
-      liftIO $ threadDelay 20_000_000
-      withClientConnection addr port act
+        $logError $ "Uncaught Error In client: " <> toText e
+        $logInfo "Restarting client in 20 seconds"
+        liftIO $ threadDelay 20_000_000
+        withClientConnection addr port act
+
 
 -- runBotServer ip port bot initglobs glob el = do
 --   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port

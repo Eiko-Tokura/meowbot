@@ -67,12 +67,12 @@ data GroupInfo = GroupInfo
 
 -- | We will now save this data to the database, no longer in a file.
 data SavedData = SavedData
-  { chatSettings    :: [(ChatId, ChatSetting)]
-  , userGroups      :: [(UserId, UserGroup)]
-  , groupGroups     :: [(GroupId, GroupGroup)]
-  , commandRules    :: [CommandRule]
+  { chatSettings    :: ![(ChatId, ChatSetting)]
+  , userGroups      :: ![(UserId, UserGroup)]
+  , groupGroups     :: ![(GroupId, GroupGroup)]
+  , commandRules    :: ![CommandRule]
   , books           :: [Book]
-  , savedAdditional :: [Saved AdditionalData]
+  , savedAdditional :: ![Saved AdditionalData]
   } deriving (Show, Eq, Read)
 
 data OtherData = OtherData -- In the future one can add course data.. etc

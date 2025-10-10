@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies, DataKinds, DerivingVia, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.CommandInstance where
 
-import Control.Concurrent.Async
+import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 import Control.Monad.Logger
@@ -50,7 +50,7 @@ import Module.Prometheus.Manager
 
 import Utils.ByteString
 import Utils.LabelKeys ()
-
+import Utils.List
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = $(makeBotCommands $ filter (`notElem` [Retract]) [minBound .. maxBound :: CommandId])
@@ -60,24 +60,36 @@ allGroupCommands   = $(makeBotCommands [minBound .. maxBound :: CommandId])
 
 instance Module CommandModule where
 
-  data ModuleRead CommandModule  = CommandModuleRead
-  data ModuleState CommandModule = CommandModuleState { msgAsync :: Async (Result '[ErrorText "recv_connection"] BL.ByteString) }
+  newtype ModuleRead  CommandModule = CommandModuleRead
+    { tbqueueMsg :: TBQueue (Result '[ErrorText "recv_connection"] BL.ByteString)
+    }
+  data ModuleState CommandModule = CommandModuleState
+  -- { msgAsync :: Async (Result '[ErrorText "recv_connection"] BL.ByteString) }
 
 instance SystemModule CommandModule where
   data ModuleInitData CommandModule = CommandModuleInitData
-  data ModuleEvent CommandModule = CommandModuleEvent { msgBS :: Result '[ErrorText "recv_connection"] BL.ByteString }
+  newtype ModuleEvent CommandModule = CommandModuleEvent { msgBS :: Result '[ErrorText "recv_connection"] BL.ByteString }
 
 instance Dependency CommandModule 
   [ MeowActionQueue, RecvSentCQ, MeowConnection
   , SModule WholeChat, SModule OtherData, SModule BotConfig
   , PrometheusMan, LoggingModule
   ] mods => Loadable FData CommandModule mods ies where
-  withModule _ act = do
-    asyncMessage <- embedError $ asyncEffT_ recvLBSData
-    runEffTOuter_ CommandModuleRead (CommandModuleState asyncMessage) act
+  withModule _ act = bracketEffT
+    (do newTBQ <- liftIO $ newTBQueueIO 10
+        let recvThread = foreverEffT $ do
+              msg <- errorToResult recvLBSData
+              liftIO . atomically $ writeTBQueue newTBQ msg
+        tid <- embedError $ forkEffT recvThread
+        return (CommandModuleRead newTBQ, tid)
+    )
+    (\(_, tid) -> liftIO $ killThread tid)
+    (\(newTBQ, _) -> do
+      runEffTOuter_ newTBQ CommandModuleState act
+    )
 
 instance
-  ( Dependency CommandModule 
+  ( Dependency CommandModule
       [MeowActionQueue, RecvSentCQ, MeowConnection
       , SModule WholeChat, SModule OtherData, SModule BotConfig
       , PrometheusMan
@@ -95,8 +107,8 @@ instance
     liftIO . atomically $ writeTVar tvarBS     Nothing
 
   moduleEvent = do
-    CommandModuleState asyncMessage <- getModule
-    return $ CommandModuleEvent <$> waitSTM asyncMessage
+    CommandModuleRead tbQ <- askModule
+    return $ CommandModuleEvent <$> readTBQueue tbQ
 
   handleEvent (CommandModuleEvent (RFailure (EHead recvErr))) = do
     $logError $ "Error in receiving data from connection: " <> pack (show recvErr)
@@ -134,8 +146,8 @@ instance
        Just (qid, meowAction) -> do
          effAddLogCat' (LogCat @Text "Query") $ $logInfo $ pack nameBot <> " <- (query " <> pack (show qid) <> ") Received response."
          liftIO . atomically $ do
-           modifyTVar tvarQueryList (filter ((/= qid) . fst))
-           modifyTVar tmeow (<> [meowAction])
+           modifyTVar' tvarQueryList (rseqList . filter ((/= qid) . fst))
+           modifyTVar' tmeow (<> [meowAction])
        Nothing -> do
      ------------Command---------------------
         labels <- case eCQmsg of
@@ -187,13 +199,8 @@ instance
                 $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
         managedCounter "meowbot_received_cqmessages_total" (Label @"bot_id" botId : labels) IncCounter
 
-     -------Next Async-------------------
-     -- | creating a new async to receive the next message
-     asyncNew <- embedNoError $ asyncEffT_ recvLBSData
-     putModule (CommandModuleState asyncNew)
-
 removeOutdatedQuery :: UTCTime -> TVar [(Int, WithTime (BL.ByteString -> Maybe (Meow [BotAction])) )] -> STM ()
 removeOutdatedQuery time tvar = do
   lst <- readTVar tvar
-  let lst' = filter (\(_, WithTime t _) -> diffUTCTime time t < 60) lst
+  let lst' = rseqList $ filter (\(_, WithTime t _) -> diffUTCTime time t < 60) lst
   writeTVar tvar lst'
