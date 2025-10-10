@@ -279,8 +279,8 @@ balanceParser = innerParserToBatchParser innerBalanceParser
       , OwnBot <$> (Just <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0) <*> optMaybe botIdP <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , OwnBotChat <$> ownerIdP <* spaces <* string "own" <* spaces0 <* string "bot" <* spaces0 <*> botIdP <*> (spaces >> string "in" >> spaces >> (Right <$> chatIdP <|> Left <$> selfP)) <*> optMaybe (spaces >> string "using" >> spaces >> costModelP)
       , string "add" >> spaces >>
-        (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
-        <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' getItem (just '"'))
+        (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
+        <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
       , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
@@ -298,6 +298,9 @@ unitTestsBalanceParser =
         , (":group 123 own bot 789 using unlimited", Just $ pure $ OwnBot (Just $ OwnerId (GroupChat 123)) (Just 789) (Just Unlimited))
         , (":group 123 own bot 1 in group 123 using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Right $ GroupChat 123) (Just $ PayAsYouGo def def))
         , (":group 123 own bot 1 in itself using payasyougo", Just $ pure $ OwnBotChat (OwnerId (GroupChat 123)) 1 (Left ItSelf) (Just $ PayAsYouGo def def))
+
+        , (":add 0 owned by user 123", Just $ pure $ AddOwnedBy (Amount 0) (OwnerId (PrivateChat 123)) Nothing)
+        , (":add 0 owned by group 12345 \"for testing\"", Just $ pure $ AddOwnedBy (Amount 0) (OwnerId (GroupChat 12345)) (Just "for testing"))
         , (":{own bot; user 123 own group 12345 using subscription;}"
           , Just $ OwnBot Nothing Nothing Nothing :| [Own (Just $ OwnerId (PrivateChat 123)) (GroupChat 12345) (Just $ Subscription def)]
           )

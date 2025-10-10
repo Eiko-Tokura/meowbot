@@ -179,7 +179,7 @@ botCommandsWithIgnore cqmsg bcs = do
     $(logInfo) "Ignored, not triggering commands"
     return []
   else do
-    updateSavedDataDB -- ^ make sure the saved data is up-to-date
+    -- updateSavedDataDB -- ^ make sure the saved data is up-to-date
     fmap concat . sequence $ botCommandsToMeow bcs
 
 updateSavedDataDB :: Meow ()
