@@ -304,9 +304,9 @@ instance
     banAction <- case (userId, duration) of
       (0, 0) -> return $ BAActionAPI (SetGroupWholeBan gid False) -- disable ban for everyone
       (0, 1) -> return $ BAActionAPI (SetGroupWholeBan gid True) -- enable ban for everyone
-      (uid, duration) | uid /= 0
+      (0, _) -> effThrow $ BanError "When banning everyone, duration can only be 0 (stop ban) or 1 (enable ban). You cannot set a duration for banning everyone, but you can use a crontab job to notify yourself, so you can stop the ban at specific time."
+      (uid, duration)
         -> return $ BAActionAPI (SetGroupBan gid (UserId uid) duration)
-      _ -> effThrow $ BanError "Invalid user_id duration combination."
     action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [banAction]
     tvarBotAction <- lift $ asksModule meowReadsAction
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])

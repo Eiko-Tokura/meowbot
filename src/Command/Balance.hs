@@ -24,6 +24,8 @@ data BalanceCommand
   -- | UnOwn      BotId (Maybe ChatId)                   -- ^ admin removes ownership of a bot or (bot, chat) pair
   | AddOwnedBy Amount        OwnerId   (Maybe Text)      -- ^ admin adds amount to the wallet owned by OwnerId (can be negative)
   | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
+  | CostTo     Amount        WalletId  (Maybe Text)      -- ^ admin adds one-off cost to the wallet with WalletId, positive means cost incurred
+  | CostOwnedBy Amount        OwnerId   (Maybe Text)     -- ^ admin adds one-off cost to the wallet owned by OwnerId, positive means cost incurred
   | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
   | BalanceCheckInChat (Maybe ChatId)                    -- ^ a different semantics, finds back the ownerId and check balance, for normal user
   | ChangeOwner  WalletId OwnerId               -- ^ admin modifys the owner of a wallet
@@ -35,6 +37,8 @@ data BalanceAction
   | AOwnBot OwnerId (Maybe CostModel) BotId
   | AAddOwnedBy UserId Amount OwnerId  (Maybe Text)
   | AAddTo      UserId Amount WalletId (Maybe Text)
+  | ACostTo     UserId Amount WalletId (Maybe Text)
+  | ACostOwnedBy UserId Amount OwnerId (Maybe Text)
   | ABalanceCheck OwnerId
   | ABalanceCheckInChat ChatId
   | AChangeOwner WalletId OwnerId
@@ -170,6 +174,25 @@ balanceAction _ scid (AAddTo uid amt wid mDesc) = do
       return $ Just [baSendToChatId scid msg]
     Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
 
+balanceAction _ scid (ACostTo uid amt wid mDesc) = do
+  mWallet <- runMeowDB $ get wid
+  case mWallet of
+    Just Wallet { walletOwnerId } -> do
+      utcTime <- liftIO getCurrentTime
+      runMeowDB $ do -- ^ runMeowDB is atomic
+        insert $ OneOffCostRecord wid amt Nothing utcTime (Just uid) mDesc
+        update wid [WalletBalance -=. amt, WalletOverdueNotified =. Nothing]
+      let msg = T.unwords [toText amt, " one-off cost is deducted from the wallet owned by", toText walletOwnerId, "with walletId", toText wid]
+      return $ Just [baSendToChatId scid msg]
+    Nothing -> return $ Just [baSendToChatId scid $ "Wallet with id " <> toText wid <> " does not exist."]
+
+balanceAction bn scid (ACostOwnedBy uid amt oid mDesc) = do
+  mWallet <- runMeowDB $ getBy $ UniqueOwnerId oid
+  case mWallet of
+    Just (Entity wid Wallet {}) -> do
+      balanceAction bn scid (ACostTo uid amt wid mDesc)
+    Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
+
 balanceAction _ scid (ABalanceCheck oid) = do
   mWallet <- runMeowDB $ getBy $ UniqueOwnerId oid
   case mWallet of
@@ -226,6 +249,8 @@ balanceCommandToAction bid _        (OwnBot (Just oid) mbid mcm)           = Jus
 balanceCommandToAction bid (oid, _) (OwnBot Nothing Nothing mcm)           = Just $ AOwnBot (OwnerId oid) mcm bid
 balanceCommandToAction _   (_, uid) (AddOwnedBy amt oid mdesc)             = Just $ AAddOwnedBy uid amt oid mdesc
 balanceCommandToAction _   (_, uid) (AddTo amt wid mdesc)                  = Just $ AAddTo uid amt wid mdesc
+balanceCommandToAction _   (_, uid) (CostTo amt wid mdesc)                 = Just $ ACostTo uid amt wid mdesc
+balanceCommandToAction _   (_, uid) (CostOwnedBy amt oid mdesc)            = Just $ ACostOwnedBy uid amt oid mdesc
 balanceCommandToAction _   (oid, _) (BalanceCheck oid')                    = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
 balanceCommandToAction _   (cid, _) (BalanceCheckInChat Nothing)           = Just $ ABalanceCheckInChat cid
 balanceCommandToAction _   (_, _)   (BalanceCheckInChat (Just cid))        = Just $ ABalanceCheckInChat cid
@@ -281,6 +306,10 @@ balanceParser = innerParserToBatchParser innerBalanceParser
       , string "add" >> spaces >>
         (   AddOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
         <|> AddTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
+        )
+      , string "cost" >> spaces >>
+        (   CostOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
+        <|> CostTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
         )
       , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
       , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
