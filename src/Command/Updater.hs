@@ -72,10 +72,11 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
           return []
 
     -- | Mark all needed updates as Updating
-    modify $ \od -> od { selfInfo = Just s { selfInGroups
-                                              = updateUMaybeTimeWithoutTime selfInGroups
-                                              $ \m -> foldr (Map.update (Just . toUpdating) . fst) m updateNeeded
-                                           } }
+    let !s_ = s { selfInGroups
+                    = updateUMaybeTimeWithoutTime selfInGroups
+                    $ \m -> foldr (Map.update (Just . toUpdating) . fst) m updateNeeded
+                 }
+    modify $ \od -> od { selfInfo = Just s_ }
 
     parsers <- lift $ queryAPI `mapM` [GetGroupMemberInfo gid selfId False | gid <- fst <$> updateNeeded]
     return $ pure $ BARawQueryCallBack [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]

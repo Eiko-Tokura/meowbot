@@ -17,7 +17,7 @@ import Data.Kind (Type)
 --
 -- * after doing something, do nothing until the status is good again where the counter is reset
 
-data WatchDogStatus = CountGood Int | CountBad Int
+data WatchDogStatus = CountGood !Int | CountBad !Int
   deriving Show
 
 data WatchDog (a :: Type)
