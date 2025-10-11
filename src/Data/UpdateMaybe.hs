@@ -12,10 +12,10 @@ data WithTime a = WithTime
   deriving (Show, Eq, Read, Generic, NFData)
 
 data UMaybe a
-  = NothingYet         -- ^ not sufficient data to compute yet
-  | Updating           -- ^ not sufficient data to compute yet but an update is in progress
-  | UpdatingOldValue a -- ^ has an old value and an update is in progress
-  | Updated a          -- ^ fully updated value
+  = NothingYet          -- ^ not sufficient data to compute yet
+  | Updating            -- ^ not sufficient data to compute yet but an update is in progress
+  | UpdatingOldValue !a -- ^ has an old value and an update is in progress
+  | Updated !a          -- ^ fully updated value
   deriving (Show, Eq, Read, Generic, NFData)
 
 type UMaybeTime a = UMaybe (WithTime a)

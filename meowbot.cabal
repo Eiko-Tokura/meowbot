@@ -310,6 +310,7 @@ library meowbot-lib
                  , base64-bytestring
                  , bytestring
                  , containers
+                 , unordered-containers
                  , crontab
                  , crypton-connection
                  , diagrams
@@ -323,6 +324,7 @@ library meowbot-lib
                  , directory
                  , esqueleto
                  , filepath
+                 , hashable
                  , http-client
                  , http-client-tls
                  , http-types

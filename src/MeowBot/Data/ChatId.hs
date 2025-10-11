@@ -6,6 +6,7 @@ import Data.Default (Default(..))
 import Database.Persist (PersistField(..))
 import Database.Persist.Sql (PersistFieldSql(..), SqlType(SqlInt64))
 import GHC.Generics (Generic)
+import Data.Hashable
 
 data Role = ROwner | RAdmin | RMember | RUnknown
   deriving (Show, Read, Eq, Generic, NFData, Bounded, Enum)
@@ -23,8 +24,8 @@ data ChatId = GroupChat GroupId | PrivateChat UserId
 instance Default ChatId where
   def = GroupChat 0
 
-newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
-newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData) via Int
+newtype UserId  = UserId  Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData, Hashable) via Int
+newtype GroupId = GroupId Int deriving (Eq, Show, Ord, Read) deriving (ToJSON, FromJSON, Num, NFData, Hashable) via Int
 
 unUserId :: UserId -> Int
 unUserId (UserId uid) = uid

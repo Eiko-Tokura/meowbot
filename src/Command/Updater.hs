@@ -7,13 +7,15 @@ import Control.Monad.Effect
 import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
-import Data.Map.Strict (Map)
+import Data.HashMap.Strict (HashMap)
+-- import Data.Map.Strict (Map)
 import Data.Time.Clock
 import Data.UpdateMaybe
 import MeowBot
 import Module.Logging
 import Control.Monad.RS.Class
-import qualified Data.Map.Strict as Map
+import qualified Data.HashMap.Strict as Map
+import Data.Hashable (Hashable)
 
 anHour :: NominalDiffTime
 anHour = 3600
@@ -25,7 +27,7 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
   $logDebug $ "Bot ID: " <> toText botid <> ", SelfInfo: " <> toText s
   let updateLensSelfInGroups u = modify $ _selfInfo ?~ s { selfInGroups = u }
 
-      updateGroupListInMapWith :: Ord g => [g] -> a -> Map g a -> Map g a
+      updateGroupListInMapWith :: (Hashable g) => [g] -> a -> HashMap g a -> HashMap g a
       updateGroupListInMapWith gids defVal mapG
         = Map.filterWithKey (\gid _ -> gid `elem` gids)
         $ Map.unionWith const mapG (Map.fromList [(gid, defVal) | gid <- gids])

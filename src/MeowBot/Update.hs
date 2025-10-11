@@ -20,6 +20,8 @@ import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
 import Utils.List
 import qualified MeowBot.Parser as MP
+import qualified Data.Sequence as Seq
+import qualified Data.Foldable as Foldable
 import Module.RS
 import Module.RecvSentCQ
 
@@ -79,11 +81,11 @@ updateAllDataByResponse :: Monad m => (ResponseData, Maybe Text) -> EffT '[SModu
 updateAllDataByResponse (rdata, mecho) = do
   otherdata <- getS
   case (message_id rdata, sent_messages otherdata) of
-    (Nothing,_) -> pure ()
-    (_, []) -> pure ()
-    (Just mid, sentMessageList@(headSentMessageList:_)) ->
-      let m0 = fromMaybe headSentMessageList $ listToMaybe [ m | m <- sentMessageList, echoR m == mecho ]
-          ms = filter (/= m0) sentMessageList
+    (Nothing, _) -> pure ()
+    (_, Seq.Empty) -> pure ()
+    (Just mid, sentMessageList@(headSentMessageList Seq.:<| _)) ->
+      let m0  = fromMaybe headSentMessageList $ listToMaybe [ m | m <- Foldable.toList sentMessageList, echoR m == mecho ]
+          !ms = Seq.filter (/= m0) sentMessageList
       in
       case (groupId m0, userId m0) of -- attach to the message id that the bot is replying to
         (Just gid, _) -> do
@@ -156,7 +158,7 @@ insertMyResponseHistory (GroupChat gid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  putS $ other' & _sent_messages .~ (my Seq.:<| Seq.filter (withInDate utc) (sent_messages other_data))
   tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 insertMyResponseHistory (PrivateChat uid) meta = do
@@ -171,7 +173,7 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             , echoR       = Just $ pack $ show aid
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
-  putS $ other' & _sent_messages .~ (my:filter (withInDate utc) (sent_messages other_data) `using` evalList rseq)
+  putS $ other' & _sent_messages .~ (my Seq.:<| Seq.filter (withInDate utc) (sent_messages other_data))
   tvarSCQmsg <- asksModule meowSentCQ
   liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
 

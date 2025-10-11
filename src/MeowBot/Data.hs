@@ -32,6 +32,7 @@ module MeowBot.Data
 import Control.Monad.Logger
 import Control.DeepSeq (NFData)
 import Data.Default
+import Data.Sequence (Seq)
 import External.ProxyWS (ProxyData)
 import GHC.Generics
 import MeowBot.CommandRule
@@ -44,6 +45,9 @@ import MeowBot.MetaMessage
 import Utils.Lens
 import Utils.Text
 import qualified MeowBot.Parser as MP
+import Data.HashMap.Strict (HashMap)
+import qualified Data.Sequence as Seq
+import qualified Data.HashMap.Strict as HM
 
 import Database.Persist.Sqlite
 import Module.Logging
@@ -60,6 +64,14 @@ instance IsLogCat BotId where
 type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
 
 type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
+
+-- type WholeChat = HashMap ChatId ChatRoom
+-- 
+-- data ChatRoom = ChatRoom
+--   { chatRoomId :: !ChatId
+--   , chatForest :: !(Seq (Int, MP.Tree CQMessage))
+--   }
+
 newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
 
 instance ToText BotName Text where

@@ -295,19 +295,19 @@ initAllData botconfig = do
   case (savedDataDB, savedDataFile) of
     (Right savedDataDB, _) -> do
       $(logInfo) "Loaded saved data from database"
-      AllData [] botconfig . OtherData 0 Nothing [] savedDataDB (coerce $ savedAdditional savedDataDB) <$> lift getAllScripts
+      AllData [] botconfig . OtherData 0 Nothing mempty savedDataDB (coerce $ savedAdditional savedDataDB) <$> lift getAllScripts
     (Left errDb, Right savedDataFile) -> do
       $(logError) $ "Failed to load saved data from database: " <> toText errDb
       $(logInfo) "Loaded saved data from file"
       $(logInfo) $ "Trying to migrate data from file to database"
       newSavedDataDB botconfig savedDataFile
-      AllData [] botconfig . OtherData 0 Nothing [] savedDataFile (coerce $ savedAdditional savedDataFile) <$> lift getAllScripts
+      AllData [] botconfig . OtherData 0 Nothing mempty savedDataFile (coerce $ savedAdditional savedDataFile) <$> lift getAllScripts
     (Left errDb, Left errFile) -> do
       $(logError) $ "Failed to load saved data from database: " <> toText errDb
       $(logError) $ "Failed to load saved data from file: " <> toText errFile
       $(logInfo) "Starting with empty data, also writing empty data to database"
       newSavedDataDB botconfig (SavedData [] initialUGroups initialGGroups initialRules initialBooks [])
-      AllData [] botconfig . OtherData 0 Nothing [] (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) [] <$> lift getAllScripts
+      AllData [] botconfig . OtherData 0 Nothing mempty (SavedData [] initialUGroups initialGGroups initialRules initialBooks []) [] <$> lift getAllScripts
   where
     initialUGroups = [(me, Admin)]
     initialGGroups = [(myGroup, AllowedGroup)]

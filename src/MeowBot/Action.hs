@@ -62,7 +62,7 @@ sendToChatId (_, cid, _, mid, _) = meowSendToChatIdFull cid (Just mid) [] []
 -- will insert the message into the history.
 meowSendToChatIdFull :: (MeowAllData mods, In RecvSentCQ mods, MonadIO m)
   => ChatId            -- ^ chat id to send to
-  -> Maybe CQMessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> Maybe CQMessageId -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Text              -- ^ message content
@@ -74,7 +74,7 @@ meowSendToChatIdFull cid mid adt items str = do
 
 meowAsyncSplitSendToChatIdFull
   :: ChatId            -- ^ chat id to send to
-  -> Maybe CQMessageId   -- ^ message id to reply to, if Nothing, will not record the message as reply.
+  -> Maybe CQMessageId -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Int               -- ^ split delay

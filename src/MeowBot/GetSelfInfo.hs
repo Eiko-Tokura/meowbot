@@ -2,7 +2,7 @@ module MeowBot.GetSelfInfo where
 
 import MeowBot
 import Data.UpdateMaybe
-import qualified Data.Map as M
+import qualified Data.HashMap.Strict as M
 
 getSelfInfo :: Meow (Maybe SelfInfo)
 getSelfInfo = queries selfInfo

@@ -29,7 +29,9 @@ import Data.Additional
 import Data.Additional.Saved
 import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
-import Data.Map.Strict (Map)
+import Data.HashMap.Strict (HashMap)
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
 import Data.Maybe
 import Data.Ord (comparing, Down(..))
 import Data.UpdateMaybe
@@ -58,11 +60,11 @@ data AllData = AllData
 
 data SelfInfo = SelfInfo
   { selfId       :: UserId
-  , selfInGroups :: UMaybeTime (Map GroupId (UMaybeTime GroupInfo))
+  , selfInGroups :: !(UMaybeTime (HashMap GroupId (UMaybeTime GroupInfo)))
   } deriving Show
 
 data GroupInfo = GroupInfo
-  { selfRole         :: Role
+  { selfRole         :: !Role
   } deriving Show
 
 -- | We will now save this data to the database, no longer in a file.
@@ -78,7 +80,7 @@ data SavedData = SavedData
 data OtherData = OtherData -- In the future one can add course data.. etc
   { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , selfInfo       :: !(Maybe SelfInfo)
-  , sent_messages  :: ![CQMessage]
+  , sent_messages  :: !(Seq CQMessage)
   , savedData      :: !SavedData
   , runningData    :: ![AdditionalData]  -- ^ additional data that is running, not saved.
   --, pendingProxies :: ![ProxyData]
