@@ -23,6 +23,7 @@ import Module.Logging.Logger
 import Module.Database.Sqlite
 import Module.Prometheus
 import Module.Prometheus.Manager
+import Module.ConnectionManager
 import qualified Data.Text.IO as TIO
 import Data.PersistModel (migrateAll)
 
@@ -88,7 +89,7 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
   promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs Nothing (Just 6001) (Just ["metrics"]) globalFlags
 
-  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ do
+  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ withConnectionManager $ do
     $logDebug $ pack $ "Arguments: " ++ show args
     $logDebug $ pack $ "Parsed: " ++ show parsed
     case parsed of

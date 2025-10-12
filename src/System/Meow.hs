@@ -33,7 +33,6 @@ import Data.Aeson
 type Mods =
   [ LogDatabase
   , AsyncModule
-  , ConnectionManagerModule
   , ProxyWS
   , CronTabTickModule
   , StatusMonitorModule
@@ -44,6 +43,7 @@ type Mods =
   , SModule BotConfig
   , SModule WholeChat
   , SModule OtherData
+  , ConnectionManagerModule
   , MeowDatabase
   , PrometheusMan
   , LoggingModule

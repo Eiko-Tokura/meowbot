@@ -112,7 +112,7 @@ pingpongOptions = defaultPingPongOptions
 --       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
 --       runBotServer ip port bot initglobs glob earlyLocal
 
-runBot :: BotInstance -> Meow a -> EffT '[MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
+runBot :: BotInstance -> Meow a -> EffT '[ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
   botm     <- embedEffT $ botInstanceToModule bot
   meowStat <- liftIO $ initTVarMeowStatus
@@ -139,12 +139,11 @@ runBot bot meow = do
     $ maybe id (\init -> withWatchDog init . const) mWatchDogInit
     $ withCronTabTick
     $ withProxyWS (ProxyWSInitData [(add, ip) | ProxyFlag add ip <- bot.botProxyFlags])
-    $ withConnectionManager
     $ withAsyncModule
     $ withLogDatabase
     $ meow
 
-runBots :: [BotInstance] -> EffT '[MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
+runBots :: [BotInstance] -> EffT '[ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
 runBots bots = mapM_ (\bot -> forkEffT $ runBot bot botLoop) bots >> liftIO (threadDelay maxBound)
 
 withServerConnection
