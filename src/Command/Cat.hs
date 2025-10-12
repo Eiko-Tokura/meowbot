@@ -8,6 +8,8 @@ import MeowBot
 import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import External.ChatAPI hiding (SystemMessage)
+import External.ChatAPI.ModelPricing
+import External.ChatAPI.Cost
 import qualified External.ChatAPI as API
 import MeowBot.CostModel
 import MeowBot.Parser (Parser, Chars)
@@ -131,7 +133,7 @@ commandCat = BotCommand Cat $ botT $ do
           rlChatModelMsg = reverse lChatModelMsg -- the last message is on top
           params = fst . head $ rlChatModelMsg   -- take the last message model
           md = either chatMarkDown chatMarkDown (bimap ($ addManager) ($ addManager) params)  -- whether to use markdown
-          ioEChatResponse = fmap (second Just) . runEffT00 . runLogging logger $ case params of
+          ioEChatResponse = fmap (second Just) . runEffT00 . runLogging logger . runModelPricing (ModelPricingRead modelPrice) $ case params of
 
             Left  paramCat      ->
               case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of

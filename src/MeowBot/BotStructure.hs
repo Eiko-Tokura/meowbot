@@ -31,7 +31,7 @@ import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
 import Data.HashMap.Strict (HashMap)
 import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
+-- import qualified Data.Sequence as Seq
 import Data.Maybe
 import Data.Ord (comparing, Down(..))
 import Data.UpdateMaybe

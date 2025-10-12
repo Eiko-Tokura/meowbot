@@ -11,6 +11,8 @@ import External.ChatAPI as API
 import External.ChatAPI.Tool
 import External.ChatAPI.Tool.Search
 import External.ChatAPI.Tool.Scrape
+import External.ChatAPI.ModelPricing
+import External.ChatAPI.Cost
 import External.ChatAPI.MeowTool
 import External.ChatAPI.MeowToolEnv
 import qualified Data.BSeq as BSeq
@@ -305,7 +307,7 @@ commandChat = BotCommand Chat $ botT $ do
       return disableAndNofity
     Right extraAction -> do
       LoggingRead logger <- lift askModule
-      ioeResponse <- pure . runEffT00 . runLogging logger . runSModule (chatStatus chatState) . fmap (first $ toText @_ @Text) . errorToEitherAll $
+      ioeResponse <- pure . runEffT00 . runLogging logger . runModelPricing (ModelPricingRead modelPrice) . runSModule (chatStatus chatState) . fmap (first $ toText @_ @Text) . errorToEitherAll $
         case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
           Nothing ->
             statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params)

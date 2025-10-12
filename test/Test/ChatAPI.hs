@@ -1,9 +1,12 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
 module Test.ChatAPI where
 
 import Control.Monad.Effect
 import Control.Monad.Except
 import External.ChatAPI
 import External.ChatAPI.Tool
+import External.ChatAPI.ModelPricing
+import External.ChatAPI.Cost
 import Network.HTTP.Client (Manager)
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -14,6 +17,8 @@ import Module.Logging
 
 timeoutHttp :: Int
 timeoutHttp = 30 * 1000000
+
+runAPIEnv logger = runEffT00 . runLogging logger . runModelPricing (ModelPricingRead modelPrice)
 
 testChatAPI :: Logger IO LogData -> Manager -> TestTree
 testChatAPI logger man = testGroup "ChatAPI Round Trip"
@@ -39,7 +44,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (Local Qwen3_30B) '[]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+        (res, _) <- runAPIEnv logger $ messageChatDefault params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r  -> return $ unpack r
@@ -52,7 +57,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatManager = man
               , chatTimeout = timeoutHttp
               } :: ChatParams (DeepSeek DeepSeekReasoner) '[]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+        (res, _) <- runAPIEnv logger $ messageChatDefault params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -80,7 +85,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatTimeout = timeoutHttp
               } :: ChatParams (DeepSeek DeepSeekChat) '[]
         -- res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params [UserMessage "你好"]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+        (res, _) <- runAPIEnv logger $ messageChatDefault params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -94,7 +99,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenRouter OR_DeepSeekR1_Free) '[]
         --res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params [UserMessage "你好"]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+        (res, _) <- runAPIEnv logger $ messageChatDefault params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -108,7 +113,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[]
         --res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params [UserMessage "你好"]
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params [UserMessage "你好"]
+        (res, _) <- runAPIEnv logger $ messageChatDefault params [UserMessage "你好"]
         case content <$> res of
           Left err -> assertFailure $ "messageChat failed: " ++ show err
           Right r -> return $ unpack r
@@ -148,7 +153,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
         --res <- runEffT00 . runLogging logger . errorToEitherAll $ messageChat params
-        (res, _) <- runEffT00 . runLogging logger $ messageChatDefault params
+        (res, _) <- runAPIEnv logger $ messageChatDefault params
           [ UserMessage "What is the time now?"
           , AssistantMessage "{\"tool\": \"time\", \"args\": {\"timezone\": 8}}" Nothing Nothing Nothing
           , UserMessage "{\"tool_output\": \"2025-02-09 13:05:55.689695563\"}"
@@ -166,7 +171,7 @@ testChatAPI logger man = testGroup "ChatAPI Round Trip"
               , chatTimeout = timeoutHttp
               } :: ChatParams (OpenAI GPT4oMini) '[TimeTool]
         --res <- runEffT00 . runLogging logger . errorToEitherAll $ messagesChat params [UserMessage "现在几点了"]
-        (res, _) <- runEffT00 . runLogging logger $ messagesChatDefault params [UserMessage "现在几点了"]
+        (res, _) <- runAPIEnv logger $ messagesChatDefault params [UserMessage "现在几点了"]
         case res of
           Left err -> assertFailure $ "messagesChat failed: " ++ show err
           Right res' -> mapM_ printMessage res'

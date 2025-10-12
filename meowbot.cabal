@@ -57,7 +57,7 @@ flag profile
     default: False
 
 common warnings
-    ghc-options: -Wall -Werror=incomplete-pattenrs
+    ghc-options: -Wall -Werror=incomplete-pattenrs -Wno-x-partial
 
 common extensions
     default-extensions:
@@ -208,6 +208,7 @@ library meowbot-lib
                    , External.ChatAPI
                    , External.ChatAPI.Cost
                    , External.ChatAPI.Models
+                   , External.ChatAPI.ModelPricing
                    , External.ChatAPI.Function
                    , External.ChatAPI.MeowTool
                    , External.ChatAPI.MeowToolEnv

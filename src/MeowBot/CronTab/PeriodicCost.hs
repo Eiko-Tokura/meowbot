@@ -3,6 +3,7 @@ module MeowBot.CronTab.PeriodicCost where
 import Command
 import Cron.Match
 import Cron.Schedule
+import Control.Monad.Effect
 import Control.Monad.Logger
 import Data.Coerce
 import Data.PersistModel
@@ -49,6 +50,13 @@ checkAndUpdatePeriodicCost botId now = do
         Nothing -> $logError $ "Failed to insert daily basic cost record for " <> toText bcm
   return ()
 
+initializeCounters :: (In PrometheusMan mods) => BotId -> EffT mods es IO ()
+initializeCounters botid = do
+  let labels = [ Label @"bot_id" botid
+               , Label @"periodic_cost_reason" "DailyBasicCost"
+               ]
+  managedGauge "meowbot_periodic_cost_summed_total" labels (GaugeSet 0)
+
 insertNewCostRecord :: DailyBasicCost -> Either (Entity BotCostModel) (Entity BotCostModelPerChat) -> UTCTime -> DB (Maybe (Meow ()))
 insertNewCostRecord dailyCost (Left enBCM) now = runMaybeT $ do
   let costRecord = PeriodicCostRecord
@@ -66,7 +74,9 @@ insertNewCostRecord dailyCost (Left enBCM) now = runMaybeT $ do
   let labels = [ Label @"bot_id" enBCM.entityVal.botCostModelBotId
                , Label @"periodic_cost_reason" "DailyBasicCost"
                ]
-  return $ managedGauge "meowbot_periodic_cost_total" labels (GaugeAdd $ coerce dailyCost)
+  return $ do
+    managedGauge "meowbot_periodic_cost_total"        labels (GaugeAdd $ coerce dailyCost)
+    managedGauge "meowbot_periodic_cost_summed_total" labels (GaugeAdd $ coerce dailyCost)
 insertNewCostRecord dailyCost (Right enBCMP) now = runMaybeT $ do
   let costRecord = PeriodicCostRecord
         { periodicCostRecordTime                      = now
@@ -81,10 +91,12 @@ insertNewCostRecord dailyCost (Right enBCMP) now = runMaybeT $ do
     update enBCMP.entityVal.botCostModelPerChatWalletId [WalletBalance -=. coerce dailyCost]
     insert_ costRecord
   let labels = [ Label @"bot_id" enBCMP.entityVal.botCostModelPerChatBotId
-               , Label @"chat_id" (coerce enBCMP.entityVal.botCostModelPerChatChatId)
                , Label @"periodic_cost_reason" "DailyBasicCost"
                ]
-  return $ managedGauge "meowbot_periodic_cost_total" labels (GaugeAdd $ coerce dailyCost)
+      labelsCid = labels <> [ Label @"chat_id" enBCMP.entityVal.botCostModelPerChatChatId ]
+  return $ do
+    managedGauge "meowbot_periodic_cost_total"        labelsCid (GaugeAdd $ coerce dailyCost)
+    managedGauge "meowbot_periodic_cost_summed_total" labels    (GaugeAdd $ coerce dailyCost)
 
 findLastCostRecord :: Either BotCostModelId BotCostModelPerChatId -> DB (Maybe PeriodicCostRecord)
 findLastCostRecord (Left botCostModelId)         = fmap entityVal <$>
