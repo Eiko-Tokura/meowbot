@@ -56,6 +56,7 @@ type MeowTools =
   , CronTabList
   , CronTabDelete
   , SetEssenceMessage
+  , DeleteMessageTool
   , SetGroupBanTool
   , LeaveGroupTool
   ]

@@ -276,6 +276,30 @@ instance
     return $ StringT "success" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
 
+data DeleteMessageTool
+-- ^ A tool that provides the ability to delete a message in the current chat. (Only for group chats where the bot is an admin)
+-- This tool is useful for moderating the chat and preventing unwanted interactions.
+instance
+  ( In MeowActionQueue mods
+  , In LogDatabase mods
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) DeleteMessageTool where
+  type ToolInput DeleteMessageTool = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to delete"])
+  type ToolOutput DeleteMessageTool = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion action"])
+  data ToolError DeleteMessageTool = DeleteError Text deriving Show
+  enabledByDefault _ _ = True
+  toolEnabled _        = computeSettingFromDB botSettingEnableDeleteMessage botSettingPerChatEnableDeleteMessage
+  toolUsable _         = meowGroupAdmin
+  toolName _ _ = "delete_message"
+  toolDescription _ _ = "As admin, delete a message in the current group chat. Use with extra caution, can be used to prevent abuse or very bad behavior."
+  toolHandler _ _ ((IntT messageId) :%* ObjT0Nil) = do
+    _ <- baseMaybeInWith (DeleteError "This tool is only valid in group chats, this is a private chat.") getGid
+    action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (DeleteMessage messageId)]
+    tvarBotAction <- lift $ asksModule meowReadsAction
+    liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
+    return $ StringT "success" :%* ObjT0Nil
+    where intercalateDelay = 2_000_000 -- 2 second
 
 data SetGroupBanTool
 -- ^ A tool that provides the ability to ban a user in the current chat. (Only for group chats where the bot is an admin)

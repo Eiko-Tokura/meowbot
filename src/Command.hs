@@ -182,8 +182,8 @@ botCommandsWithIgnore cqmsg bcs = do
     -- updateSavedDataDB -- ^ make sure the saved data is up-to-date
     fmap concat . sequence $ botCommandsToMeow bcs
 
-updateSavedDataDB :: Meow ()
-updateSavedDataDB = do
+_updateSavedDataDB :: Meow ()
+_updateSavedDataDB = do
   botid <- query
   inUserGroups   <- map entityVal <$> runMeowDB (selectList [InUserGroupBotId   ==. botid] [])
   inGroupGroups  <- map entityVal <$> runMeowDB (selectList [InGroupGroupBotId  ==. botid] [])

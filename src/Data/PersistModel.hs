@@ -232,6 +232,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
+  enableDeleteMessage     Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
   deriving Generic
@@ -263,6 +264,7 @@ BotSettingPerChat -- Overlapping BotSetting
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
+  enableDeleteMessage     Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
   deriving Generic
