@@ -37,7 +37,7 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
       fetchGroupList = do
         parseResponse <- lift $ queryAPI (GetGroupList False)
         let nextStep :: QueryAPIResponse 'QueryGroupList -> Meow [BotAction]
-            nextStep (GetGroupListResponse ginfos) = botT $ do
+            nextStep (GetGroupListResponse ginfos) = effAddLogCat' (LogCat @Text "OTHER:UPDATER") $ botT $ do
               let gids = map groupBasicInfoGroupId ginfos
               $logInfo $ toText botid <> " Fetched group list: " <> toText gids
               utcTime <- liftIO getCurrentTime
@@ -56,7 +56,7 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
     let groupList = Map.toList groupMap
         updateNeeded = filter (needUpdate anHour utcTime . snd) groupList
         nextStepFor :: GroupId -> QueryAPIResponse 'QueryGroupMemberInfo -> Meow [BotAction]
-        nextStepFor gid resp = botT $ do
+        nextStepFor gid resp = effAddLogCat' (LogCat @Text "OTHER:UPDATER") $ botT $ do
           $logInfo $ toText botid <> " Fetched group member info for group " <> toText gid <> ": " <> toText resp
           utcTime' <- liftIO getCurrentTime
           s@SelfInfo {selfInGroups} <- MaybeT $ queries selfInfo
