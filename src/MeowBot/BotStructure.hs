@@ -28,11 +28,7 @@ import Control.Monad.Effect
 import Control.Parallel.Strategies
 import Data.Additional
 import Data.Additional.Saved
-import Data.Bifunctor
 import Data.List (sortOn, maximumBy)
-import Data.HashMap.Strict (HashMap)
-import Data.Sequence (Seq)
--- import qualified Data.Sequence as Seq
 import Data.Maybe
 import Data.Ord (comparing, Down(..))
 import Data.UpdateMaybe

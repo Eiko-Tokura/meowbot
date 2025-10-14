@@ -130,6 +130,7 @@ updateListByFuncKeyElement wc cid attRule cq = case HM.lookup cid wc of
               (\chatRoom -> Just $ chatRoom
                 { chatForest = Seq.take forestSizeForEachChat
                              $ putElementIntoForest attRule cq chatRoom.chatForest
+                , newest     = fromMaybe 0 cq.absoluteId
                 }
               ) cid wc
   Nothing -> HM.insert cid (ChatRoom cid (Seq.singleton $ Node cq []) (fromMaybe 0 cq.absoluteId)) wc

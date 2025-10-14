@@ -49,8 +49,6 @@ import qualified MeowBot.Parser as MP
 
 import Data.Sequence (Seq)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.Sequence as Seq
-import qualified Data.HashMap.Strict as HM
 
 import Database.Persist.Sqlite
 import Module.Logging
