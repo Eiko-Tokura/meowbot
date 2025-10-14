@@ -18,14 +18,15 @@ import Data.UpdateMaybe
 import Debug.Trace
 import External.ProxyWS (cqhttpHeaders, Headers)
 import MeowBot.Parser (Tree(..), flattenTree)
-import Utils.List
+import Data.Sequence (Seq)
+import qualified Data.HashMap.Strict as HM
 import qualified MeowBot.Parser as MP
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Foldable
 import Module.RS
 import Module.RecvSentCQ
 
-forestSizeForEachChat = 32 -- ^ controls how many trees to keep in each chat room
+forestSizeForEachChat = 12 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
 updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m ()
@@ -46,7 +47,7 @@ makeHeader = do
   sid <- queries (fmap selfId . selfInfo)
   return $ cqhttpHeaders <$> coerce @_ @(Maybe Int) sid
 
-increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m Int
+increaseAbsoluteId :: Monad m => EffT '[SModule OtherData] NoError m AbsoluteMsgId
 increaseAbsoluteId = do
   modifyS $ \other_data -> let !mid = message_number other_data in other_data {message_number = mid + 1}
   getsS message_number
@@ -63,11 +64,11 @@ updateWholeChatByMessage :: Monad m => CQMessage -> EffT '[SModule WholeChat, SM
 updateWholeChatByMessage cqmsg =
   case eventType cqmsg of
     GroupMessage -> case groupId cqmsg of
-      Just gid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (GroupChat gid) cqmsg
+      Just gid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat (GroupChat gid) (attachRule cqmsg) cqmsg
       Nothing -> return ()
 
     PrivateMessage -> case userId cqmsg of
-      Just uid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule cqmsg) (PrivateChat uid) cqmsg
+      Just uid -> modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat (PrivateChat uid) (attachRule cqmsg) cqmsg
       Nothing -> return ()
 
     Response -> let (rdata, mecho) = (responseData cqmsg, echoR cqmsg) in
@@ -81,7 +82,7 @@ updateAllDataByResponse :: Monad m => (ResponseData, Maybe Text) -> EffT '[SModu
 updateAllDataByResponse (rdata, mecho) = do
   otherdata <- getS
   case (message_id rdata, sent_messages otherdata) of
-    (Nothing, _) -> pure ()
+    (Nothing, _)   -> pure ()
     (_, Seq.Empty) -> pure ()
     (Just mid, sentMessageList@(headSentMessageList Seq.:<| _)) ->
       let m0  = fromMaybe headSentMessageList $ listToMaybe [ m | m <- Foldable.toList sentMessageList, echoR m == mecho ]
@@ -89,45 +90,59 @@ updateAllDataByResponse (rdata, mecho) = do
       in
       case (groupId m0, userId m0) of -- attach to the message id that the bot is replying to
         (Just gid, _) -> do
-          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (GroupChat gid) m0{messageId = Just mid}
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat (GroupChat gid) (attachRule m0) m0{messageId = Just mid}
           modifyS $ \od -> od { sent_messages = ms }
         (Nothing, Just uid) -> do
-          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat id (attachRule m0) (PrivateChat uid) m0{messageId = Just mid}
+          modifyS $ \whole_chat -> updateListByFuncKeyElement whole_chat (PrivateChat uid) (attachRule m0) m0{messageId = Just mid}
           modifyS $ \od -> od { sent_messages = ms }
         _ -> pure ()
 
 type End a = a -> a
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
 -- and also put at the top of the list.
-updateListByFuncKeyElement :: (Ord k)
-  => [ ( k
-       , ( [Tree a], [a] )
-       )
-     ]
-  -> End [ (k, ([Tree a], [a])) ]
-  -> Maybe (a -> Bool)
-  -> k
-  -> a
-  -> [ (k, ([Tree a], [a])) ]
-updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []
-updateListByFuncKeyElement (l: !ls) past attachTo key element
-  | keyl == key   =  ( keyl
-                     , ( strictTake forestSizeForEachChat $ putElementIntoForest attachTo element treel
-                       , strictTake forestSizeForEachChat $ element : list
-                       ) `using` evalTuple2 rseq rseq -- when eval this tuple, evaluate the two lists
-                     ) : let !pastls = past ls in pastls
-  | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
-  where (keyl, (treel, list)) = l
+-- updateListByFuncKeyElement :: (Ord k)
+--   => [ ( k
+--        , ( [Tree a], [a] )
+--        )
+--      ]
+--   -> End [ (k, ([Tree a], [a])) ]
+--   -> Maybe (a -> Bool)
+--   -> k
+--   -> a
+--   -> [ (k, ([Tree a], [a])) ]
+-- updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []
+-- updateListByFuncKeyElement (l: !ls) past attachTo key element
+--   | keyl == key   =  ( keyl
+--                      , ( strictTake forestSizeForEachChat $ putElementIntoForest attachTo element treel
+--                        , strictTake forestSizeForEachChat $ element : list
+--                        ) `using` evalTuple2 rseq rseq -- when eval this tuple, evaluate the two lists
+--                      ) : let !pastls = past ls in pastls
+--   | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
+--   where (keyl, (treel, list)) = l
+updateListByFuncKeyElement
+  :: WholeChat
+  -> ChatId
+  -> Maybe (CQMessage -> Bool)
+  -> CQMessage
+  -> WholeChat
+updateListByFuncKeyElement wc cid attRule cq = case HM.lookup cid wc of
+  Just _  -> HM.update
+              (\chatRoom -> Just $ chatRoom
+                { chatForest = Seq.take forestSizeForEachChat
+                             $ putElementIntoForest attRule cq chatRoom.chatForest
+                }
+              ) cid wc
+  Nothing -> HM.insert cid (ChatRoom cid (Seq.singleton $ Node cq []) (fromMaybe 0 cq.absoluteId)) wc
 
 -- | Helper function to put an element into a forest according to the attachTo function.
-putElementIntoForest :: Maybe (a -> Bool) -> a -> [Tree a] -> [Tree a]
+putElementIntoForest :: Maybe (a -> Bool) -> a -> Seq (Tree a) -> Seq (Tree a)
 putElementIntoForest attachTo element forest = case attachTo of
-    Nothing -> Node element []:forest
-    Just f -> let (before, rest) = break (any f . flattenTree) forest
+    Nothing -> Node element [] Seq.:<| forest
+    Just f -> let (before, rest) = Seq.breakl (any f . flattenTree) forest
               in case rest of
-                   (tree:after) -> let modifiedTree = attachToFirstNode f element tree
-                                   in  modifiedTree : before ++ after
-                   []           -> Node element []:forest
+                   (tree Seq.:<| after) -> let modifiedTree = attachToFirstNode f element tree
+                                   in  modifiedTree Seq.:<| before <> after
+                   Seq.Empty            -> Node element [] Seq.:<| forest
 
 attachToFirstNode :: (a -> Bool) -> a -> Tree a -> Tree a
 attachToFirstNode f element (Node a ts)

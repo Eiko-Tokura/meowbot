@@ -72,7 +72,7 @@ getCid :: MeowAllData mods => MeowToolEnv mods (Maybe ChatId)
 getCid =
   (liftA2 (<|>)
     (getsS $ chatIdOverride <=< overrideSettings)
-    (getsS $ cqmsgToCid . getNewMsg)
+    (getsS $ cqmsgToCid <=< getNewMsg)
   )
 {-# INLINE getCid #-}
 

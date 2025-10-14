@@ -2,6 +2,7 @@ module MeowBot.GetInfo where
 
 import MeowBot
 import MeowBot.Data.CQHttp.CQCode
+import Control.Monad
 import Control.Monad.Trans.Maybe
 import Data.Maybe
 import MeowBot.Parser
@@ -25,7 +26,7 @@ isSuperUser uid = do
 -- | Whether the newest message contains @bot
 beingAt :: Meow Bool
 beingAt = fmap (fromMaybe False) . runMaybeT $ do
-  cqmsg  <- MaybeT $ queries (fmap cqcodes . metaMessage . getNewMsg)
+  cqmsg  <- MaybeT $ queries (fmap cqcodes . metaMessage <=< getNewMsg)
   selfId <- MaybeT $ queries (fmap ((\(UserId uid) -> uid) . selfId) . selfInfo)
   return $ any (\case
       CQAt uid _ -> uid == selfId
@@ -35,8 +36,8 @@ beingAt = fmap (fromMaybe False) . runMaybeT $ do
 
 -- | Whether the newest message replies to the bot
 beingReplied :: Meow Bool
-beingReplied = do
-  firstTree <- queries getFirstTree
+beingReplied = fmap (fromMaybe False) . runMaybeT $ do
+  firstTree <- MaybeT $ queries getFirstTree
   case runParser replyContextParser firstTree of
     Just _  -> return True
     Nothing -> return False

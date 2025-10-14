@@ -9,6 +9,12 @@ import MeowBot.MetaMessage
 import Data.Additional
 import qualified MeowBot.Parser as MP
 import Utils.Time
+import Database.Persist
+import Database.Persist.Sql
+
+newtype AbsoluteMsgId = AbsoluteMsgId { unAbsoluteMsgId :: Int }
+  deriving newtype (Show, Eq, Ord, Read, ToJSON, FromJSON)
+  deriving newtype (PersistField, PersistFieldSql, NFData, Num, Default)
 
 -------------------------------------------------------------------------------------------
 -- CQMessage
@@ -25,10 +31,11 @@ data CQMessage = CQMessage
   , message      :: Maybe Text     -- ^ raw message
   , time         :: Maybe Int
   , utcTime      :: Maybe UTCTime
-  , self_id      :: Maybe Int
+  , self_id      :: Maybe UserId
+  , target_id    :: Maybe UserId
   , responseData :: Maybe ResponseData
   , echoR        :: Maybe Text
-  , absoluteId   :: Maybe Int
+  , absoluteId   :: Maybe AbsoluteMsgId
   , metaMessage  :: Maybe MetaMessage
   , noticeType   :: Maybe NoticeType
   , requestType  :: Maybe RequestType
@@ -61,7 +68,7 @@ roleToText RMember  = Nothing -- ^ not displaying if it's a member
 roleToText RUnknown = Just "未知"
 
 emptyCQMessage :: CQMessage
-emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+emptyCQMessage = CQMessage UnknownMessage Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
 
 newtype ResponseData = ResponseData
   { message_id :: Maybe Int
@@ -106,6 +113,7 @@ instance FromJSON CQMessage where
               <*> obj .:? "time"
               <*> return timeUTC
               <*> obj .:? "self_id"
+              <*> obj .:? "target_id"
               <*> pure dataObj
               <*> obj .:? "echo"
               <*> pure Nothing

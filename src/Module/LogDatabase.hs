@@ -39,7 +39,7 @@ instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModu
     let mcq = coerce mrcq <|> coerce mscq
     botname <- getsS (nameOfBot . botModules)
     botid   <- getsS (botId . botModules)
-    mNewMessage <- getsS (cqMessageToChatMessage botid botname . getNewMsg)
+    mNewMessage <- getsS (cqMessageToChatMessage botid botname <=< getNewMsg)
     case (mcq, mNewMessage) of
       (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage, SelfMessage]) $ do
         $logDebug "Inserting a new message into the database."

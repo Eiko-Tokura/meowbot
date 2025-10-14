@@ -11,7 +11,6 @@ import Module.RecvSentCQ
 import Module.MeowConnection
 import Control.System
 import Control.Monad.Effect
-import Control.Parallel.Strategies
 import Data.Time
 import Data.UpdateMaybe
 import Data.Aeson (eitherDecode)
@@ -166,7 +165,7 @@ instance
               HeartBeat -> return [Label @"message_type" HeartBeat]
               Response -> do
                 embedEffT $ updateWholeChatByMessage cqmsg
-                modifyS (`using` rseqWholeChat) 
+                -- modifyS (`using` rseqWholeChat) 
                 updateSavedAdditionalData
                 $(logInfo) $ pack nameBot <> " <- response."
                 return [Label @"message_type" Response]
@@ -188,13 +187,15 @@ instance
                 tmeow <- asksModule meowReadsAction
                 liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
                 return [Label @"message_type" RequestEvent]
-              _ -> return [Label @"message_type" cqmsg.eventType]
+              _ -> do
+                $logInfo $ "Other event received (unhandled): " <> toText cqmsg
+                return [Label @"message_type" cqmsg.eventType]
             where
               updateStates :: MonadIO m => String -> CQMessage -> EffT '[SModule WholeChat, SModule OtherData, LoggingModule] NoError m ()
               updateStates name cqm = do
                 cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> embedMods increaseAbsoluteId
                 embedEffT $ updateWholeChatByMessage cqmsg'
-                modifyS (`using` rseqWholeChat)
+                -- modifyS (`using` rseqWholeChat)
                 updateSavedAdditionalData
                 $(logInfo) $ pack name <> " <- " <> pack (showCQ cqmsg')
         managedCounter "meowbot_received_cqmessages_total" (Label @"bot_id" botId : labels) IncCounter

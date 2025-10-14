@@ -4,6 +4,7 @@ module MeowBot.Data
   ( module MeowBot.MetaMessage
   , module MeowBot.Data
   , UserId(..), unUserId, GroupId(..), ChatId(..), BotId(..)
+  , AbsoluteMsgId(..)
 
   , CQMessage(..), CQEventType(..)
   , ReceCQMessage(..), SentCQMessage(..)
@@ -31,8 +32,8 @@ module MeowBot.Data
 
 import Control.Monad.Logger
 import Control.DeepSeq (NFData)
+import Data.Aeson
 import Data.Default
--- import Data.Sequence (Seq)
 import External.ProxyWS (ProxyData)
 import GHC.Generics
 import MeowBot.CommandRule
@@ -45,9 +46,11 @@ import MeowBot.MetaMessage
 import Utils.Lens
 import Utils.Text
 import qualified MeowBot.Parser as MP
--- import Data.HashMap.Strict (HashMap)
--- import qualified Data.Sequence as Seq
--- import qualified Data.HashMap.Strict as HM
+
+import Data.Sequence (Seq)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.Sequence as Seq
+import qualified Data.HashMap.Strict as HM
 
 import Database.Persist.Sqlite
 import Module.Logging
@@ -61,16 +64,17 @@ instance IsLogCat BotId where
 
 -- | Structured and Unstructured Chat
 -- recent messages top, older messages bottom
-type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
+-- type ChatRoom = (ChatId, ([MP.Tree CQMessage], [CQMessage]))
 
-type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
+-- type WholeChat = [ChatRoom]  -- [(ChatId, [Tree CQMessage])]
 
--- type WholeChat = HashMap ChatId ChatRoom
--- 
--- data ChatRoom = ChatRoom
---   { chatRoomId :: !ChatId
---   , chatForest :: !(Seq (Int, MP.Tree CQMessage))
---   }
+type WholeChat = HashMap ChatId ChatRoom
+
+data ChatRoom = ChatRoom
+  { chatRoomId :: !ChatId
+  , chatForest :: !(Seq (MP.Tree CQMessage))
+  , newest     :: !AbsoluteMsgId
+  } deriving Show
 
 newtype BotName = BotName { maybeBotName :: Maybe String } deriving (Eq, Show)
 

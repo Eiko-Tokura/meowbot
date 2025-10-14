@@ -22,6 +22,7 @@ module MeowBot.BotStructure
 
 import Command.Aokana.Scripts
 import Control.Monad.RS.Class
+import Control.Monad
 import Module.RS
 import Control.Monad.Effect
 import Control.Parallel.Strategies
@@ -39,8 +40,14 @@ import Module.Logging
 import MeowBot.CommandRule
 import MeowBot.Data
 import MeowBot.Data.Book
-import MeowBot.Parser ( ChatSetting(..), Tree(..) )
+import MeowBot.Parser ( ChatSetting(..), Tree(..), flattenTree)
 import Utils.Lens
+
+import Data.Sequence (Seq)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.Foldable as Foldable
+import qualified Data.Sequence as Seq
+import qualified Data.HashMap.Strict as HM
 
 data BotConfig = BotConfig
   { botModules       :: BotModules
@@ -78,7 +85,7 @@ data SavedData = SavedData
   } deriving (Show, Eq, Read)
 
 data OtherData = OtherData -- In the future one can add course data.. etc
-  { message_number :: !Int -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
+  { message_number :: !AbsoluteMsgId -- ^ all messages, will be used to create an absolute message id number ordered by time of receipt or time of send.
   , selfInfo       :: !(Maybe SelfInfo)
   , sent_messages  :: !(Seq CQMessage)
   , savedData      :: !SavedData
@@ -167,29 +174,30 @@ instance HasAdditionalData OtherData where
   getAdditionalData = runningData
   modifyAdditionalData f od = od {runningData = f $ runningData od}
 
-rseqWholeChat :: Strategy WholeChat
-rseqWholeChat = evalList (evalTuple2 r0 (evalTuple2 rseq rseq))
+getNewMsg :: WholeChat -> Maybe CQMessage
+getNewMsg wholechat = snd . largestInTree (fromMaybe 0 . absoluteId) <$> getFirstTree wholechat
 
-getNewMsg :: WholeChat -> CQMessage
-getNewMsg [] = emptyCQMessage
-getNewMsg wholechat = snd $ largestInTree (fromMaybe 0 . absoluteId) (getFirstTree wholechat)
+getNewestChatRoom :: WholeChat -> Maybe ChatRoom
+getNewestChatRoom wc
+  | HM.null wc = Nothing
+  | otherwise = Just $ maximumBy (comparing newest) wc
 
-getFirstTree :: WholeChat -> Tree CQMessage
-getFirstTree ((_cid, (tree0:_, _cqmsgs)):_) = tree0
-getFirstTree _                              = Node emptyCQMessage []
+getFirstTree :: WholeChat -> Maybe (Tree CQMessage)
+getFirstTree = getNewestChatRoom >=> (\case (a Seq.:<| _) -> Just a; _ -> Nothing) . chatForest
 
 -- | Get n most recent chat messages as a list of CQMessage
 getNewMsgN :: Int -> WholeChat -> [CQMessage]
-getNewMsgN _ [] = []
-getNewMsgN n (headWholeChat:_) = take n $ snd $ snd headWholeChat
+getNewMsgN n = take n . maybe [] (sortOn (Down . fromMaybe 0 . absoluteId) . flattenTree) . getFirstTree
+-- getNewMsgN _ [] = []
+-- getNewMsgN n (headWholeChat:_) = take n $ snd $ snd headWholeChat
 
-getNewMsgChatIdN :: Int -> WholeChat -> Maybe (ChatId, [CQMessage])
-getNewMsgChatIdN _ [] = Nothing
-getNewMsgChatIdN n (headWholeChat:_) = Just $ second (take n . snd) headWholeChat
+-- getNewMsgChatIdN :: Int -> WholeChat -> Maybe (ChatId, [CQMessage])
+-- getNewMsgChatIdN _ [] = Nothing
+-- getNewMsgChatIdN n (headWholeChat:_) = Just $ second (take n . snd) headWholeChat
 
 -- | Get the most important informations from the most recent one chat message
 getEssentialContent :: WholeChat -> Maybe EssentialContent
-getEssentialContent wchat = cqmsgToEssentialContent (getNewMsg wchat)
+getEssentialContent = cqmsgToEssentialContent <=< getNewMsg
 
 getEssentialContentChatId :: ChatId -> WholeChat -> Maybe EssentialContent
 getEssentialContentChatId cid wchat = listToMaybe (getTimeLineCid cid wchat) >>= cqmsgToEssentialContent
@@ -204,13 +212,14 @@ getEssentialContentAtN n wchat = cqmsgToEssentialContent =<< (getNewMsgN n wchat
 
 -- | get the timeline of the most recent chat, i.e. sort the chat room of the most recent message by time.
 getTimeLine :: WholeChat -> [CQMessage]
-getTimeLine ((_, (_, timeline)):_) = sortOn (Down . time) timeline
-getTimeLine [] = []
+getTimeLine = maybe [] (sortOn (Down . fromMaybe 0 . absoluteId) . flattenTree) . getFirstTree
+-- getTimeLine ((_, (_, timeline)):_) = sortOn (Down . time) timeline
+-- getTimeLine [] = []
 
 -- | Get the timeline of a chat id.
 getTimeLineCid :: ChatId -> WholeChat -> [CQMessage]
-getTimeLineCid cid wc = case lookup cid wc of
-  Just (_, tl) -> sortOn (Down . time) tl
+getTimeLineCid cid wc = case HM.lookup cid wc of
+  Just chatRoom -> sortOn (Down . time) (concatMap flattenTree chatRoom.chatForest)
   Nothing -> []
 
 largestInTree :: (Ord b) => (a -> b) -> Tree a -> (b, a)
@@ -221,7 +230,6 @@ largestInTree f (Node a children) =
               [] -> currentValue
               _  -> maximumBy (comparing fst) $ currentValue:childValues
 largestInTree _ EmptyTree = error "largestInTree : EmptyTree"
-
 
 makeLenses_ ''BotConfig
 makeLenses_ ''OverrideSettings

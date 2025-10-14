@@ -87,8 +87,8 @@ helpHangman = T.unlines
 commandHangman :: BotCommand
 commandHangman = BotCommand Hangman $ botT $ do
   (str, cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
-  tree <- lift $ getFirstTree <$> query
-  nickname <- MaybeT $ queries $ senderNickname <=< sender . getNewMsg
+  tree <- MaybeT $ getFirstTree <$> query
+  nickname <- MaybeT $ queries $ senderNickname <=< sender <=< getNewMsg
   hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
   case (runParser hangmanParser' str, runParser hangmanTreeParser tree) of
     (Just cmd, _) -> lift $ doHangman cid nickname uid cmd
@@ -109,7 +109,7 @@ doHangman cid _ uid (Left hmact) = do
     (Right (HangmanEnd (txt, s)), alls) -> do
       moldUserRank <- getUserRank uid
       runMeowDB $ insert_ (hangmanStateToRecord uid s)
-      nickname <- queries $ senderNickname <=< sender . getNewMsg
+      nickname <- queries $ senderNickname <=< sender <=< getNewMsg
       (newpp, newrank, _, _) <- updateTotalPP uid nickname
       modify @OtherData $ modifyAdditionalDataType @_ @(AllHangmanStates UserId) (const $ Just alls)
       return [baSendToChatId cid (txt <> rankChange moldUserRank newpp newrank)]
@@ -158,7 +158,7 @@ hangmanTreeParser = do
   self <- satisfy $ \cqm -> eventType cqm == SelfMessage && (not . null $ getAdditionalDataType @_ @HangmanUnit cqm)
   let _ = head . getAdditionalDataSavedType @_ @HangmanUnit $ self
   umsg <- satisfy $ (`elem` [GroupMessage, PrivateMessage]) . eventType
-  maybe zero return $ runParser (replyHangmanParser) (maybe "" onlyMessage $ metaMessage umsg)
+  maybe zero return $ runParser replyHangmanParser (maybe "" onlyMessage $ metaMessage umsg)
   where
     replyHangmanParser
       = spaces0 >> HangmanGuess <$>

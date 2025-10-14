@@ -19,7 +19,7 @@ instance FromJSON Role where
     _ -> return RUnknown
 
 data ChatId = GroupChat GroupId | PrivateChat UserId
-  deriving (Show, Eq, Ord, Read, Generic, NFData)
+  deriving (Show, Eq, Ord, Read, Generic, NFData, Hashable)
 
 instance Default ChatId where
   def = GroupChat 0

@@ -65,7 +65,7 @@ catSetParser =
       , MP.string "systemTemp"              >> fmap (action range) (SystemTemp              <$> MP.optMaybe (MP.spaces >> MP.nFloat))
       , MP.string "systemMaxToolDepth"      >> fmap (action range) (SystemMaxToolDepth      <$> MP.optMaybe (MP.spaces >> MP.intRange 1 10))
       , MP.string "systemAPIKeyOpenAI"      >> fmap (action range) (SystemAPIKeyOpenAI      <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
-      , MP.string "systemAPIkeyDeepSeek"    >> fmap (action range) (SystemAPIKeyDeepSeek    <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
+      , MP.string "systemAPIKeyDeepSeek"    >> fmap (action range) (SystemAPIKeyDeepSeek    <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIKeyOpenRouter"  >> fmap (action range) (SystemAPIKeyOpenRouter  <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "systemAPIKeySiliconFlow" >> fmap (action range) (SystemAPIKeySiliconFlow <$> MP.optMaybe (MP.spaces >> MP.some' MP.item))
       , MP.string "activeChat"              >> fmap (action range) (ActiveChat              <$> MP.optMaybe (MP.spaces >> MP.bool))

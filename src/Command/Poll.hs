@@ -74,7 +74,7 @@ pollTreeParser = do
 commandPoll :: BotCommand
 commandPoll = BotCommand Poll $ botT $ do
   ess@(str, _, _, _, _) <- MaybeT $ getEssentialContent <$> query
-  tree <- lift $ getFirstTree <$> query
+  tree <- MaybeT $ getFirstTree <$> query
   pollParser' <- lift $ commandParserTransformByBotName pollParser
   case (runParser pollParser' str, runParser pollTreeParser tree) of
     (Just cmd, _) -> lift $ doPollCommand ess cmd

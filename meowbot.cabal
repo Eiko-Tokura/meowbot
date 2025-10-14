@@ -51,8 +51,8 @@ flag deploy
     manual: False
     default: False
 
-flag profile
-    description: Compile with profiling, use cabal build --flag=profile
+flag info
+    description: Compile with infotable
     manual: False
     default: False
 
@@ -168,7 +168,7 @@ library meowbot-lib
     -- -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=512 -finfo-table-map -fdistinct-constructor-tables -j8
 
 
-    if flag(profile)
+    if flag(info)
       ghc-options: -finfo-table-map -fdistinct-constructor-tables
 
     -- Modules included in this executable, other than Main.
@@ -325,6 +325,7 @@ library meowbot-lib
                  , directory
                  , esqueleto
                  , filepath
+                 , fusion-plugin
                  , hashable
                  , http-client
                  , http-client-tls
@@ -382,7 +383,10 @@ executable meowbot
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all
     ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m -with-rtsopts=-xn -flate-dmd-anal
 
-    if flag(profile)
+    if flag(deploy)
+      ghc-options: -fplugin=Fusion.Plugin
+
+    if flag(info)
       ghc-options: -finfo-table-map -fdistinct-constructor-tables
 
     hs-source-dirs:   app
@@ -399,6 +403,7 @@ executable meowbot
                  , directory
                  , discord-haskell
                  , filepath
+                 , fusion-plugin
                  , http-client
                  , http-client-tls
                  , http-types

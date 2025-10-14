@@ -23,7 +23,7 @@ import Control.Monad.Trans.Maybe
 -- | This command is used to automatically retract emoticons that contain certain keywords owo
 commandRetract :: BotCommand
 commandRetract = BotCommand Retract $ botT $ do
-  cqs <- cqcodes <$> MaybeT (metaMessage . getNewMsg <$> query)
+  cqs <- cqcodes <$> MaybeT ((metaMessage <=< getNewMsg) <$> query)
   (msg, _, uid, mid, _) <- MaybeT $ getEssentialContent <$> query
   (msg1, _, _, _, _) <- MaybeT $ getEssentialContentAtN 2 <$> query
   MaybeT . pure $ listToMaybe $ catMaybes

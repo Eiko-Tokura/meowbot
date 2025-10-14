@@ -1,17 +1,20 @@
 {-# LANGUAGE TypeFamilies, OverloadedStrings, TemplateHaskell, UndecidableInstances #-}
 module Module.ConnectionManager where
 
-import Module.RS
-import Control.Monad.Logger
 import Control.Monad.Effect
+import Control.Monad.Logger
 import Control.System
-import Module.RS.QQ
-import Module.Logging
-import Network.HTTP.Client (Manager, newManager, managerResponseTimeout, responseTimeoutMicro)
-import Network.HTTP.Client.TLS
-import Network.Connection
-import Network.TLS
 import Data.Default
+import Data.Function ((&))
+import Module.Logging
+import Module.RS.QQ
+import Network.Connection
+import Network.HTTP.Client
+import Network.HTTP.Client.TLS
+import Network.HTTP.Types.Status
+import Network.TLS
+import Utils.ByteString
+import Utils.Text
 
 [makeRModule__|
 ConnectionManagerModule
@@ -67,3 +70,21 @@ withConnectionManager act = do
   $logInfo "Connection Manager Initialized"
   let r = ConnectionManagerModuleRead manager customTimeout
   runConnectionManagerModule r act
+
+type URL = Text
+download ::
+  ( ConnectionManagerModule `In` mods
+  , InList (ErrorText "download") es
+  , MonadIO m
+  )
+  => URL -> EffT mods es m LazyByteString
+download url = do
+  man   <-  asksModule manager
+  req   <-  parseRequest (unpack url)
+    `effCatch` \(e :: MonadThrowError) -> effThrow $ errorText @"download" $ "Invalid URL: " <> url <> " (" <> toText e <> ")"
+  resp  <-  httpLbs req man
+    & liftIOSafeWith (errorText @"download" . toText @HttpException)
+    & embedError
+  case resp.responseStatus of
+    s | s >= status200 && s < status300 -> return resp.responseBody
+      | otherwise -> effThrow $ errorText @"download" $ "HTTP error code " <> toText (statusCode s) <> " when downloading " <> url

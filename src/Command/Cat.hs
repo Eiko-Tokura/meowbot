@@ -4,6 +4,7 @@ module Command.Cat where
 import Command
 import Command.Md
 import Command.Cat.CatSet
+import Control.Monad
 import MeowBot
 import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
@@ -113,7 +114,7 @@ commandCat = BotCommand Cat $ botT $ do
             ]
       lChatModelMsg <- if activeChat
         then MaybeT . pure $ Nothing  -- disable cat command when active chat, we will use chat command instead
-        else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) (getFirstTree whole_chat)
+        else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) =<< getFirstTree whole_chat
 
       breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
 

@@ -368,7 +368,7 @@ ChatMessage
   messageId      CQMessageId     Maybe
   chatId         ChatId
   userId         UserId        Maybe
-  absoluteId     Int
+  absoluteId     AbsoluteMsgId
   pureContent    Text
   cqCodes        [CQCode]
   replyTo        CQMessageId     Maybe

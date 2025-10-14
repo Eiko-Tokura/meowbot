@@ -108,7 +108,7 @@ commandChat = BotCommand Chat $ botT $ do
         mess <- getEssentialContentChatId cid <$> query -- trigger for the specified cid instead
         return ((\(m,_,_,_,_) -> m) <$> mess, cid, (\(_,_,_,mid,_) -> mid) <$> mess)
 
-  cqmsg  <- queries getNewMsg
+  cqmsg  <- MaybeT $ queries getNewMsg
   cqmsg3 <- queries $ getNewMsgN 3
   other_data <- query
   -- whole_chat :: WholeChat <- query
@@ -211,7 +211,7 @@ commandChat = BotCommand Chat $ botT $ do
       selectedContent :: [Either CQCode Text] -> Text
       selectedContent []                          = ""
       selectedContent (Right t:rest)              = t <> selectedContent rest
-      selectedContent (Left (CQImage _):rest)     = "[CQ:image,url=<too_long>]" <> selectedContent rest
+      selectedContent (Left (CQImage _):rest)     = "[CQ:image,url=<too_long>]"  <> selectedContent rest
       selectedContent (Left (CQRecord _):rest)    = "[CQ:record,url=<too_long>]" <> selectedContent rest
       selectedContent (Left cq@(CQAt {}):rest)    = embedCQCode cq <> selectedContent rest
       selectedContent (Left cq@(CQReply {}):rest) = embedCQCode cq <> selectedContent rest
