@@ -41,7 +41,6 @@ import Utils.Lens
 
 import Data.Sequence (Seq)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.Foldable as Foldable
 import qualified Data.Sequence as Seq
 import qualified Data.HashMap.Strict as HM
 
@@ -51,7 +50,7 @@ data BotConfig = BotConfig
   , overrideSettings :: Maybe OverrideSettings
   } deriving Show
 
-data OverrideSettings = OverrideSettings
+newtype OverrideSettings = OverrideSettings
   { chatIdOverride :: Maybe ChatId
   } deriving Show
 
@@ -66,8 +65,8 @@ data SelfInfo = SelfInfo
   , selfInGroups :: !(UMaybeTime (HashMap GroupId (UMaybeTime GroupInfo)))
   } deriving Show
 
-data GroupInfo = GroupInfo
-  { selfRole         :: !Role
+newtype GroupInfo = GroupInfo
+  { selfRole     :: Role
   } deriving Show
 
 -- | We will now save this data to the database, no longer in a file.

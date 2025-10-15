@@ -32,7 +32,6 @@ module MeowBot.Data
 
 import Control.Monad.Logger
 import Control.DeepSeq (NFData)
-import Data.Aeson
 import Data.Default
 import External.ProxyWS (ProxyData)
 import GHC.Generics

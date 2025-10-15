@@ -68,50 +68,10 @@ performMeowActions = do
   as <- liftIO . atomically $ readTVar actions <* writeTVar actions []
   mapM_ doBotAction . concat =<< sequence as
 
--- the process of initialization:
---
--- in the outer layer, init all global states
---
--- in each inner layer where we run each bot, init all local states
---
--- then initialize AllData, and run the botLoop
-
--- allInitDataG :: AllModuleInitDataG Mods
--- allInitDataG  = CronTabTickInitDataG :** StatusMonitorInitDataG
---               :** AsyncInitDataG :** CommandInitDataG
---               :** LogDatabaseInitDataG "meowbot.db"
---               :** ProxyWSInitDataG :** ConnectionManagerInitDataG :** FNil
-
--- allInitDataL :: TVar MeowStatus -> [ProxyFlag] -> AllModuleInitDataL Mods
--- allInitDataL tvar pf = CronTabTickInitDataL :** StatusMonitorInitDataL tvar
---                 :** AsyncInitDataL :** CommandInitDataL :** LogDatabaseInitDataL
---                 :** ProxyWSInitDataL [(add, ip) | ProxyFlag add ip <- pf]
---                 :** ConnectionManagerInitDataL :** FNil
-
 pingpongOptions = defaultPingPongOptions
   -- { pingInterval = 30
   -- , pongTimeout  = 30
   -- }
-
--- runBots :: AllModuleInitDataG Mods -> [BotInstance] -> EffT '[LoggingModule] NoError IO ()
--- runBots initglobs bots = do
---   $(logInfo) "Initializing all global states"
---   global <- initAllModulesG @R initglobs
---   $(logInfo) "Starting bot instances"
---   mapM_ (runBot initglobs global) bots
-
--- | All these are read-only so no problem to reuse them when restarting the bot
--- runBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> BotInstance -> EffT '[LoggingModule] NoError IO ()
--- runBot initglobs glob bot = do
---   case botRunFlag bot of
---     RunClient ip port -> do
---       tvarMeowStat  <- liftIO $ initTVarMeowStatus
---       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
---       runBotClient ip port bot initglobs glob earlyLocal
---     RunServer ip port -> do
---       tvarMeowStat  <- liftIO $ initTVarMeowStatus
---       earlyLocal <- initAllModulesEL @R allInitDataG (allInitDataL tvarMeowStat $ botProxyFlags bot)
---       runBotServer ip port bot initglobs glob earlyLocal
 
 runBot :: BotInstance -> Meow a -> EffT '[ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
@@ -230,72 +190,6 @@ withClientConnection addr port act = do
         restoreT $ pure state -- ^ this restores the state of the inner computation
 
         withClientConnection addr port act
-
-
--- runBotServer ip port bot initglobs glob el = do
---   $(logInfo) $ "Running bot server, listening on " <> tshow ip <> ":" <> tshow port
---   botm     <- botInstanceToModule bot
---   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
---       watchDog = listToMaybe $ botWatchDogFlags bot
---   alldata       <- initAllData botconfig glob
---   connectedTVar <- liftIO $ newTVarIO False
---   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
---   let checkHandle tvarExtra =
---         liftIO $ atomically $ do
---           meowStat <- readTVar tvarMeowStat
---           extra    <- readTVar tvarExtra
---           return $ foldl' (&&) True [meowStat == MeowOnline, extra]
---   mWatchDogId   <- case watchDog of
---     Just (WatchDogFlag interval action) -> do
---       $(logInfo) $ "Starting watch dog with interval " <> tshow interval
---       wd <- liftIO $ initWatchDog connectedTVar interval checkHandle (void $ system action)
---       liftIO $ Just <$> startWatchDog wd
---     Nothing -> return Nothing
---   void $
---     logThroughCont (runServer ip port) (\pendingconn -> do
---       conn <- lift $ acceptRequest pendingconn
---       liftIO . atomically $ writeTVar connectedTVar True
---       logThroughCont (withPingPong pingpongOptions conn) (\conn -> do
---         $(logInfo) $ "Connected to client"
---         meowData <- liftIO $ initMeowData conn
---         $(logDebug) $ "initMeowData finished"
---         local    <- initAllModulesL meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
---         $(logDebug) $ "initAllModulesL finished, entering bot loop"
---         void (runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata))) `logCatch`
---           (\e -> do
---             $(logError) $ "ERROR In connection with client : " <> tshow e
---           )
---       $(logInfo) $ "Disconnected from client"
---       liftIO . atomically $ writeTVar connectedTVar False) `logForkFinally`
---         ( \e -> do
---           maybe (pure ()) (liftIO . killThread) mWatchDogId
---           rerunBot initglobs glob el bot e
---         )
--- 
--- runBotClient ip port bot initglobs glob el = do
---   $(logInfo) $ "Running bot client, connecting to " <> tshow ip <> ":" <> tshow port
---   botm     <- botInstanceToModule bot
---   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
---   let tvarMeowStat = elUsedByWatchDog $ getF @StatusMonitorModule el
---   alldata  <- initAllData botconfig glob
---   void $
---     logThroughCont (runClient ip port "") (\conn -> do
---       $(logInfo) $ "Connected to server " <> tshow ip <> ":" <> tshow port
---       meowData <- liftIO $ initMeowData conn
---       local    <- initAllModulesL meowData initglobs (allInitDataL tvarMeowStat $ botProxyFlags bot) el
---       runReaderStateT (runCatT botLoop) (glob, meowData) (local, alldata)
---       ) `logForkFinally` rerunBot initglobs glob el bot
-
--- rerunBot :: AllModuleInitDataG Mods -> AllModuleGlobalStates Mods -> AllModuleEarlyLocalStates Mods -> BotInstance -> Either SomeException a -> EffT '[LoggingModule] NoError IO ()
--- rerunBot initglobs glob el bot (Left e) = do
---   $(logError) $ "Bot instance failed: " <> tshow bot <> "\nWith Error: " <> tshow e
---   $(logInfo) "Restarting bot instance in 60 seconds"
---   liftIO $ threadDelay 60_000_000
---   case botRunFlag bot of
---     RunClient ip port -> runBotClient ip port bot initglobs glob el
---     RunServer ip port -> runBotServer ip port bot initglobs glob el
--- rerunBot _ _ _ _ (Right _) = do
---   $(logInfo) $ "Bot instance finished successfully."
 
 botInstanceToModule :: BotInstance -> EffT '[LoggingModule] NoError IO BotModules
 botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags _) = do

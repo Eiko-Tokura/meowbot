@@ -8,7 +8,6 @@ import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.HashMap.Strict (HashMap)
--- import Data.Map.Strict (Map)
 import Data.Time.Clock
 import Data.UpdateMaybe
 import MeowBot

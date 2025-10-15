@@ -165,7 +165,6 @@ instance
               HeartBeat -> return [Label @"message_type" HeartBeat]
               Response -> do
                 embedEffT $ updateWholeChatByMessage cqmsg
-                -- modifyS (`using` rseqWholeChat) 
                 updateSavedAdditionalData
                 $(logInfo) $ pack nameBot <> " <- response."
                 return [Label @"message_type" Response]
@@ -187,6 +186,9 @@ instance
                 tmeow <- asksModule meowReadsAction
                 liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
                 return [Label @"message_type" RequestEvent]
+              UnknownMessage -> do
+                $logWarn $ toText nameBot <> " <- Unknown message received (unhandled): " <> bsToText msg
+                return [Label @"message_type" UnknownMessage]
               _ -> do
                 $logInfo $ "Other event received (unhandled): " <> toText cqmsg
                 return [Label @"message_type" cqmsg.eventType]
