@@ -26,7 +26,7 @@ import qualified Data.Foldable as Foldable
 import Module.RS
 import Module.RecvSentCQ
 
-forestSizeForEachChat = 12 -- ^ controls how many trees to keep in each chat room
+forestSizeForEachChat = 20 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
 updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m ()

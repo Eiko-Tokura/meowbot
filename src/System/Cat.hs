@@ -123,9 +123,9 @@ withServerConnection addr port act = do
     (foreverEffT $ do
 
       liftWith $ \run -> runServer addr port $ \pending -> do
-        conn <- acceptRequest pending
+        conn' <- acceptRequest pending
   
-        withPingPong pingpongOptions conn $ \conn -> do
+        withPingPong pingpongOptions conn' $ \conn -> do
           s <- run $ do
             $logInfo "Connected to client"
             runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`

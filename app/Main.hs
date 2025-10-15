@@ -85,7 +85,7 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   fileLogger <- liftIO $ createFileLogger "meowbot.log"
   let baseLogger = stdoLogger <> fileLogger
 
-  loggerInit <- pureEitherInWith id $ defaultLoadFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
+  loggerInit <- pureEitherInWith id $ defaultLoggingFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
   dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
   promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs Nothing (Just 6001) (Just ["metrics"]) globalFlags
 
