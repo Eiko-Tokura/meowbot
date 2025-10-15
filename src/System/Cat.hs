@@ -116,7 +116,7 @@ withServerConnection addr port act = do
 
   -- | because runServer does not allow any return type and restricts to IO, we have to use a TMVar to pass the state back
   initState <- liftWith $ \run -> run $ return ()
-  stateVar <- liftIO $ newTMVarIO initState
+  stateVar  <- liftIO newEmptyTMVarIO
 
   $(logInfo) $ "Running bot server, listening on " <> tshow addr <> ":" <> tshow port
   effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e))
@@ -127,6 +127,8 @@ withServerConnection addr port act = do
   
         withPingPong pingpongOptions conn' $ \conn -> do
           s <- run $ do
+            state <- fmap (fromMaybe initState) $ liftIO $ atomically $ tryTakeTMVar stateVar
+            restoreT $ pure state -- ^ this restores the state of the inner computation
             $logInfo "Connected to client"
             runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
               (\e -> do
@@ -138,15 +140,10 @@ withServerConnection addr port act = do
 
       $logInfo "Server quits, restoring state and looping"
 
-      state <- liftIO $ atomically $ readTMVar stateVar
-      restoreT $ pure state -- ^ this restores the state of the inner computation
 
     ) `effCatch` \(e :: ErrorText "uncaught") -> do
       $logError $ "Uncaught Error In server: " <> toText e
       $logInfo "Server crashed, restarting server in 20 seconds"
-
-      state <- liftIO $ atomically $ readTMVar stateVar
-      restoreT $ pure state -- ^ this restores the state of the inner computation
 
       liftIO $ threadDelay 20_000_000
       withServerConnection addr port act
@@ -160,17 +157,20 @@ withClientConnection addr port act = do
   
   -- | because runClient does not allow any return type and restricts to IO, we have to use a TMVar to pass the state back
   initState <- liftWith $ \run -> run $ return ()
-  stateVar <- liftIO $ newTMVarIO initState
+  stateVar <- liftIO newEmptyTMVarIO
 
   $(logInfo) $ "Running bot client, connecting to " <> tshow addr <> ":" <> tshow port
   effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e))
     (foreverEffT $ do
 
       liftWith $ \run -> runClient addr port "" $ \conn -> void . run $ do
+
         $logInfo $ "Connected to server " <> tshow addr <> ":" <> tshow port
 
         liftIO $ withPingPong pingpongOptions conn $ \conn -> do
           s <- run $ do
+            state <- fmap (fromMaybe initState) $ liftIO $ atomically $ tryTakeTMVar stateVar
+            restoreT $ pure state -- ^ this restores the state of the inner computation
             $logInfo "Connected to client"
             runMeowConnection (MeowConnectionRead conn) (void act)
               `effCatchAll` (\(e :: EList es) -> do
@@ -178,16 +178,10 @@ withClientConnection addr port act = do
               )
           atomically $ writeTMVar stateVar s
 
-      state <- liftIO $ atomically $ readTMVar stateVar
-      restoreT $ pure state -- ^ this restores the state of the inner computation
-
     ) `effCatch` \(e :: ErrorText "uncaught") -> do
         $logError $ "Uncaught Error In client: " <> toText e
         $logInfo "Restarting client in 20 seconds"
         liftIO $ threadDelay 20_000_000
-
-        state <- liftIO $ atomically $ readTMVar stateVar
-        restoreT $ pure state -- ^ this restores the state of the inner computation
 
         withClientConnection addr port act
 
