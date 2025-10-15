@@ -57,7 +57,7 @@ flag info
     default: False
 
 common warnings
-    ghc-options: -Wall -Werror=incomplete-pattenrs -Wno-x-partial
+    ghc-options: -Wall -Werror=incomplete-patterns -Werror=missing-fields -Werror=missing-methods -Wno-x-partial 
 
 common extensions
     default-extensions:
@@ -78,6 +78,7 @@ common extensions
       ImpredicativeTypes
 
 library crontab
+    import: warnings
     -- Modules exported by the library.
     exposed-modules:  Cron.Match
                     , Cron.Parser
@@ -115,7 +116,7 @@ library crontab
 --                    , Parser.Text
 -- 
 -- -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
---     ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
+--     ghc-options: +RTS -A128m -AL512m -RTS -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
 -- 
 --     build-depends: base  >=4.7 && <5
 --                  , mtl
@@ -132,11 +133,12 @@ library crontab
 -- * web scraping, providing a function that cleans up the html and return text content
 library search-scrape-text
 
+    import: warnings
     exposed-modules: Search
                    , Scrape
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all  
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
+    ghc-options: +RTS -A128m -AL512m -RTS -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2    -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -threaded -j8
 
     build-depends: base  >=4.7 && <5
                  , data-default
@@ -158,13 +160,13 @@ library search-scrape-text
 
 library meowbot-lib
     -- .hs or .lhs file containing the Main module.
-    import: extensions
+    import: warnings, extensions
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all 
     if flag(deploy)
-      ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -Wno-unused-imports -flate-dmd-anal
+      ghc-options: +RTS -A128m -AL512m -RTS -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -Wno-unused-imports -flate-dmd-anal
     else
-      ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Werror=missing-methods -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O0 -threaded -j8
+      ghc-options: +RTS -A128m -AL512m -RTS -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O0 -threaded -j8
     -- -finline-generics-aggressively -fspecialize-aggressively -fexpose-all-unfoldings -funfolding-use-threshold=512 -finfo-table-map -fdistinct-constructor-tables -j8
 
 
@@ -378,10 +380,11 @@ library meowbot-lib
     default-extensions: OverloadedStrings, TypeFamilies
 
 executable meowbot
+    import: warnings
     main-is:          Main.hs
 
 -- -ddump-simpl -ddump-to-file -ddump-simpl-stats -ddump-inlinings -ddump-rule-firings -ddump-rule-rewrites -dsuppress-all
-    ghc-options: +RTS -A128m -AL512m -RTS -Wall -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m -with-rtsopts=-xn -flate-dmd-anal
+    ghc-options: +RTS -A128m -AL512m -RTS -Werror=missing-fields -Wno-name-shadowing -Wno-missing-signatures -Wno-unused-do-bind -Wno-unticked-promoted-constructors -O2 -threaded -rtsopts -finline-generics-aggressively -fspecialize-aggressively -with-rtsopts=-N -with-rtsopts=-F2 -with-rtsopts=-Fd2 -fexpose-all-unfoldings -funfolding-use-threshold=256 -j8 -with-rtsopts=-Iw60 -with-rtsopts=-A10m -with-rtsopts=-xn -flate-dmd-anal
 
     if flag(deploy)
       ghc-options: -fplugin=Fusion.Plugin
@@ -439,6 +442,7 @@ executable meowbot
     default-extensions: OverloadedStrings, TypeFamilies
 
 test-suite meowbot-test
+    import: warnings
     type: exitcode-stdio-1.0
 
     hs-source-dirs: test

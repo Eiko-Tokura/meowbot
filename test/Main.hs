@@ -12,6 +12,7 @@ import Network.HTTP.Client.TLS
 import Module.Logging
 import Module.Logging.Logger
 
+main :: IO ()
 main = do
   man <- newManager tlsManagerSettings
   base <- createStdoutBaseLogger

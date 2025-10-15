@@ -4,7 +4,6 @@ module Command.Cat where
 import Command
 import Command.Md
 import Command.Cat.CatSet
-import Control.Monad
 import MeowBot
 import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
@@ -117,16 +116,6 @@ commandCat = BotCommand Cat $ botT $ do
         else MaybeT . pure $ MP.runParser (treeCatParser botname msys mid) =<< getFirstTree whole_chat
 
       breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
-
-      -- needAction <- lift . runMeowDB $ serviceBalanceActionCheck botid cid
-      -- breakAction <- case needAction of
-      --   Nothing -> return $ Right []
-      --   Just (DoNothing notis, Just winfo) -> do
-      --     lift $ Right . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
-      --   Just (DisableService notis, Just winfo) -> do
-      --     lift $ Left  . concat <$> sequence [ checkSendNotis botname botid cid noti winfo | noti <- notis ]
-      --   Just (DoNothing _, Nothing) -> return $ Right []
-      --   Just (DisableService _, Nothing) -> return $ Left []
 
       LoggingRead logger <- lift askModule
 

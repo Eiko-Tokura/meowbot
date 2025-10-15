@@ -1,7 +1,6 @@
 module Test.SearchScrape where
 
 import Search
-import Scrape
 import Test.Tasty
 import Test.Tasty.HUnit
 import External.ChatAPI.Tool.Search

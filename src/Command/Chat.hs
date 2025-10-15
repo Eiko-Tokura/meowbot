@@ -93,7 +93,7 @@ commandChat = BotCommand Chat $ botT $ do
       Nothing -> do -- trigger for the newest message
         (msg, cid, uid, mid, _sender) <- MaybeT $ getEssentialContent <$> query
         catParser' <- lift $ commandParserTransformByBotName catSetParser
-        _ <- MaybeT $ invertMaybe_ . (`MP.runParser` msg) <$> pure catParser'
+        _ <- MaybeT $ pure $ (invertMaybe_ . (`MP.runParser` msg)) catParser'
         hangmanParser' <- lift $ commandParserTransformByBotName hangmanParser
         commandHead' <- lift $ commandParserTransformByBotName (MP.headCommand "" >> MP.itemsNotIn " ")
         -- let senderUsername  = senderNickname sender

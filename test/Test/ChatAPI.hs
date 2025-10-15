@@ -2,7 +2,6 @@
 module Test.ChatAPI where
 
 import Control.Monad.Effect
-import Control.Monad.Except
 import External.ChatAPI
 import External.ChatAPI.Tool
 import External.ChatAPI.ModelPricing
@@ -10,7 +9,6 @@ import External.ChatAPI.Cost
 import Network.HTTP.Client (Manager)
 import Test.Tasty
 import Test.Tasty.HUnit
-import Utils.Logging
 import Utils.Text
 import Data.Default
 import Module.Logging
@@ -18,6 +16,7 @@ import Module.Logging
 timeoutHttp :: Int
 timeoutHttp = 30 * 1000000
 
+runAPIEnv :: Logger IO LogData -> EffT '[ModelPricing, LoggingModule] NoError IO a -> IO a
 runAPIEnv logger = runEffT00 . runLogging logger . runModelPricing (ModelPricingRead modelPrice)
 
 testChatAPI :: Logger IO LogData -> Manager -> TestTree
