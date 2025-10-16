@@ -46,6 +46,16 @@ BotUserMeta
   favoriteItemNumber Int       Maybe
   UniqueBotUserMetaBotIdUserId botId userId
 
+BotUserBlackList
+  botId              BotId
+  userId             UserId
+  chatId             ChatId    Maybe -- ^ nothing means valid for all chats
+  botName            String    Maybe
+  ignoreReaction     Bool            -- ^ ignore reactions from this user, but keep receiving messages
+  blackListed        Bool            -- ^ blacklisted user, ignore all messages from this user
+  reason             Text            -- ^ reason for blacklisting
+  time               UTCTime
+
 BotIgnore
   botId     BotId
   botName   String          Maybe
@@ -235,6 +245,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   enableDeleteMessage     Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
+  enableBlackListUser     Bool                 Maybe
   deriving Generic
   deriving Default
 
@@ -267,6 +278,7 @@ BotSettingPerChat -- Overlapping BotSetting
   enableDeleteMessage     Bool                 Maybe
   enableSetGroupBan       Bool                 Maybe
   enableLeaveGroup        Bool                 Maybe
+  enableBlackListUser     Bool                 Maybe
   deriving Generic
   deriving Default
 

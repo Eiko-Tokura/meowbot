@@ -7,12 +7,14 @@ import Control.Monad.Reader (ReaderT(..))
 import Module.RS
 import Data.TypeList
 import Control.Lens
+import Control.Monad.Trans
 import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Data.Maybe
 import Database.Persist.Sql hiding (In)
 import MeowBot.BotStructure
 import MeowBot.GetSelfInfo ( isSelfAdminInGroup )
+import MeowBot.CostModel
 import System.Meow
 import Module.MeowTypes
 
@@ -91,6 +93,15 @@ isGroupChat = do
     Just (GroupChat _) -> True
     _                  -> False
 {-# INLINE isGroupChat #-}
+
+hasCostModel :: (MeowDatabase `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
+hasCostModel = fmap (fromMaybe False) . runMaybeT $ do
+  botid <- lift getBotId
+  cid   <- MaybeT getCid
+  srvCk <- lift $ runMeowDBMeowTool $ serviceBalanceCheck botid cid
+  case srvCk of
+    NoCostModelAssigned -> return False
+    _                   -> return True
 
 embedMeowToolEnv :: (SubList FData mods Mods, MeowAllData mods) => MeowToolEnv mods a -> Meow a
 embedMeowToolEnv = embedEffT

@@ -61,6 +61,8 @@ type MeowTools =
   , DeleteMessageTool
   , SetGroupBanTool
   , LeaveGroupTool
+  , BlackListUserTool
+  , BlackListListingTool
   ]
 
 type ModelChat = Local QwQ
@@ -88,7 +90,7 @@ commandChat = BotCommand Chat $ botT $ do
   allChatState <- lift $ getTypeWithDef newChatState
   let activeStateList = Foldable.find (\(_, cs) -> activeTriggerOneOff cs) (SM.toList allChatState)
 
-  (mMsg, cid, mMid) <-
+  (mMsg, cid, mMid, mUid) <-
     case activeStateList of
       Nothing -> do -- trigger for the newest message
         (msg, cid, uid, mid, _sender) <- MaybeT $ getEssentialContent <$> query
@@ -103,10 +105,14 @@ commandChat = BotCommand Chat $ botT $ do
               (fmap Right . MP.runParser commandHead')
         _ <- MaybeT . pure $ invertMaybe_ $ ignoredPatterns msg
         guard $ uid /= qGroupManagerId
-        return (Just msg, cid, Just mid)
+        return (Just msg, cid, Just mid, Just uid) -- trigger for the newest message
       Just (cid, _) -> do
         mess <- getEssentialContentChatId cid <$> query -- trigger for the specified cid instead
-        return ((\(m,_,_,_,_) -> m) <$> mess, cid, (\(_,_,_,mid,_) -> mid) <$> mess)
+        return ( (\(m,_,_,_,_) -> m) <$> mess
+               , cid
+               , (\(_,_,_,mid,_) -> mid) <$> mess
+               , Nothing
+               )
 
   cqmsg  <- MaybeT $ queries getNewMsg
   cqmsg3 <- queries $ getNewMsgN 3
@@ -120,6 +126,13 @@ commandChat = BotCommand Chat $ botT $ do
   noteListing <- lift $ getNoteListing botname cid
   botSetting        <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotId botid)
   botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotIdChatId botid cid)
+  botUserBlackList  <- lift $ fmap (fmap entityVal) $ case mUid of
+    Just uid' -> runMeowDB $ selectFirst
+        [ BotUserBlackListBotId ==. botid
+        , BotUserBlackListUserId ==. uid'
+        , BotUserBlackListChatId ==. Just cid
+        ] []
+    Nothing   -> pure Nothing
   let appendNoteListing :: Text -> Text
       appendNoteListing t = case noteListing of
         Nothing       -> t
@@ -191,6 +204,9 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
         ])
+
+      blackListed     = maybe False botUserBlackListBlackListed    botUserBlackList
+      ignoredReaction = maybe False botUserBlackListIgnoreReaction botUserBlackList
 
       -- | If a text is empty, make it Nothing
       nullify :: Maybe Text -> Maybe Text
@@ -280,7 +296,7 @@ commandChat = BotCommand Chat $ botT $ do
 
       --notCatSet = isNothing $ MP.runParser catSetParser msg
 
-  MaybeT $ if activeChat then pure (Just ()) else pure Nothing
+  MaybeT $ if activeChat && not blackListed then pure (Just ()) else pure Nothing
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
@@ -296,7 +312,7 @@ commandChat = BotCommand Chat $ botT $ do
 
   -- determine If we should reply
   $(logDebug) "Determining if reply"
-  determineIfReply oneOffActive atReply mentionReply activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
+  determineIfReply oneOffActive atReply mentionReply ignoredReaction activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
   $(logInfo) "Replying"
 
   breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
@@ -408,9 +424,9 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
-determineIfReply True _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
-determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
+determineIfReply :: Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
+determineIfReply True _ _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
+determineIfReply oneOff atReply mentionReply ignoredReaction prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
@@ -420,6 +436,7 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
         _                   -> False
   let thrSeconds = 300
       thrReplyCount = 3
+      notIgnoredReaction = boolMaybe $ not ignoredReaction
   let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
@@ -453,8 +470,9 @@ determineIfReply oneOff atReply mentionReply prob GroupChat{} cqmsgs (Just msg) 
       parsed = void $ MP.runParser (catParser bn cs) msg
   MaybeT . pure $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
   MaybeT . pure $ notRateLimited
-determineIfReply _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
+  MaybeT . pure $ notIgnoredReaction
+determineIfReply _ _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then MaybeT . pure $ Nothing
   else MaybeT . pure $ Just ()
-determineIfReply _ _ _ _ _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ _ _ _ _ _ = empty

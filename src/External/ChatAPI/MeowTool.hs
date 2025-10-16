@@ -1,4 +1,4 @@
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, TransformListComp #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 module External.ChatAPI.MeowTool where
 
@@ -20,7 +20,10 @@ import Utils.RunDB hiding (In)
 import Utils.Persist
 import MeowBot.CronTab.CronMeowAction
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as TL
+import qualified Database.Esqueleto.Experimental as E
 import Cron.Parser (validateCronText)
+import Utils.ListComp
 
 data NoteToolRead
 data NoteToolAdd
@@ -363,6 +366,106 @@ instance
     liftIO $ atomically $ modifyTVar tvarBotAction (<> [return action])
     return $ StringT "success, will leave group in 5 seconds" :%* ObjT0Nil
     where intercalateDelay = 2_000_000 -- 2 second
+
+data BlackListUserTool
+-- ^ A tool that provides the ability to blacklist a user from interacting with the bot in the current chat.
+-- This tool is useful for preventing unwanted interactions from specific users.
+instance
+  ( In MeowActionQueue mods
+  , In LogDatabase mods
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) BlackListUserTool where
+  type ToolInput BlackListUserTool  = ParamToData (ObjectP0
+      '[ IntP  "user_id"         "the user_id of the user to blacklist"
+       , BoolP "ignore_reaction" "if true, will stop reacting to the user, still receives messages in the message history (level 1 blacklist)"
+       , BoolP "blacklist"       "if true, will not receive any messsages from the user (level 2 blacklist)"
+       , StringP "reason" "the reason"
+       ]
+    )
+  type ToolOutput BlackListUserTool = ParamToData (ObjectP0 '[StringP "result" "the result of the blacklist action"])
+  data ToolError BlackListUserTool = BlackListError Text deriving Show
+  enabledByDefault _ _ = True
+  toolEnabled _        = do
+    mConfig <- computeSettingFromDB botSettingEnableBlackListUser botSettingPerChatEnableBlackListUser
+    case mConfig of
+      Just _  -> return mConfig
+      Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
+  toolUsable _         = isGroupChat
+  toolName _ _ = "blacklist_user"
+  toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution, can be used to prevent abuse or very bad behavior."
+  toolHandler _ _ (IntT userId :%* BoolT ignore :%* BoolT blacklist :%* StringT reason :%* ObjT0Nil) = do
+    cid     <- baseMaybeInWith (BlackListError "no ChatId found") getCid
+    botname <- lift getBotName
+    botid   <- lift getBotId
+    time    <- liftIO getCurrentTime
+    _ <- lift $ runMeowDBMeowTool $ insert_
+      (BotUserBlackList
+        { botUserBlackListBotId          = botid
+        , botUserBlackListUserId         = UserId userId
+        , botUserBlackListChatId         = Just cid
+        , botUserBlackListBotName        = botname
+        , botUserBlackListIgnoreReaction = ignore
+        , botUserBlackListBlackListed    = blacklist
+        , botUserBlackListReason         = reason
+        , botUserBlackListTime           = time
+        }
+      )
+    return $ StringT "success" :%* ObjT0Nil
+
+data BlackListListingTool
+-- ^ A tool that provides the ability to list all blacklisted users in the current chat.
+instance
+  ( In MeowActionQueue mods
+  , In LogDatabase mods
+  , In MeowDatabase mods
+  , MeowAllData mods
+  ) => ToolClass (MeowToolEnv mods) BlackListListingTool where
+  type ToolInput BlackListListingTool = ParamToData (ObjectP0 '[])
+  type ToolOutput BlackListListingTool = ParamToData (ObjectP0 '[StringP "blacklist" "the list of blacklisted users"])
+  data ToolError BlackListListingTool = BlackListListingError Text deriving Show
+  enabledByDefault _ _ = True
+  toolEnabled _        = do
+    mConfig <- computeSettingFromDB botSettingEnableBlackListUser botSettingPerChatEnableBlackListUser
+    case mConfig of
+      Just _  -> return mConfig
+      Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
+  toolUsable _         = isGroupChat
+  toolName _ _ = "blacklist_list"
+  toolDescription _ _ = "List all blacklisted users in the current chat."
+  toolHandler _ _ ObjT0Nil = do
+    cid     <- baseMaybeInWith (BlackListListingError "no ChatId found") getCid
+    botid   <- lift getBotId
+    -- | run an esqueleto query to get all blacklisted users in the current chat for the current bot, for each user only get the latest entry, i.e. for each BotUserBlackListUserId group return the row with maximal BotUserBlackListTime
+    bls <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ E.select $ do
+      bl <- E.from $ E.table @BotUserBlackList
+      E.where_ (     bl E.^. BotUserBlackListBotId  E.==. E.val  botid
+               E.&&. bl E.^. BotUserBlackListChatId E.==. E.just (E.val cid)
+               )
+      E.orderBy [E.desc (bl E.^. BotUserBlackListTime)]
+      return bl
+    let distinctBls =
+          [ head' bl
+          | bl <- groupWith botUserBlackListUserId bls
+          ]
+    let blsText = if null distinctBls
+          then "No blacklisted users."
+          else TL.intercalate "\n---\n"
+            [ TL.concat
+              [ "user_id="
+              , toText (unUserId $ botUserBlackListUserId bl)
+              , " ignore_reaction="
+              , toText (botUserBlackListIgnoreReaction bl)
+              , " blacklisted="
+              , toText (botUserBlackListBlackListed bl)
+              , " reason="
+              , TL.fromStrict $ botUserBlackListReason bl
+              , " time="
+              , toText (botUserBlackListTime bl)
+              ]
+            | bl <- bls
+            ]
+    return $ StringT (TL.toStrict blsText) :%* ObjT0Nil
 
 -- | A helper function to compute whether a setting is enabled from the database.
 computeSettingFromDB
