@@ -369,7 +369,7 @@ commandChat = BotCommand Chat $ botT $ do
                           , thinking = mt
                           , withToolCall = Just (_, rest)
                           } -> [t | displayThinking, Just t <- [mt]]
-                            <> [if displayToolMessage then c else rest "(Casting Spell...)"]
+                            <> [if displayToolMessage then c else rest $ const "(Casting Spell...)"]
                         AssistantMessage -- Case 3 : assistant returned a message with no tool call
                           { content  = c
                           , thinking = mt

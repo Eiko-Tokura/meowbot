@@ -20,6 +20,7 @@ module External.ChatAPI
 import Control.Applicative
 import Control.DeepSeq
 import Control.Exception (try, SomeException)
+import Control.Monad
 import Control.Monad.Trans
 import Control.Monad.Effect
 import Control.Monad.Logger
@@ -30,6 +31,7 @@ import Data.HList
 import Data.Time
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Proxy (Proxy(..))
+import Data.List.NonEmpty (NonEmpty(..))
 import External.ChatAPI.Tool
 import External.ChatAPI.Cost
 import External.ChatAPI.Models
@@ -44,6 +46,7 @@ import Parser.Run
 import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import Utils.TokenEstimator (estimateTokens)
 import Utils.Text
+import qualified Data.List.NonEmpty as NE
 import qualified Data.ByteString.Lazy as BL
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -187,7 +190,7 @@ instance FromJSON ChatCompletionResponseOllama where
 data Message
   = SystemMessage    { content :: Text }
   | UserMessage      { content :: Text }
-  | AssistantMessage { content :: Text, thinking :: Maybe Text, pureToolCall :: Maybe Bool, withToolCall :: Maybe (ToolText, ToolText -> Text) }
+  | AssistantMessage { content :: Text, thinking :: Maybe Text, pureToolCall :: Maybe Bool, withToolCall :: Maybe (NonEmpty ToolText, (ToolCallPair -> Text) -> Text) }
   | ToolMessage      { content :: Text, toolMeta :: Maybe ToolMeta }
   deriving (Eq, Read, Generic, NFData)
 
@@ -585,30 +588,49 @@ agent = do
     (amsg', usage) <- pureMaybeInWith @(ErrorText "chat-error") "No assistant message found!" mAmsg'
     modifyS $ \st -> st { chatEstimateTokens = chatEstimateTokens st <> usage }
     $(logInfo) $ showMessage amsg'
-    case parseToolCall (content amsg') of
+    case parseManyToolCalls (content amsg') of
       Nothing -> return [amsg']
-      Just (_toolText, Nothing  , ToolCallPair toolCallName args) -> continueAgent True  Nothing amsg' toolCallName args
-      Just (toolText , Just rest, ToolCallPair toolCallName args) -> continueAgent False (Just (toolText, rest)) amsg' toolCallName args
-      where continueAgent isPureToolCall withToolCall amsg' toolCallName args = do
+      Just (_toolText , Nothing   , toolCalls) -> continueAgent True  Nothing amsg' toolCalls
+      Just (toolTexts , Just holed, toolCalls) -> continueAgent False (Just (toolTexts, holed)) amsg' toolCalls
+      where continueAgent isPureToolCall withToolCall amsg' toolCalls = do
               let amsg = case amsg' of
                     AssistantMessage {} -> amsg'
                       { pureToolCall = Just isPureToolCall
                       , withToolCall = withToolCall
                       }
                     _ -> amsg'
-              skip_toolmsg <- handleToolCall toolCallName args (ToolMeta "tool_call_id" toolCallName 0) -- replace with actual tool call id
-              case skip_toolmsg of
-                Left Skipped -> do
-                  modifyS $ \st -> st { chatEstimateTokens = st.chatEstimateTokens {apiSkips = st.chatEstimateTokens.apiSkips + 1 }}
-                  effThrow @(ErrorText "chat-error") "Skipped"
-                Right toolmsg -> do
-                  $(logInfo) $ showMessage toolmsg
-                  modifyS $ \st -> st
-                    { chatStatusToolDepth      = chatStatusToolDepth st + 1
-                    , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
-                    , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
-                    }
-                  ([amsg, toolmsg] <>) <$> agent
+              skip_toolmsgs :: NonEmpty (Either Skipped Message) <- forM toolCalls $ \(ToolCallPair toolName args) -> handleToolCall toolName args (ToolMeta "tool_call_id" toolName 0)
+              if Left Skipped `elem` skip_toolmsgs
+              then do
+                modifyS $ \st -> st { chatEstimateTokens = st.chatEstimateTokens {apiSkips = st.chatEstimateTokens.apiSkips + 1 }}
+                effThrow @(ErrorText "chat-error") "Skipped"
+              else do
+                toolMsgs <- forM skip_toolmsgs $ \case
+                  Left Skipped -> do
+                    effThrow @(ErrorText "chat-error") "Skipped"
+                  Right toolmsg -> do
+                    $(logInfo) $ showMessage toolmsg
+                    modifyS $ \st -> st
+                      { chatStatusToolDepth      = chatStatusToolDepth st + 1
+                      , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
+                      --, chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
+                      }
+                    return toolmsg
+                modifyS $ \st -> st { chatStatusMessages = chatStatusMessages st <> (amsg : NE.toList toolMsgs) }
+                ((amsg : NE.toList toolMsgs) <>) <$> agent
+                    -- ([amsg, toolmsg] <>) <$> agent
+              -- case skip_toolmsg of
+              --   Left Skipped -> do
+              --     modifyS $ \st -> st { chatEstimateTokens = st.chatEstimateTokens {apiSkips = st.chatEstimateTokens.apiSkips + 1 }}
+              --     effThrow @(ErrorText "chat-error") "Skipped"
+              --   Right toolmsg -> do
+              --     $(logInfo) $ showMessage toolmsg
+              --     modifyS $ \st -> st
+              --       { chatStatusToolDepth      = chatStatusToolDepth st + 1
+              --       , chatStatusTotalToolCalls = chatStatusTotalToolCalls st + 1
+              --       , chatStatusMessages       = chatStatusMessages st <> [amsg, toolmsg]
+              --       }
+              --     ([amsg, toolmsg] <>) <$> agent
 
 printMessage :: Message -> IO ()
 printMessage = TIO.putStrLn . showMessage
@@ -708,7 +730,7 @@ messagesChatDefault params prevMsg
   . errorToEitherAll
   $ messagesChat @md @ts params
 
-data Skipped = Skipped
+data Skipped = Skipped deriving (Show, Eq, Generic, NFData)
 -- | Handle tool execution, no recursion
 handleToolCall :: forall md ts m. (ConstraintList (ToolClass m) ts, MonadIO m) => Text -> Value -> ToolMeta -> ChatT md ts m (Either Skipped Message)
 handleToolCall toolCallName args md = do

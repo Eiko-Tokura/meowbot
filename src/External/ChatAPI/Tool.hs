@@ -32,6 +32,8 @@ import Data.Time.Clock
 import Data.Time
 import GHC.TypeLits
 import Data.Aeson as A
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Aeson.KeyMap as AK
 import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
@@ -223,7 +225,7 @@ class ParamExplained t where
   getExplanation :: Text
   getExplanation
     = T.intercalate "\n" . reverse . printStateTextRev
-    $ execState (printParamExplanation @t) (PrintState 0 []) 
+    $ execState (printParamExplanation @t) (PrintState 0 [])
   {-# INLINE getExplanation #-}
 
 data PrintState = PrintState { printStateIndent :: Int, printStateTextRev :: [Text] }
@@ -463,20 +465,48 @@ instance FromJSON ToolCallPair where
 newtype ToolText = ToolText { unToolText :: Text }
   deriving newtype (Show, Read, Eq, Ord, IsString, NFData)
 
-instance Show (ToolText -> Text) where show f = show (f "<ToolText>")
-instance Eq (ToolText -> Text)   where f1 == f2 = f1 "<ToolText>" == f2 "<ToolText>"
-instance Read (ToolText -> Text) where -- treat as a constant function, use the methods from Read Text, give a constant function with the Text parsed in
+instance Show ((ToolCallPair -> Text) -> Text) where show f = show (f (const "<ToolText>"))
+instance Eq   ((ToolCallPair -> Text) -> Text) where f1 == f2 = f1 (const "<ToolText>") == f2 (const "<ToolText>")
+instance Read ((ToolCallPair -> Text) -> Text) where -- treat as a constant function, use the methods from Read Text, give a constant function with the Text parsed in
   readsPrec _ s = [(const (T.pack s), "")] -- this is a constant function that returns the parsed Text
-  
+
+parseManyToolCalls :: Text -> Maybe
+  ( NonEmpty ToolText                       -- ^ parsed raw tool call texts
+  , Maybe ((ToolCallPair -> Text) -> Text)  -- ^ function to fill in the tool call results into the message
+  , NonEmpty ToolCallPair                   -- ^ parsed tool call pairs
+  )
+parseManyToolCalls input = case parseToolCall input of
+  Nothing -> Nothing
+  Just (t1, mprefix, Nothing, tp1) ->
+    Just  ( NE.singleton t1
+          , (\p -> Just (\t -> p <> t tp1)) =<< mprefix
+          , NE.singleton tp1
+          )
+  Just (t1, mprefix, Just suffix, tp1) ->
+    case parseManyToolCalls suffix of
+      Nothing ->
+        Just  ( NE.singleton t1
+              , Just (\t -> fromMaybe mempty mprefix <> t tp1 <> suffix)
+              , NE.singleton tp1
+              )
+      Just (ts, mholes, tps) ->
+        Just  ( t1 NE.<| ts
+              , case mholes of
+                  -- | only if no prefix, and the rest has no meaningful text, we output Nothing
+                  Nothing    -> (\p -> Just (\t -> p <> t tp1 <> suffix)) =<< mprefix
+                  Just holes -> Just (\t -> fromMaybe mempty mprefix <> t tp1 <> holes t)
+              , tp1 NE.<| tps
+              )
 
 -- | Parse potential tool call from message content
 parseToolCall :: Text -> Maybe
-  ( ToolText                 -- ^ the tool call text, separated from the rest of the message
-  , Maybe (ToolText -> Text) -- ^ a function to reconstruct the original message with the tool call text replaced
-  , ToolCallPair             -- ^ the parsed tool call pair
+  ( ToolText     -- ^ the tool call text, separated from the rest of the message
+  , Maybe Text   -- ^ the prefix text around the tool call, if any
+  , Maybe Text   -- ^ the suffix text around the tool call, if any
+  , ToolCallPair -- ^ the parsed tool call pair
   )
 parseToolCall txt
-  =   fmap (ToolText txt, Nothing, ) (decode (encodeUtf8LBS txt))
+  =   fmap (ToolText txt, Nothing, Nothing , ) (decode (encodeUtf8LBS txt))
   <|> parseToolCallText txt
   where parseToolCallText t
           | all (`T.isInfixOf` t) ["\"tool\":", "\"args\":", "```tool"]
@@ -489,12 +519,13 @@ parseToolCall txt
                         )
                         t :: Maybe (Text, Text, Text)
                 case (T.null (T.strip part1), T.null (T.strip part2)) of
-                  (True, True) -> do
+                  (null1, null2) -> do
                     decodedToolPair <- decode (encodeUtf8LBS toolText)
-                    return (ToolText toolText, Nothing, decodedToolPair)
-                  _ -> do
-                    decodedToolPair <- decode (encodeUtf8LBS toolText)
-                    return (ToolText toolText, Just $ \toolText' -> part1 <> unToolText toolText' <> part2, decodedToolPair)
+                    return  ( ToolText toolText
+                            , if null1 then Nothing else Just part1
+                            , if null2 then Nothing else Just part2
+                            , decodedToolPair
+                            )
 
           | all (`T.isInfixOf` t) ["{\"tool\":", "\"args\":"]
              = let parsed = runParser ((,) <$> manyTill' (string "{\"tool\":") getItem <*> (some' getItem <* end)) txt :: Maybe (Text, Text)
@@ -503,15 +534,15 @@ parseToolCall txt
                 let toolBS = encodeUtf8LBS toolText
                 decodedToolPair <- decode toolBS
                 case T.null (T.strip start) of
-                  True  -> return (ToolText t, Nothing, decodedToolPair)
-                  False -> return (ToolText t, Just $ \t -> unToolText t <> start, decodedToolPair)
+                  True  -> return (ToolText t, Nothing, Nothing   , decodedToolPair)
+                  False -> return (ToolText t, Nothing, Just start, decodedToolPair)
 
           | otherwise = Nothing
 
 testParseToolCall :: IO ()
 testParseToolCall = do
   let input = "喵~ 好的呀，我来帮您查一下相关的会议信息！[表情]\n\n```tool\n{\n  \"tool\": \"search\",  \"args\": {\n    \"query\": \"p-adic number theory conferences 2024\"  }\n}```\n等一下搜索结果出来后，我会为您整理相关信息并推荐合适的会议哦~ 希望能帮到您"
-  print $ (\(t, _, tp) -> (t, tp)) <$> parseToolCall input
+  print $ (\(t, _, _, tp) -> (t, tp)) <$> parseToolCall input
 
 -- | A unique identifier for tool call tracking
 newtype ToolCallId = ToolCallId { unToolCallId :: Text }
@@ -540,9 +571,9 @@ computeToolPrompts clist sep
       , ""
       , "* format output as JSON with 'tool' and 'args' fields"
       , ""
-      , "* **use code block (```tool ... ```) to wrap the tool call**"
+      , "* **use code block (```tool ... ```) to wrap every tool call**"
       , ""
-      , "* At most one tool call per message!"
+      , "* You can use multiple tool calls at once, but use separate tool blocks for each!"
       , ""
       , "Example output: "
       , "```tool"
@@ -571,7 +602,7 @@ computeToolPromptsWithEnable clist sep
       , ""
       , "* **use code block (```tool ... ```) to wrap the tool call**"
       , ""
-      , "* At most one tool call per message!"
+      , "* You can use multiple tool calls at once, but use separate tool blocks for each!"
       , ""
       , "Example output: "
       , "```tool"
