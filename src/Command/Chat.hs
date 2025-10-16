@@ -205,8 +205,9 @@ commandChat = BotCommand Chat $ botT $ do
         , botSettingDefaultModel =<< botSetting
         ])
 
-      blackListed     = maybe False botUserBlackListBlackListed    botUserBlackList
-      ignoredReaction = maybe False botUserBlackListIgnoreReaction botUserBlackList
+      blackListValid  = maybe True  (>= utcTime) (botUserBlackListValidTo =<< botUserBlackList)
+      blackListed     = blackListValid && maybe False botUserBlackListBlackListed    botUserBlackList
+      ignoredReaction = blackListValid && maybe False botUserBlackListIgnoreReaction botUserBlackList
 
       -- | If a text is empty, make it Nothing
       nullify :: Maybe Text -> Maybe Text

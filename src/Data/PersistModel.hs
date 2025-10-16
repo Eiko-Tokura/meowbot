@@ -55,6 +55,7 @@ BotUserBlackList
   blackListed        Bool            -- ^ blacklisted user, ignore all messages from this user
   reason             Text            -- ^ reason for blacklisting
   time               UTCTime
+  validTo            UTCTime   Maybe -- ^ nothing means permanent
 
 BotIgnore
   botId     BotId

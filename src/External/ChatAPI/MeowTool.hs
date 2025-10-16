@@ -380,6 +380,7 @@ instance
       '[ IntP  "user_id"         "the user_id of the user to blacklist"
        , BoolP "ignore_reaction" "if true, will stop reacting to the user, still receives messages in the message history (level 1 blacklist)"
        , BoolP "blacklist"       "if true, will not receive any messsages from the user (level 2 blacklist)"
+       , IntP  "duration"        "the duration in seconds to blacklist / ignore the user, 0 means permanent blacklist"
        , StringP "reason" "the reason"
        ]
     )
@@ -391,10 +392,10 @@ instance
     case mConfig of
       Just _  -> return mConfig
       Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
-  toolUsable _         = isGroupChat
+  toolUsable _         = pure True
   toolName _ _ = "blacklist_user"
-  toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution, can be used to prevent abuse or very bad behavior."
-  toolHandler _ _ (IntT userId :%* BoolT ignore :%* BoolT blacklist :%* StringT reason :%* ObjT0Nil) = do
+  toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution."
+  toolHandler _ _ (IntT userId :%* BoolT ignore :%* BoolT blacklist :%* IntT duration :%* StringT reason :%* ObjT0Nil) = do
     cid     <- baseMaybeInWith (BlackListError "no ChatId found") getCid
     botname <- lift getBotName
     botid   <- lift getBotId
@@ -409,6 +410,7 @@ instance
         , botUserBlackListBlackListed    = blacklist
         , botUserBlackListReason         = reason
         , botUserBlackListTime           = time
+        , botUserBlackListValidTo        = if duration == 0 then Nothing else Just (addUTCTime (fromIntegral duration) time)
         }
       )
     return $ StringT "success" :%* ObjT0Nil
@@ -430,12 +432,13 @@ instance
     case mConfig of
       Just _  -> return mConfig
       Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
-  toolUsable _         = isGroupChat
+  toolUsable _         = pure True
   toolName _ _ = "blacklist_list"
   toolDescription _ _ = "List all blacklisted users in the current chat."
   toolHandler _ _ ObjT0Nil = do
     cid     <- baseMaybeInWith (BlackListListingError "no ChatId found") getCid
     botid   <- lift getBotId
+    time    <- liftIO getCurrentTime
     -- | run an esqueleto query to get all blacklisted users in the current chat for the current bot, for each user only get the latest entry, i.e. for each BotUserBlackListUserId group return the row with maximal BotUserBlackListTime
     bls <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ E.select $ do
       bl <- E.from $ E.table @BotUserBlackList
@@ -444,24 +447,27 @@ instance
                )
       E.orderBy [E.desc (bl E.^. BotUserBlackListTime)]
       return bl
-    let distinctBls =
-          [ head' bl
-          | bl <- groupWith botUserBlackListUserId bls
-          ]
+    let distinctBls = [ head' bl
+                      | bl <- bls
+                      , maybe True (>= time) bl.botUserBlackListValidTo
+                      , then group by bl.botUserBlackListUserId using groupWith
+                      ]
     let blsText = if null distinctBls
           then "No blacklisted users."
           else TL.intercalate "\n---\n"
             [ TL.concat
               [ "user_id="
               , toText (unUserId $ botUserBlackListUserId bl)
-              , " ignore_reaction="
+              , ", ignore_reaction="
               , toText (botUserBlackListIgnoreReaction bl)
-              , " blacklisted="
+              , ", blacklisted="
               , toText (botUserBlackListBlackListed bl)
-              , " reason="
+              , ", reason="
               , TL.fromStrict $ botUserBlackListReason bl
-              , " time="
+              , ", time="
               , toText (botUserBlackListTime bl)
+              , ", valid_to="
+              , maybe "permanent" toText (botUserBlackListValidTo bl)
               ]
             | bl <- bls
             ]
