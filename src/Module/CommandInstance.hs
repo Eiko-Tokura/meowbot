@@ -15,7 +15,7 @@ import Data.Time
 import Data.UpdateMaybe
 import Data.Aeson (eitherDecode)
 import Data.Maybe
-import MeowBot.Action
+import MeowBot.Handler.Requests
 import MeowBot.BotStructure
 import MeowBot.Update
 import Network.WebSockets hiding (Response)

@@ -287,8 +287,11 @@ BotRequestSetting -- how to handle requests received by bot
   botName          String                    Maybe
   botId            BotId
   UniqueBotRequestSettingBotId botId
-  approveFriendRequest  Bool                 Maybe
-  approveGroupRequest   Bool                 Maybe
+  approveFriendRequest      Bool             Maybe
+  approveGroupRequest       Bool             Maybe
+  approveGroupWithCostModel Bool             Maybe
+  approveFriendWithWallet   Bool             Maybe
+  quitGroupWithoutCostModel Bool             Maybe
   deriving Generic
   deriving Default
 

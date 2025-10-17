@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, PartialTypeSignatures #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant $" #-}
 module System.Cat where
@@ -92,7 +92,7 @@ runBot bot meow = do
     $ runSModule_ wc
     $ runSModule_ bc
     $ ( case botRunFlag bot of
-          RunClient addr port -> void . withClientConnection addr port
+          RunClient addr port -> void . withClientConnection Nothing addr port
           RunServer addr port ->        withServerConnection addr port
       )
     $ withMeowActionQueue
@@ -152,12 +152,14 @@ withClientConnection
   :: ( ConsFDataList FData (MeowConnection : mods)
      , LoggingModule `In` mods, m ~ IO, Show (EList es)
      )
-  => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
-withClientConnection addr port act = do
+  => Maybe (TMVar (Result '[] (), SystemState FData mods)) -> String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
+withClientConnection mStateVar addr port act = do
   
   -- | because runClient does not allow any return type and restricts to IO, we have to use a TMVar to pass the state back
   initState <- liftWith $ \run -> run $ return ()
-  stateVar <- liftIO newEmptyTMVarIO
+  stateVar  <- case mStateVar of
+    Nothing -> liftIO newEmptyTMVarIO
+    Just a  -> return a
 
   $(logInfo) $ "Running bot client, connecting to " <> tshow addr <> ":" <> tshow port
   effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e))
@@ -183,7 +185,7 @@ withClientConnection addr port act = do
         $logInfo "Restarting client in 20 seconds"
         liftIO $ threadDelay 20_000_000
 
-        withClientConnection addr port act
+        withClientConnection (Just stateVar) addr port act
 
 botInstanceToModule :: BotInstance -> EffT '[LoggingModule] NoError IO BotModules
 botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode proxyFlags logFlags watchDogFlags _) = do

@@ -3,14 +3,9 @@ module MeowBot.Action where
 
 import Control.Concurrent
 import Control.Concurrent.Async (Async, async)
-import Control.Monad
 import Control.Monad.Effect
-import Control.Monad.Logger
 import Control.Monad.Trans
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Maybe
-import Data.Maybe
-import Data.PersistModel
 import MeowBot.BotStructure
 import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Update
@@ -18,7 +13,6 @@ import Module.RecvSentCQ
 import System.Meow
 import Utils.Base64
 import Utils.ByteString
-import Utils.RunDB
 
 -- | Abstract representation of sending a message to a chat id.
 -- will NOT insert the message into the history.
@@ -81,9 +75,8 @@ meowAsyncSplitSendToChatIdFull
   -> [Text]            -- ^ message content
   -> Meow [BotAction]
 meowAsyncSplitSendToChatIdFull _ _ _ _ _ [] = return []
-meowAsyncSplitSendToChatIdFull cid mid adt items _ (txt:[]) = do
-  act1 <- meowSendToChatIdFull cid mid adt items txt
-  return $ act1
+meowAsyncSplitSendToChatIdFull cid mid adt items _ [txt] = do
+  meowSendToChatIdFull cid mid adt items txt
 meowAsyncSplitSendToChatIdFull cid mid adt items delay (txt:rest) = do
   act1 <- meowSendToChatIdFull cid mid adt items txt
   act2 <- fmap (pure . BAAsync) . liftIO $ async $ do
@@ -96,31 +89,7 @@ asyncMeow :: Meow (IO (Meow [BotAction])) -> Meow [BotAction]
 asyncMeow masync = do
   asyncAction  <- masync -- meow part
   asyncWrapped <- liftIO $ async asyncAction -- async
-  return $ [BAAsync asyncWrapped]
-
-botHandleRequestEvent :: CQMessage -> String -> Meow [BotAction]
-botHandleRequestEvent cqmsg str = do
-  $(logInfo) $ pack str <> " <- RequestEvent: " <> toText cqmsg
-  botId      <- query
-  case requestType cqmsg of
-    Just (RequestFriend mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      mBotReqSetting <- lift $ runMeowDB $ getBy $ UniqueBotRequestSettingBotId botId
-      guard ((botRequestSettingApproveFriendRequest =<< fmap entityVal mBotReqSetting) /= Just False)
-      -- ^ by default, accept request
-      uid <- MaybeT $ return $ userId cqmsg
-      $(logInfo) $ toText str <> " <- RequestFriend from " <> toText uid <> ", comment: " <> toText mcomment
-      $(logInfo) $ " -> Approving the request."
-      return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag ""
-    Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      mBotReqSetting <- lift $ runMeowDB $ getBy $ UniqueBotRequestSettingBotId botId
-      guard ((botRequestSettingApproveGroupRequest =<< fmap entityVal mBotReqSetting) /= Just False)
-      -- ^ by default, accept request
-      gid <- MaybeT $ return $ groupId cqmsg
-      uid <- MaybeT $ return $ userId cqmsg
-      $(logInfo) $ toText str <> " <- RequestGroupInvite from " <> toText uid <> " in " <> toText gid <> ", comment: " <> toText mcomment
-      $(logInfo) $ " -> Approving the request."
-      return . pure . pure $ BAActionAPI $ SetGroupAddRequest flag RequestGroupInvite True Nothing
-    _ -> return []
+  return [BAAsync asyncWrapped]
 
 baSequenceDelayFullAsync
   :: Int -- ^ delay in microseconds
