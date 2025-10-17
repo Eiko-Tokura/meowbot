@@ -391,7 +391,7 @@ instance
     mConfig <- computeSettingFromDB botSettingEnableBlackListUser botSettingPerChatEnableBlackListUser
     case mConfig of
       Just _  -> return mConfig
-      Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
+      Nothing -> Just . not <$> hasPositiveCostModel -- ^ without config, enable if has no cost model
   toolUsable _         = pure True
   toolName _ _ = "blacklist_user"
   toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution."
@@ -431,7 +431,7 @@ instance
     mConfig <- computeSettingFromDB botSettingEnableBlackListUser botSettingPerChatEnableBlackListUser
     case mConfig of
       Just _  -> return mConfig
-      Nothing -> Just . not <$> hasCostModel -- ^ without config, enable if has no cost model
+      Nothing -> Just . not <$> hasPositiveCostModel -- ^ without config, enable if has no cost model
   toolUsable _         = pure True
   toolName _ _ = "blacklist_list"
   toolDescription _ _ = "List all blacklisted users in the current chat."

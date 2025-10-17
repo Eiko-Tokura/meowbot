@@ -103,6 +103,16 @@ hasCostModel = fmap (fromMaybe False) . runMaybeT $ do
     NoCostModelAssigned -> return False
     _                   -> return True
 
+hasPositiveCostModel :: (MeowDatabase `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
+hasPositiveCostModel = fmap (fromMaybe False) . runMaybeT $ do
+  botid <- lift getBotId
+  cid   <- MaybeT getCid
+  srvCk <- lift $ runMeowDBMeowTool $ serviceBalanceCheck botid cid
+  case srvCk of
+    NoCostModelAssigned -> return False
+    WalletUnlimited _   -> return False
+    _                   -> return True
+
 embedMeowToolEnv :: (SubList FData mods Mods, MeowAllData mods) => MeowToolEnv mods a -> Meow a
 embedMeowToolEnv = embedEffT
 {-# INLINE embedMeowToolEnv #-}
