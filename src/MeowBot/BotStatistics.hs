@@ -4,6 +4,10 @@ module MeowBot.BotStatistics
   , StatType(..)
   , APIInfo(..)
   , TokenPrice(..)
+
+  -- * Chat statistics
+  , ChatStatistics(..)
+  , chatStatistics
   ) where
 
 import Control.Monad.IO.Class
@@ -11,6 +15,7 @@ import Data.Coerce
 import Data.Default
 import Data.PersistModel
 import Data.Time
+import Data.Maybe (fromMaybe)
 import External.ChatAPI
 import External.ChatAPI.Cost
 import MeowBot
@@ -18,6 +23,8 @@ import MeowBot.CostModel
 import Utils.RunDB
 import Utils.LabelKeys ()
 import Module.Prometheus.Manager
+import qualified Database.Esqueleto.Experimental as E
+import qualified Data.Vector.Unboxed as V
 
 data StatType
   = StatTokens ChatStatus
@@ -173,3 +180,40 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
       , BotStatisticsTotalApiCallSkips +=. apiSkips
       ]
     pure ()
+
+data ChatStatistics = ChatStatistics
+  { recvMessagesPerDay      :: V.Vector Int -- ^ Indexed by day offset from today
+  , sentMessagesPerDay      :: V.Vector Int -- ^ Indexed by day offset from today
+  , totalInputTokensPerDay  :: V.Vector Int -- ^ Indexed by day offset from today
+  , totalOutputTokensPerDay :: V.Vector Int -- ^ Indexed by day offset from today
+  }
+chatStatistics :: Int -> BotId -> ChatId -> DB ChatStatistics
+chatStatistics nDays botId chatId = do
+  today <- liftIO $ utctDay <$> getCurrentTime
+  let dayOffsets = [0 .. nDays - 1]
+      days = map (addDays . negate . fromIntegral) dayOffsets <*> pure today
+  recvMessagesPerDay <- V.fromList <$> mapM (getRecvMessages botId chatId) days
+  sentMessagesPerDay <- V.fromList <$> mapM (getSentMessages botId chatId) days
+  totalInputTokensPerDay <- V.fromList <$> mapM (getInputTokens botId chatId) days
+  totalOutputTokensPerDay <- V.fromList <$> mapM (getOutputTokens botId chatId) days
+  pure ChatStatistics {..}
+  where
+    getRecvMessages bId cId day = do
+      mStat <- getBy $ UniqueBotStatisticsPerApiKeyPerChatPerDay "STATISTICS" bId cId day
+      pure $ maybe 0 (botStatisticsPerApiKeyPerChatPerDayTotalMessageRecv . entityVal) mStat
+    getSentMessages bId cId day = do
+      mStat <- getBy $ UniqueBotStatisticsPerApiKeyPerChatPerDay "STATISTICS" bId cId day
+      pure $ maybe 0 (botStatisticsPerApiKeyPerChatPerDayTotalMessageSent . entityVal) mStat
+    getSumApiStats item bId cId day = do
+      mStat <- E.selectOne $ do
+        stat <- E.from $ E.table @BotStatisticsPerApiKeyPerChatPerDay
+        E.where_ (     stat E.^. BotStatisticsPerApiKeyPerChatPerDayBotId  E.==. E.val bId
+                 E.&&. stat E.^. BotStatisticsPerApiKeyPerChatPerDayChatId E.==. E.val cId
+                 E.&&. stat E.^. BotStatisticsPerApiKeyPerChatPerDayDay    E.==. E.val day
+                 )
+        pure $ E.sum_ $ stat E.^. item
+      case mStat of
+        Nothing -> pure 0
+        Just (E.Value mbSum) -> pure $ fromMaybe 0 mbSum
+    getInputTokens = getSumApiStats BotStatisticsPerApiKeyPerChatPerDayTotalInputEstimateTokens
+    getOutputTokens = getSumApiStats BotStatisticsPerApiKeyPerChatPerDayTotalOutputEstimateTokens

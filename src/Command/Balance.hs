@@ -6,6 +6,7 @@ import Data.PersistModel
 import Data.Time.Clock
 import GHC.Exts
 import MeowBot
+import MeowBot.BotStatistics (ChatStatistics(..), chatStatistics)
 import MeowBot.Prelude
 import MeowBot.CostModel
 import MeowBot.Data.Parser
@@ -15,7 +16,9 @@ import Utils.ListComp
 import Utils.RunDB
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
+import qualified Data.Vector.Unboxed as V
 
+data FlagAll = FlagAll deriving (Show, Eq)
 data ItSelf = ItSelf deriving (Show, Eq)
 data BalanceCommand
   = Own        (Maybe OwnerId) ChatId        (Maybe CostModel) -- ^ a owner of a wallet decides to own a (bot, chat) pair
@@ -26,8 +29,8 @@ data BalanceCommand
   | AddTo      Amount        WalletId  (Maybe Text)      -- ^ admin adds amount to the wallet with WalletId (can be negative)
   | CostTo     Amount        WalletId  (Maybe Text)      -- ^ admin adds one-off cost to the wallet with WalletId, positive means cost incurred
   | CostOwnedBy Amount        OwnerId   (Maybe Text)     -- ^ admin adds one-off cost to the wallet owned by OwnerId, positive means cost incurred
-  | BalanceCheck (Maybe OwnerId)                         -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
-  | BalanceCheckInChat (Maybe ChatId)                    -- ^ a different semantics, finds back the ownerId and check balance, for normal user
+  | BalanceCheck       (Maybe OwnerId) (Maybe FlagAll)   -- ^ check balance of the wallet owned by OwnerId, if None, try to find the ownerId by chatId
+  | BalanceCheckInChat (Maybe ChatId)  (Maybe FlagAll)   -- ^ a different semantics, finds back the ownerId and check balance, for normal user
   | ChangeOwner  WalletId OwnerId               -- ^ admin modifys the owner of a wallet
   | TotalBalance (Maybe BotId) -- for admin only
   deriving (Show, Eq)
@@ -39,8 +42,8 @@ data BalanceAction
   | AAddTo      UserId Amount WalletId (Maybe Text)
   | ACostTo     UserId Amount WalletId (Maybe Text)
   | ACostOwnedBy UserId Amount OwnerId (Maybe Text)
-  | ABalanceCheck OwnerId
-  | ABalanceCheckInChat ChatId
+  | ABalanceCheck OwnerId (Maybe FlagAll)
+  | ABalanceCheckInChat ChatId (Maybe FlagAll)
   | AChangeOwner WalletId OwnerId
   | ATotalBalance (Maybe BotId)
 
@@ -92,6 +95,25 @@ warningIfNotInGroup bid (GroupChat gid) = runMaybeT $ do
   isInGroup <- MaybeT $ return $ isSelfInGroup gid selfInfo
   MaybeT $ pure $ guard isInGroup
   return $ "Warning: I'm not in " <> toText gid <> "."
+
+filterInactive
+    :: Maybe FlagAll
+       -> [(BotId, ChatId, CostModel)]
+       -> DB  ( [(BotId, ChatId, CostModel)]
+              , Maybe Int -- ^ number of inactive chats filtered out
+              )
+filterInactive (Just FlagAll) owns = pure (owns, Nothing)
+filterInactive Nothing owns = do
+  chatStatsList <- mapM (\(bid, cid, cm) -> (bid, cid, cm, ) <$> chatStatistics 7 bid cid) owns
+  let isActiveChat ChatStatistics { recvMessagesPerDay, sentMessagesPerDay } =
+        V.sum recvMessagesPerDay + V.sum sentMessagesPerDay > 0
+      active =
+        [ (bid, cid, cm)
+        | (bid, cid, cm, stats) <- chatStatsList
+        , isActiveChat stats
+        ]
+      inactiveCount = length owns - length active
+  return (active, if inactiveCount > 0 then Just inactiveCount else Nothing)
 
 balanceAction
   :: Maybe String  -- ^ bot name for logging purpose, optional
@@ -193,21 +215,24 @@ balanceAction bn scid (ACostOwnedBy uid amt oid mDesc) = do
       balanceAction bn scid (ACostTo uid amt wid mDesc)
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
-balanceAction _ scid (ABalanceCheck oid) = do
+balanceAction _ scid (ABalanceCheck oid flagAll) = do
   mWallet <- runMeowDB $ getBy $ UniqueOwnerId oid
   case mWallet of
     Just (Entity wid Wallet {walletBalance}) -> do
-      owns <- runMeowDB $ walletOwns wid
+      owns'  <- runMeowDB $ walletOwns wid
+      (ownBot, (ownChats, filtered)) <- runMeowDB $ (fst owns',) <$> filterInactive flagAll (snd owns')
+      let owns = (ownBot, ownChats)
       let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText oid, "has balance:", toText walletBalance]
           ownsMsg = T.intercalate "\n" $ ["Associated with"]
                     <>  [ "bot" <> toText bid <> " " <> toText cm
                         | (bid, cm)      <- fst owns ]
                     <>  [ "bot" <> toText bid <> " in " <> toText cid <> " " <> toText cm
                         | (bid, cid, cm) <- snd owns ]
+                    <>  maybe [] (\n -> ["(" <> toText n <> " inactive chats omitted, use --all to see)"]) filtered
       return $ Just [baSendToChatId scid $ T.intercalate "\n" [balanceMsg, ownsMsg]]
     Nothing -> return $ Just [baSendToChatId scid $ "No wallet found for owner " <> toText oid]
 
-balanceAction _ scid (ABalanceCheckInChat cid) = do
+balanceAction _ scid (ABalanceCheckInChat cid flagAll) = do
   botid <- query
   mWarnCid <- warningIfNotInGroup botid cid
   mCmWid <- runMeowDB $ findWalletAssociatedToBotChat botid cid
@@ -216,13 +241,16 @@ balanceAction _ scid (ABalanceCheckInChat cid) = do
       mWallet <- runMeowDB $ get wid
       case mWallet of
         Just Wallet { walletOwnerId, walletBalance } -> do
-          owns <- runMeowDB $ walletOwns wid
+          owns' <- runMeowDB $ walletOwns wid
+          (ownBot, (ownChats, filtered)) <- runMeowDB $ (fst owns',) <$> filterInactive flagAll (snd owns')
+          let owns = (ownBot, ownChats)
           let balanceMsg = T.unwords ["Wallet with id", toText wid, "owned by", toText walletOwnerId, "has balance:", toText walletBalance]
               ownsMsg = T.intercalate "\n" $ ["Associated with"]
                         <>  [ "bot" <> toText bid <> " " <> toText cm
                             | (bid, cm)      <- fst owns ]
                         <>  [ "bot" <> toText bid <> " in " <> toText cid' <> " " <> toText cm
                             | (bid, cid', cm) <- snd owns ]
+                        <>  maybe [] (\n -> ["(" <> toText n <> " inactive chats omitted, use --all to see)"]) filtered
           return $ Just [baSendToChatId scid $ T.intercalate "\n" $ [balanceMsg, ownsMsg] <> maybe [] pure mWarnCid]
         Nothing -> return $ Just [baSendToChatId scid $ "Something wrong: " <> toText cid <> " links to wallet with id " <> toText wid <> ", but it is not found."]
     Nothing -> return $ Just [baSendToChatId scid $ "No cost/wallet is associated with " <> toText cid <> "."]
@@ -251,9 +279,9 @@ balanceCommandToAction _   (_, uid) (AddOwnedBy amt oid mdesc)             = Jus
 balanceCommandToAction _   (_, uid) (AddTo amt wid mdesc)                  = Just $ AAddTo uid amt wid mdesc
 balanceCommandToAction _   (_, uid) (CostTo amt wid mdesc)                 = Just $ ACostTo uid amt wid mdesc
 balanceCommandToAction _   (_, uid) (CostOwnedBy amt oid mdesc)            = Just $ ACostOwnedBy uid amt oid mdesc
-balanceCommandToAction _   (oid, _) (BalanceCheck oid')                    = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid')
-balanceCommandToAction _   (cid, _) (BalanceCheckInChat Nothing)           = Just $ ABalanceCheckInChat cid
-balanceCommandToAction _   (_, _)   (BalanceCheckInChat (Just cid))        = Just $ ABalanceCheckInChat cid
+balanceCommandToAction _   (oid, _) (BalanceCheck oid' fl)                 = Just $ ABalanceCheck (fromMaybe (OwnerId oid) oid') fl
+balanceCommandToAction _   (cid, _) (BalanceCheckInChat Nothing fl)        = Just $ ABalanceCheckInChat cid fl
+balanceCommandToAction _   (_, _)   (BalanceCheckInChat (Just cid) fl)     = Just $ ABalanceCheckInChat cid fl
 balanceCommandToAction _   _        (ChangeOwner wid oid)                  = Just $ AChangeOwner wid oid
 balanceCommandToAction _   _        (TotalBalance mbid)                    = Just $ ATotalBalance mbid
 
@@ -261,10 +289,10 @@ checkPrivilegeBalance :: IsSuperUser -> (ChatId, UserId) -> BalanceCommand -> Bo
 checkPrivilegeBalance (IsSuperUser True ) _  _                                        = True
 checkPrivilegeBalance (IsSuperUser False) _ (Own Nothing _ Nothing)                   = True
 checkPrivilegeBalance (IsSuperUser False) _ (OwnBot Nothing _ Nothing)                = True
-checkPrivilegeBalance (IsSuperUser False) _ (BalanceCheck Nothing)                    = True
-checkPrivilegeBalance (IsSuperUser False) (_, _) (BalanceCheckInChat Nothing)         = True
-checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheckInChat (Just cid')) = cid == cid'       || PrivateChat uid == cid'
-checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid))        = cid == coerce oid || PrivateChat uid == coerce oid
+checkPrivilegeBalance (IsSuperUser False) _ (BalanceCheck Nothing _)                  = True
+checkPrivilegeBalance (IsSuperUser False) (_, _) (BalanceCheckInChat Nothing _)       = True
+checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheckInChat (Just cid') _) = cid == cid'       || PrivateChat uid == cid'
+checkPrivilegeBalance (IsSuperUser False) (cid, uid) (BalanceCheck (Just oid) _)        = cid == coerce oid || PrivateChat uid == coerce oid
 checkPrivilegeBalance _ _ _                                                           = False
 
 ownerIdP = fmap OwnerId chatIdP
@@ -311,8 +339,8 @@ balanceParser = innerParserToBatchParser innerBalanceParser
         (   CostOwnedBy <$> (Amount <$> float <* spaces <* string "owned by" <* spaces) <*> fmap OwnerId chatIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
         <|> CostTo      <$> (Amount <$> float <* spaces <* string "to" <* spaces) <*> walletIdP <*> optMaybe (spaces >> just '"' >> manyTill' (just '"') getItem <* just '"')
         )
-      , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP)
-      , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP)
+      , string "balance check" >> BalanceCheck <$> optMaybe (spaces >> ownerIdP) <*> optMaybe (spaces >> string "--all" >> return FlagAll)
+      , string "balance check in chat" >> BalanceCheckInChat <$> optMaybe (spaces >> chatIdP) <*> optMaybe (spaces >> string "--all" >> return FlagAll)
       , string "modify owner of wallet" >> spaces >> ChangeOwner <$> walletIdP <*> (spaces >> string "to" >> spaces >> ownerIdP)
       ]
 
