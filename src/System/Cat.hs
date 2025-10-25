@@ -114,10 +114,6 @@ withServerConnection
   => String -> Int -> EffT (MeowConnection : mods) es m a -> EffT mods NoError m ()
 withServerConnection addr port act = do
 
-  -- | because runServer does not allow any return type and restricts to IO, we have to use a TMVar to pass the state back
-  initState <- liftWith $ \run -> run $ return ()
-  stateVar  <- liftIO newEmptyTMVarIO
-
   $(logInfo) $ "Running bot server, listening on " <> tshow addr <> ":" <> tshow port
   effTryWith (\(e :: SomeException) -> errorText @"uncaught" (toText e))
     (foreverEffT $ do
@@ -125,16 +121,13 @@ withServerConnection addr port act = do
       liftWith $ \run -> runServer addr port $ \pending -> do
         conn' <- acceptRequest pending
   
-        withPingPong pingpongOptions conn' $ \conn -> do
-          s <- run $ do
-            state <- fmap (fromMaybe initState) $ liftIO $ atomically $ tryTakeTMVar stateVar
-            restoreT $ pure state -- ^ this restores the state of the inner computation
+        withPingPong pingpongOptions conn' $ \conn -> void $ do
+          run $ do
             $logInfo "Connected to client"
             runMeowConnection (MeowConnectionRead conn) (void act) `effCatchAll`
               (\e -> do
                 $logError $ "ERROR In connection with client : " <> tshow e
               )
-          atomically $ writeTMVar stateVar s
   
         void . run $ $logInfo $ "Disconnected from client"
 
