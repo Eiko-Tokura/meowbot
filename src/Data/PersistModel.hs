@@ -131,6 +131,17 @@ ApiPriceInfo
   inserted             UTCTime
   description          Text      Maybe
 
+-- | For decoupling our API pricing from vendor prices
+ApiMeowPriceInfo
+  chatModel            ChatModel
+  inputTokenPrice      Double    Maybe
+  inputTokenPriceCache Double    Maybe
+  outputTokenPrice     Double    Maybe
+  validFrom            UTCTime   Maybe
+  validUntil           UTCTime   Maybe
+  inserted             UTCTime
+  description          Text      Maybe
+
 -- | These records are issued by the system automatically
 ApiCostRecord
   botId        BotId
