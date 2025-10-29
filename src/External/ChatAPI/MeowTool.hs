@@ -295,7 +295,7 @@ instance
   toolEnabled _        = computeSettingFromDB botSettingEnableDeleteMessage botSettingPerChatEnableDeleteMessage
   toolUsable _         = meowGroupAdmin
   toolName _ _ = "delete_message"
-  toolDescription _ _ = "As admin, delete a message in the current group chat. Use with extra caution, can be used to prevent abuse or very bad behavior."
+  toolDescription _ _ = "As admin, delete a message (撤回消息) in the current group chat. Use with extra caution, can be used to prevent abuse or very bad behavior."
   toolHandler _ _ ((IntT messageId) :%* ObjT0Nil) = do
     _ <- baseMaybeInWith (DeleteError "This tool is only valid in group chats, this is a private chat.") getGid
     action <- liftIO $ baSequenceDelayFullAsync intercalateDelay [BAActionAPI (DeleteMessage messageId)]
