@@ -5,7 +5,6 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad.Effect
 import Control.Monad.Logger
-import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Control.System
 import Data.Maybe

@@ -15,7 +15,7 @@ import System.Meow
 import Control.Monad.Logger
 import Module.RS
 
-getTypeWithDef :: forall t mods m. (MeowAllData mods, MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT mods m t
+getTypeWithDef :: forall t mods m. (MeowAllData' m mods, MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT mods m t
 getTypeWithDef defT = do
   mt <- listToMaybe . getAdditionalDataType @_ @t <$> getS @OtherData
   case mt of
@@ -26,5 +26,5 @@ getTypeWithDef defT = do
       $(logInfo) $ pack (show (typeRep (Proxy @t))) <> " initialized!"
       return emptyMap
 
-putType :: forall t mods m. (MeowAllData mods, MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT mods m ()
+putType :: forall t mods m. (MeowAllData' m mods, MonadIO m, Show t, Eq t, Typeable t, IsAdditionalData t) => t -> MeowT mods m ()
 putType t = modifyS @OtherData . modifyAdditionalDataType $ const $ Just t

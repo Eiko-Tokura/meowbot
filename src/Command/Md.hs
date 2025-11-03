@@ -15,7 +15,6 @@ import Utils.Base64
 import External.ChatAPI
 
 import Control.Monad.Effect
-import Control.Monad.Trans
 import Control.Monad.Trans.Except
 
 commandMd :: BotCommand

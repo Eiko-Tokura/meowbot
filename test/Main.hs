@@ -18,7 +18,7 @@ main = do
   base <- createStdoutBaseLogger
   defaultMain (tests (simpleLogger True (baseLogFunc base)) man)
 
-tests :: Logger IO LogData -> Manager -> TestTree
+tests :: Logger IO LogS -> Manager -> TestTree
 tests logger man = testGroup "Tests"
   [ testGroup "Legacy Tests"
     [ testCase "Saved Additional" testSavedAdditional

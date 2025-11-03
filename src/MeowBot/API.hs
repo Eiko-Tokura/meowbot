@@ -13,7 +13,7 @@ import Module.Logging
 -- | Low-level functions to send any action
 actionAPI ::
   ( MonadIO m
-  , In' c LoggingModule mods
+  , In' c (Logging m LogS) mods
   , In' c MeowConnection mods
   , InList (ErrorText "send_connection") es
   )
@@ -26,7 +26,7 @@ actionAPI af = do
 -- with continuation style passing functions around, we can enforce a lot of coupled relationships
 queryAPI
   :: ( FromJSON (WithEcho (QueryAPIResponse queryType))
-     , In' c LoggingModule mods
+     , In' c (Logging m LogS) mods
      , In' c MeowConnection mods
      , InList (ErrorText "send_connection") es
      , MonadIO m

@@ -16,6 +16,7 @@ import qualified Data.ByteString.Lazy as BL
 import Module.Logging
 import Module.LogDatabase
 import Module.Async
+import Module.BotGlobal
 import Module.ProxyWS
 import Module.ConnectionManager
 import Module.StatusMonitor
@@ -43,6 +44,7 @@ type Mods =
   , SModule BotConfig
   , SModule WholeChat
   , SModule OtherData
+  , BotGlobal
   , ConnectionManagerModule
   , MeowDatabase
   , PrometheusMan

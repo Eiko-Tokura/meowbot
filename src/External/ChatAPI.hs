@@ -463,7 +463,7 @@ getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow api
 getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKey
 getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
-fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> EffT '[ModelPricing, LoggingModule] '[ErrorText "chat-error"] m (ChatCompletionResponse md, EstimateTokens)
+fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> EffT '[ModelPricing, Logging m LogS] '[ErrorText "chat-error"] m (ChatCompletionResponse md, EstimateTokens)
 fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
   request <- liftIO $ parseRequest (modelEndpoint $ chatModel @md)
   utcTime <- liftIO getCurrentTime
@@ -546,7 +546,7 @@ readApiKeyFile =
 simpleChat
   :: (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
   => Manager -> Int -> ChatParams md ts -> String
-  -> EffT '[ModelPricing, LoggingModule] '[ErrorText "read-api-key-error", ErrorText "chat-error"] m (Text, EstimateTokens)
+  -> EffT '[ModelPricing, Logging m LogS] '[ErrorText "read-api-key-error", ErrorText "chat-error"] m (Text, EstimateTokens)
 simpleChat man timeOut model prompt = do
   apiKey <- embedEffT readApiKeyFile
   sysMsg <- lift $ generateSystemPrompt def model
@@ -560,7 +560,7 @@ data ChatStatus = ChatStatus
   , chatEstimateTokens       :: !EstimateTokens
   } deriving (Show, Eq, Generic, NFData)
 
-type ChatT md tools m = EffT '[RModule (ChatParams md tools), SModule ChatStatus, ModelPricing, LoggingModule] '[ErrorText "chat-error"] m
+type ChatT md tools m = EffT '[RModule (ChatParams md tools), SModule ChatStatus, ModelPricing, Logging m LogS] '[ErrorText "chat-error"] m
 
 -- | Enhanced message chat with tool handling
 agent :: forall md ts m. (MonadIO m, ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatT md ts m [Message]
@@ -646,13 +646,13 @@ showMessage (ToolMessage c tm)              = "ToolMessage: "       <> c <> "\nT
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will only read apiKey from chat setting
 statusChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
-  => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, LoggingModule] '[ErrorText "chat-error"] m [Message]
+  => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, Logging m LogS] '[ErrorText "chat-error"] m [Message]
 statusChat r = runRModule r agent
 
 statusChatDefault :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
   => ChatParams md ts -> [Message]
   -> EffT
-      '[ModelPricing, LoggingModule]
+      '[ModelPricing, Logging m LogS]
       NoError
       m
       (Either Text [Message], ChatStatus)
@@ -665,7 +665,7 @@ statusChatDefault params prevMsg
 -- | If using this you will need to maintain the chat status
 -- the first system message should not be included in the input, as it will be calculated and appended using params
 -- will read apiKey from file if no api key is found in the chat setting
-statusChatReadAPIKey :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, LoggingModule] '[ErrorText "chat-error"] m [Message]
+statusChatReadAPIKey :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, Logging m LogS] '[ErrorText "chat-error"] m [Message]
 statusChatReadAPIKey params = do
   apiKey <- embedEffT . errorToMaybe $ readApiKeyFile
   let params' = params { chatSetting = (chatSetting params) { systemApiKeys = systemApiKeys (chatSetting params) <|> apiKey } }
@@ -674,7 +674,7 @@ statusChatReadAPIKey params = do
 statusChatReadAPIKeyDefault :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
   => ChatParams md ts -> [Message]
   -> EffT
-      '[ModelPricing, LoggingModule]
+      '[ModelPricing, Logging m LogS]
       NoError
       m
       (Either Text [Message], ChatStatus)
@@ -687,7 +687,7 @@ statusChatReadAPIKeyDefault params prevMsg
 -- | Tool calls are discarded in the output
 -- system message will be appended so don't add it to the input
 -- will try to read apiKey file if no api key is found in the chat setting
-messageChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, LoggingModule] '[ErrorText "chat-error", ErrorText "read-api-key-error"] m Message
+messageChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => ChatParams md ts -> EffT '[SModule ChatStatus, ModelPricing, Logging m LogS] '[ErrorText "chat-error", ErrorText "read-api-key-error"] m Message
 messageChat params --prevMsg
   | Just _ <- systemApiKeys (chatSetting params)
       = last <$> embedEffT (statusChat @md params)
@@ -704,7 +704,7 @@ messageChatDefault param msgs = (first $ second last) <$> messagesChatDefault pa
 messagesChat :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
   => ChatParams md ts
   -> EffT
-      '[SModule ChatStatus, ModelPricing, LoggingModule]
+      '[SModule ChatStatus, ModelPricing, Logging m LogS]
       '[ErrorText "chat-error", ErrorText "read-api-key-error"]
       m
       [Message]
@@ -720,7 +720,7 @@ messagesChat params --prevMsg
 messagesChatDefault :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m)
   => ChatParams md ts -> [Message]
   -> EffT
-      '[ModelPricing, LoggingModule]
+      '[ModelPricing, Logging m LogS]
       NoError
       m
       (Either Text [Message], ChatStatus)

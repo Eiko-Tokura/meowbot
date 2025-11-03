@@ -87,8 +87,10 @@ data ProxyFlag       = ProxyFlag String Int deriving (Eq, Show)
 newtype LogFlag      = LogFlag FilePath deriving (Eq, Show)
 data WatchDogFlag    = WatchDogFlag
     Int -- ^ interval in seconds
-    String -- ^ action command
+    WatchDogAction -- ^ action command
   deriving (Eq, Show)
+data WatchDogAction = SystemCmd String | SendToId UserId
+  deriving (Eq, Show, Read)
 newtype CommandFlags = CommandFlag CommandId deriving (Eq, Show)
 
 data BotInstance = BotInstance

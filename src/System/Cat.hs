@@ -10,7 +10,6 @@ import Control.Concurrent.STM
 import Control.Exception
 import Control.Monad
 import Control.Monad.Effect
-import Control.Monad.Trans
 import Control.Monad.Trans.Control
 import Control.System
 import Data.Coerce
@@ -23,6 +22,7 @@ import MeowBot.CronTab.PeriodicCost (initializeCounters)
 import MeowBot.CommandRule
 import MeowBot.Data.Book
 import Module.AsyncInstance
+import Module.BotGlobal
 import Module.CommandInstance
 import Module.ConnectionManager
 import Module.CronTabTickInstance
@@ -73,15 +73,16 @@ pingpongOptions = defaultPingPongOptions
   -- , pongTimeout  = 30
   -- }
 
-runBot :: BotInstance -> Meow a -> EffT '[ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
+runBot :: BotInstance -> Meow a -> EffT '[BotGlobal, ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
 runBot bot meow = do
   botm     <- embedEffT $ botInstanceToModule bot
+  glbMesChan <- asksModule globalMessageChannel
   meowStat <- liftIO $ initTVarMeowStatus
   let botconfig = BotConfig botm (botDebugFlags bot) Nothing
       watchDog  = listToMaybe $ botWatchDogFlags bot
 
       checkHandle = fmap (== MeowOnline) . readTVarIO
-      mWatchDogInit = (\(WatchDogFlag interval action) -> WatchDogInitData meowStat interval checkHandle (void $ system action)) <$> watchDog
+      mWatchDogInit = (\(WatchDogFlag interval action) -> WatchDogInitData meowStat interval checkHandle (case action of SystemCmd cmd -> void $ system cmd; SendToId uid -> atomically $ modifyTVar' glbMesChan $ ((PrivateChat uid, toText botm.nameOfBot <> "似乎睡着了！"):) )) <$> watchDog
 
   initializeCounters botm.botId
 
@@ -106,7 +107,7 @@ runBot bot meow = do
     $ withLogDatabase
     $ meow
 
-runBots :: [BotInstance] -> EffT '[ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
+runBots :: [BotInstance] -> EffT '[BotGlobal, ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
 runBots bots = mapM_ (\bot -> forkEffT $ runBot bot botLoop) bots >> liftIO (threadDelay maxBound)
 
 withServerConnection

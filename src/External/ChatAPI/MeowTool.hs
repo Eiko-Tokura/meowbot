@@ -5,7 +5,6 @@ module External.ChatAPI.MeowTool where
 import Control.Applicative
 import Control.Monad.Effect
 import Control.Monad.Trans.Maybe
-import Control.Monad.Reader
 import Data.PersistModel
 import Data.Time.Clock
 import Control.Concurrent.STM

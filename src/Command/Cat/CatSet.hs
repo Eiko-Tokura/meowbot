@@ -19,7 +19,6 @@ import qualified Data.BSeq as BSeq
 import Control.Monad.Trans.Maybe
 import Module.MeowTypes
 import Control.Monad.Effect
-import Control.Monad.Trans
 import Control.Monad
 import Utils.RunDB
 import Utils.Persist

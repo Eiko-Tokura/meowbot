@@ -2,7 +2,6 @@
 module External.ChatAPI.Tool.Scrape where
 
 import Control.Monad.Effect
-import Control.Monad.Reader
 import External.ChatAPI.MeowToolEnv
 import External.ChatAPI.Tool
 import Module.ConnectionManager

@@ -317,14 +317,14 @@ commandChat = BotCommand Chat $ botT $ do
   $(logInfo) "Replying"
 
   breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
+  LoggingRead logger <- lift (askModule @LoggingModule)
 
   case breakAction of
     Left disableAndNofity -> do
       $logInfo "Service disabled due to insufficient balance"
       return disableAndNofity
     Right extraAction -> do
-      LoggingRead logger <- lift askModule
-      ioeResponse <- pure . runEffT00 . runLogging logger . runModelPricing (ModelPricingRead modelPrice) . runSModule (chatStatus chatState) . fmap (first $ toText @_ @Text) . errorToEitherAll $
+      ioeResponse <- pure . runEffT00 . runLogging (liftLogger lift logger) . runModelPricing (ModelPricingRead modelPrice) . runSModule (chatStatus chatState) . fmap (first $ toText @_ @Text) . errorToEitherAll $
         case cfListPickElem modelsInUse (\(Proxy :: Proxy a) -> chatModel @a == modelCat) of
           Nothing ->
             statusChatReadAPIKey @ModelChat @MeowTools @MeowToolEnvDefault (coerce params)

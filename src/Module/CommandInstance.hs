@@ -42,6 +42,7 @@ import Command.Statistics
 -- import Command.Haskell
 
 import Module.Command
+import Module.BotGlobal
 import Module.Logging
 import Module.Prometheus
 import Module.Prometheus.Counter
@@ -50,6 +51,8 @@ import Module.Prometheus.Manager
 import Utils.ByteString
 import Utils.LabelKeys ()
 import Utils.List
+
+import qualified Data.HashMap.Strict as HM
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = $(makeBotCommands $ filter (`notElem` [Retract]) [minBound .. maxBound :: CommandId])
@@ -69,7 +72,7 @@ instance SystemModule CommandModule where
   data ModuleInitData CommandModule = CommandModuleInitData
   newtype ModuleEvent CommandModule = CommandModuleEvent { msgBS :: Result '[ErrorText "recv_connection"] BL.ByteString }
 
-instance Dependency CommandModule 
+instance Dependency CommandModule
   [ MeowActionQueue, RecvSentCQ, MeowConnection
   , SModule WholeChat, SModule OtherData, SModule BotConfig
   , PrometheusMan, LoggingModule
@@ -89,8 +92,8 @@ instance Dependency CommandModule
 
 instance
   ( Dependency CommandModule
-      [MeowActionQueue, RecvSentCQ, MeowConnection
-      , SModule WholeChat, SModule OtherData, SModule BotConfig
+      [ MeowActionQueue, RecvSentCQ, MeowConnection
+      , SModule WholeChat, SModule OtherData, SModule BotConfig, BotGlobal
       , PrometheusMan
       , LoggingModule
       ] mods
@@ -104,6 +107,23 @@ instance
     liftIO . atomically $ writeTVar tvarRCQmsg Nothing
     liftIO . atomically $ writeTVar tvarSCQmsg Nothing
     liftIO . atomically $ writeTVar tvarBS     Nothing
+
+    tmeow <- asksModule meowReadsAction
+    friendList <- (fmap (HM.keys . unWithTime) . toMaybe . selfFriends =<<) <$> queries selfInfo
+    groupList  <- (fmap (HM.keys . unWithTime) . toMaybe . selfInGroups =<<) <$> queries selfInfo
+    glbMesChan <- asksModule globalMessageChannel
+    -- fmap listToMaybe . lift . readTVarIO =<< 
+    liftIO . atomically $ do
+      glbMesL <- readTVar glbMesChan
+      forM_ glbMesL $ \case
+        m@(PrivateChat uid, msg) ->
+          when (uid `elem` fromMaybe [] friendList) $ do
+                modifyTVar' tmeow ((pure $ pure $ BASendPrivate uid msg):)
+                modifyTVar' glbMesChan (filter (/= m))
+        m@(GroupChat gid, msg) ->
+          when (gid `elem` fromMaybe [] groupList) $ do
+                modifyTVar' tmeow ((pure $ pure $ BASendGroup gid msg):)
+                modifyTVar' glbMesChan (filter (/= m))
 
   moduleEvent = do
     CommandModuleRead tbQ <- askModule
@@ -119,7 +139,7 @@ instance
      asksModule meowRawByteString >>= liftIO . atomically . (`writeTVar` Just msg)
 
      botMods <- getsS botModules
-     
+
      botId <- query
 
      let gcmdids = canUseGroupCommands   botMods
@@ -170,20 +190,17 @@ instance
                 return [Label @"message_type" Response]
               PrivateMessage -> do
                 embedEffT $ updateStates nameBot cqmsg
-                tmeow   <- asksModule meowReadsAction
                 liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg pcmds, botMessageCounter cqmsg])
                 return [ Label @"message_type" PrivateMessage
                        , Label @"chat_id" (fromMaybe (PrivateChat 0) $ cqmsgToCid cqmsg)
                        ]
               GroupMessage -> do
                 embedEffT $ updateStates nameBot cqmsg
-                tmeow   <- asksModule meowReadsAction
                 liftIO $ atomically $ modifyTVar tmeow (<> [botCommandsWithIgnore cqmsg gcmds, botMessageCounter cqmsg])
                 return [ Label @"message_type" GroupMessage
                        , Label @"chat_id" (fromMaybe (GroupChat 0) $ cqmsgToCid cqmsg)
                        ]
               RequestEvent -> do
-                tmeow <- asksModule meowReadsAction
                 liftIO $ atomically $ modifyTVar tmeow (<> [botHandleRequestEvent cqmsg nameBot])
                 return [Label @"message_type" RequestEvent]
               UnknownMessage -> do
@@ -193,7 +210,7 @@ instance
                 $logInfo $ "Other event received (unhandled): " <> toText cqmsg
                 return [Label @"message_type" cqmsg.eventType]
             where
-              updateStates :: MonadIO m => String -> CQMessage -> EffT '[SModule WholeChat, SModule OtherData, LoggingModule] NoError m ()
+              updateStates :: String -> CQMessage -> EffT '[SModule WholeChat, SModule OtherData, LoggingModule] NoError IO ()
               updateStates name cqm = do
                 cqmsg' <- (\mid -> cqm {absoluteId = Just mid}) <$> embedMods increaseAbsoluteId
                 embedEffT $ updateWholeChatByMessage cqmsg'

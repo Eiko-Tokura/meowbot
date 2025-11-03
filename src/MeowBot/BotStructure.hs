@@ -12,7 +12,7 @@ module MeowBot.BotStructure
   , BotModules(..), BotConfig(..), OverrideSettings(..)
   , GroupId(..), UserId(..), ChatId(..)
 
-  , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..)
+  , AllData(..), OtherData(..), SavedData(..), Saved(..), SelfInfo(..), GroupInfo(..), FriendInfo(..)
   , UserGroup(..), GroupGroup(..)
   , MetaMessageItem(..)
 
@@ -63,6 +63,12 @@ data AllData = AllData
 data SelfInfo = SelfInfo
   { selfId       :: UserId
   , selfInGroups :: !(UMaybeTime (HashMap GroupId (UMaybeTime GroupInfo)))
+  , selfFriends  :: !(UMaybeTime (HashMap UserId FriendInfo))
+  } deriving Show
+
+data FriendInfo = FriendInfo
+  { nickname   :: !Text
+  , remarkName :: !(Maybe Text)
   } deriving Show
 
 newtype GroupInfo = GroupInfo
@@ -120,35 +126,36 @@ instance {-# OVERLAPPABLE #-} (SModule OtherData `In` mods, Monad m) => MonadSta
   modify = modifyS
   {-# INLINE modify #-}
 
-type MeowAllData mods = (In (SModule BotConfig) mods, In (SModule WholeChat) mods, In (SModule OtherData) mods, In LoggingModule mods)
+type MeowAllData' m mods = (In (SModule BotConfig) mods, In (SModule WholeChat) mods, In (SModule OtherData) mods, In (Logging m LogS) mods)
+type MeowAllData mods = MeowAllData' IO mods
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly BotConfig (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly BotConfig (EffT mods es m) where
   query = getS
   {-# INLINE query #-}
-instance (Monad m, MeowAllData mods) => MonadReadable BotConfig (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadable BotConfig (EffT mods es m) where
   local = localByState
   {-# INLINE local #-}
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly BotModules (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly BotModules (EffT mods es m) where
   query = queries botModules
   {-# INLINE query #-}
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly RunningMode (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly RunningMode (EffT mods es m) where
   query = queries runningMode
   {-# INLINE query #-}
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly WholeChat (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly WholeChat (EffT mods es m) where
   query = getS
   {-# INLINE query #-}
-instance (Monad m, MeowAllData mods) => MonadReadable WholeChat (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadable WholeChat (EffT mods es m) where
   local = localByState
   {-# INLINE local #-}
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly BotName (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly BotName (EffT mods es m) where
   query = queries nameOfBot
   {-# INLINE query #-}
 
-instance (Monad m, MeowAllData mods) => MonadReadOnly BotId (EffT mods es m) where
+instance (Monad m, MeowAllData' m mods) => MonadReadOnly BotId (EffT mods es m) where
   query = queries botId
   {-# INLINE query #-}
 

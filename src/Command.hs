@@ -41,7 +41,7 @@ import qualified Data.Set             as S
 import qualified Data.Text            as T
 import qualified MeowBot.Parser       as MP
 
-commandParserTransformByBotName :: (MP.Chars sb, Monad m, MeowAllData mods) => MP.Parser sb Char a -> MeowT mods m (MP.Parser sb Char a)
+commandParserTransformByBotName :: (MP.Chars sb, Monad m, MeowAllData' m mods) => MP.Parser sb Char a -> MeowT mods m (MP.Parser sb Char a)
 commandParserTransformByBotName cp = do
   botname <- maybeBotName <$> query
   return $ case botname of

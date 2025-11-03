@@ -34,7 +34,7 @@ updateSelfInfo cqmsg = do
   mselfInfo <- gets selfInfo
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet
+    (Nothing, Just sid) -> modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet NothingYet
     _ -> return ()
 
 -- | Specify the path to save the data according to the bot name.

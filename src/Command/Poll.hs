@@ -10,7 +10,6 @@ import Control.Monad.RS.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad.Logger
 import Control.Monad
-import Control.Monad.Trans
 import Probability.Foundation
 import Data.Additional
 import Data.Maybe
@@ -81,7 +80,7 @@ commandPoll = BotCommand Poll $ botT $ do
     (_, Just cmd) -> lift $ doPollCommand ess cmd
     _             -> return []
 
-getPollMap :: (MonadIO m, MeowAllData mods) => MeowT mods m (M.Map PollId PollData)
+getPollMap :: (MonadIO m, MeowAllData' m mods) => MeowT mods m (M.Map PollId PollData)
 getPollMap = do
   mPollMap <- listToMaybe . getAdditionalDataSavedType @_ @(M.Map PollId PollData) <$> getS @OtherData
   case mPollMap of
@@ -94,7 +93,7 @@ getPollMap = do
       liftIO $ print s
       return emptyMap
 
-doPollCommand :: (MonadIO m, MeowAllData mods, RecvSentCQ `In` mods) => EssentialContent -> PollCommand -> MeowT mods m [BotAction]
+doPollCommand :: (MonadIO m, MeowAllData' m mods, RecvSentCQ `In` mods) => EssentialContent -> PollCommand -> MeowT mods m [BotAction]
 doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list

@@ -6,6 +6,7 @@ import Data.Aeson.Types (Parser)
 import MeowBot.Data.ChatId
 import MeowBot.Data.CQHttp.Action
 import Utils.Time
+import qualified Data.Text as T
 
 -------------------------------------------------------------------------------------------
 -- Query API
@@ -15,6 +16,7 @@ data QueryType
   | QueryGroupMemberInfo
   | QueryGroupInfo
   | QueryGetForwardMessage
+  | QueryFriendList
 
 data WithEcho a = WithEcho
   { maybeEcho :: Maybe Text
@@ -40,6 +42,7 @@ data QueryAPI (q :: QueryType) where
     , queryGroupInfoNoCache :: Bool
     } -> QueryAPI 'QueryGroupMemberInfo
   GetForwardMessage :: ForwardCQMessageId -> QueryAPI 'QueryGetForwardMessage
+  GetFriendList :: QueryAPI 'QueryFriendList
 
 data Sex = SexMale | SexFemale
   deriving (Show, Eq, Read, Generic, NFData)
@@ -75,6 +78,8 @@ data QueryAPIResponse (q :: QueryType) where
     , getGroupInfoMemberCount    :: Maybe Int
     , getGroupInfoMaxMemberCount :: Maybe Int
     } -> QueryAPIResponse 'QueryGroupInfo
+  GetFriendListResponse ::
+    { getFriendList :: [FriendBasicInfo] } -> QueryAPIResponse 'QueryFriendList
 
 -- GetMessageResponse ::
 --   { getMessageTime    :: UTCTime
@@ -125,6 +130,10 @@ instance ToJSON (ActionForm (QueryAPI q)) where
     , "params" .= object
         [ "message_id" .= fmid
         ]
+    , "echo"   .= mecho
+    ]
+  toJSON (ActionForm GetFriendList mecho) = object
+    [ "action" .= ("get_friend_list" :: Text)
     , "echo"   .= mecho
     ]
 
@@ -205,6 +214,23 @@ instance FromJSON (QueryAPIResponse 'QueryGroupInfo) where
       , getGroupInfoMaxMemberCount = maxmembercount
       }
 
+data FriendBasicInfo = FriendBasicInfo
+  { friendBasicInfoUserId   :: UserId
+  , friendBasicInfoNickname :: Text
+  , friendBasicInfoRemark   :: Maybe Text
+  } deriving (Show, Eq, Read, Generic, NFData)
+
+instance FromJSON FriendBasicInfo where
+  parseJSON = withObject "FriendBasicInfo" $ \o -> do
+    uid      <- o .: "user_id"
+    nickname <- o .: "nickname"
+    remark   <- o .:? "remark"
+    return FriendBasicInfo
+      { friendBasicInfoUserId   = uid
+      , friendBasicInfoNickname = nickname
+      , friendBasicInfoRemark   = (\remark -> if T.null remark then Nothing else Just remark) =<< remark
+      }
+
 data GroupBasicInfo = GroupBasicInfo
   { groupBasicInfoGroupId        :: GroupId
   , groupBasicInfoGroupName      :: Text
@@ -230,3 +256,10 @@ instance FromJSON (WithEcho (QueryAPIResponse 'QueryGroupList)) where
     dataObj <- o .: "data"
     mecho  <- o .:? "echo"
     return $ WithEcho mecho $ GetGroupListResponse { getGroupList = dataObj }
+
+instance FromJSON (WithEcho (QueryAPIResponse 'QueryFriendList)) where
+  parseJSON = withObject "QueryAPIResponse" $ \o -> do
+    dataObj <- o .: "data"
+    mecho  <- o .:? "echo"
+    return $ WithEcho mecho $ GetFriendListResponse { getFriendList = dataObj }
+  

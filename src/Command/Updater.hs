@@ -5,7 +5,6 @@ import Command
 import Control.Lens
 import Control.Monad.Effect
 import Control.Monad.Logger
-import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
 import Data.HashMap.Strict (HashMap)
 import Data.Time.Clock
@@ -15,16 +14,21 @@ import Module.Logging
 import Control.Monad.RS.Class
 import qualified Data.HashMap.Strict as Map
 import Data.Hashable (Hashable)
+import MeowBot.Data.CQHttp.Query (FriendBasicInfo(..))
 
 anHour :: NominalDiffTime
 anHour = 3600
 
+aDay :: NominalDiffTime
+aDay = 86400
+
 commandUpdater :: BotCommand
 commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER") $ botT $ do
   botid :: BotId <- query
-  s@SelfInfo {selfId, selfInGroups} <- MaybeT $ queries selfInfo
+  s@SelfInfo {selfId, selfInGroups, selfFriends} <- MaybeT $ queries selfInfo
   $logDebug $ "Bot ID: " <> toText botid <> ", SelfInfo: " <> toText s
   let updateLensSelfInGroups u = modify $ _selfInfo ?~ s { selfInGroups = u }
+      updateLensSelfFriends u = modify $ _selfInfo ?~ s { selfFriends = u }
 
       updateGroupListInMapWith :: (Hashable g) => [g] -> a -> HashMap g a -> HashMap g a
       updateGroupListInMapWith gids defVal mapG
@@ -32,6 +36,20 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
         $ Map.unionWith const mapG (Map.fromList [(gid, defVal) | gid <- gids])
 
       doNothing = MaybeT $ return Nothing
+
+      fetchFriendList = do
+        parseResponse <- lift $ queryAPI GetFriendList
+        let nextStep :: QueryAPIResponse 'QueryFriendList -> Meow [BotAction]
+            nextStep (GetFriendListResponse uinfos) = effAddLogCat' (LogCat @Text "FREIND") $ effAddLogCat' (LogCat @Text "OTHER:UPDATER") $ botT $ do
+              let fset = Map.fromList [(uinfo.friendBasicInfoUserId, FriendInfo uinfo.friendBasicInfoNickname uinfo.friendBasicInfoRemark) | uinfo <- uinfos]
+              $logInfo $ toText botid <> " Fetched friend list: " <> toText (Map.keys fset)
+              utcTime <- liftIO getCurrentTime
+              s <- MaybeT $ queries selfInfo
+              let s' = s  & _selfFriends
+                            .~ Updated (WithTime utcTime fset)
+              modify $ _selfInfo ?~ s'
+              return []
+        return $ pure $ BARawQueryCallBack [fmap nextStep . parseResponse]
 
       fetchGroupList = do
         parseResponse <- lift $ queryAPI (GetGroupList False)
@@ -49,7 +67,9 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
               return []
         return $ pure $ BARawQueryCallBack [fmap nextStep . parseResponse]
 
-  withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
+  l1 <- withExpireTimeDo aDay updateLensSelfFriends selfFriends fetchFriendList doNothing (const doNothing)
+
+  fmap (l1 <>) <$> withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
     utcTime <- liftIO getCurrentTime
 
     let groupList = Map.toList groupMap
@@ -89,14 +109,14 @@ withExpireTimeDo
   -> m b                    -- ^ action to perform if updating
   -> (a -> m b)             -- ^ action to perform if present and not expired
   -> m b
-withExpireTimeDo expireDuration updateLens umaybe fetchAction waitAction action = do
+withExpireTimeDo expireDuration updateLens umaybe fetchAction waitAction presentAction = do
   currentTime <- liftIO getCurrentTime
   case umaybe of
     NothingYet -> updateLens Updating >> fetchAction
     Updating   -> waitAction
-    UpdatingOldValue (WithTime _ a) -> action a
+    UpdatingOldValue (WithTime _ a) -> presentAction a
     Updated (WithTime timeStamp a) ->
       if diffUTCTime currentTime timeStamp > expireDuration
         then updateLens Updating >> fetchAction
-        else action a
+        else presentAction a
 {-# INLINE withExpireTimeDo #-}

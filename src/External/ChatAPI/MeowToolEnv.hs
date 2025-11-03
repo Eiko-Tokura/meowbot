@@ -18,7 +18,7 @@ import MeowBot.CostModel
 import System.Meow
 import Module.MeowTypes
 
-type MeowToolEnvDefault = MeowToolEnv Mods
+type MeowToolEnvDefault = MeowT Mods IO
 type MeowToolEnv mods = MeowT mods IO
 -- | This will be the monad the tools will run in, ReaderT is necessary to make UnliftIO work
 -- newtype MeowToolEnv a = MeowToolEnv

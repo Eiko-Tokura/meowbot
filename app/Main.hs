@@ -5,6 +5,7 @@ import Command
 import MeowBot.BotStructure
 import Parser.Run
 import Parser.Except
+import Control.Concurrent.STM
 
 import Data.List (isPrefixOf)
 import Data.Maybe
@@ -18,6 +19,7 @@ import Control.System
 
 import System.Environment
 import System.Cat
+import Module.BotGlobal
 import Module.Logging
 import Module.Logging.Logger
 import Module.Database.Sqlite
@@ -46,7 +48,7 @@ parseArgs = (,) <$>
       , liftR1 just "--run-server" >> RunServer <$> withE "Usage: --run-server <ip> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
       ]
     localFlags <- fmap (fromMaybe []) . optMaybe $ liftR1 just "+LOCAL" >> liftR2 manyTill (just "-LOCAL") getItem <* liftR1 just "-LOCAL"
-    restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| watchDogParser |+| unrecognizedFlag)
+    restFlags <- many (identityParser |+| commandParser |+| debugParser |+| proxyParser |+| logParser |+| (watchDogParser2 <|> watchDogParser) |+| unrecognizedFlag)
     return $ BotInstance runFlag (lefts restFlags) (lefts $ rights restFlags) (lefts $ rights $ rights restFlags) (lefts $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights restFlags) (lefts $ rights $ rights $ rights $ rights $ rights restFlags) localFlags
   ) <* liftR end
     where
@@ -63,7 +65,8 @@ parseArgs = (,) <$>
         liftR1 just "--proxy"
         ProxyFlag <$> withE "Usage: --proxy <address> <port>" nonFlag <*> readE "cannot read the port number" nonFlag
       logParser = LogFlag <$> liftR1 just "--log" >> withE "--log needs a file path argument" (LogFlag <$> nonFlag)
-      watchDogParser = liftR1 just "--watchdog" >> WatchDogFlag <$> readE "--watchdog <interval> <action>" nonFlag <*> withE "--watchdog <interval> <action>" nonFlag
+      watchDogParser  = liftR1 just "--watchdog" >> WatchDogFlag <$> readE "--watchdog <interval> <action>" nonFlag <*> withE "--watchdog <interval> <action>" (SystemCmd <$> nonFlag)
+      watchDogParser2 = liftR1 just "--watchdog-send-to-uid" >> WatchDogFlag <$> readE "--watchdog-send-to-uid <interval> <uid>" nonFlag <*> (SendToId <$> readE "--watchdog-send-to-uid <interval> <uid>" nonFlag)
       unrecognizedFlag = do
         flag <- liftR $ require ((&&) <$> ("--" `isPrefixOf`) <*> (`notElem` ["--run-client", "--run-server"])) getItem
         lift $ throwE $ "Unrecognized flag " ++ flag
@@ -88,8 +91,9 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   loggerInit <- pureEitherInWith id $ defaultLoggingFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
   dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
   promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs Nothing (Just 6001) (Just ["metrics"]) globalFlags
+  botGlobal  <- liftIO $ BotGlobalRead <$> newTVarIO []
 
-  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ withConnectionManager $ do
+  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ withConnectionManager $ runBotGlobal botGlobal $ do
     $logDebug $ pack $ "Arguments: " ++ show args
     $logDebug $ pack $ "Parsed: " ++ show parsed
     case parsed of
