@@ -15,3 +15,9 @@ BotGlobal
 |]
 
 instance EventLoop FData BotGlobal mods es
+
+data GlobalMessage
+  = GlobalMessage
+      { recipientChatId :: !ChatId
+      , messageContent  :: !Text
+      }

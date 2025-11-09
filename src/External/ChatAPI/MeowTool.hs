@@ -376,7 +376,7 @@ instance
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) BlackListUserTool where
   type ToolInput BlackListUserTool  = ParamToData (ObjectP0
-      '[ IntP  "user_id"         "the user_id of the user to blacklist"
+      '[ IntP  "user_id"         "the user_id of the user to blacklist / unblacklist"
        , BoolP "ignore_reaction" "if true, will stop reacting to the user, still receives messages in the message history (level 1 blacklist)"
        , BoolP "blacklist"       "if true, will not receive any messsages from the user (level 2 blacklist)"
        , IntP  "duration"        "the duration in seconds to blacklist / ignore the user, 0 means permanent blacklist"
@@ -393,7 +393,7 @@ instance
       Nothing -> Just . not <$> hasPositiveCostModel -- ^ without config, enable if has no cost model
   toolUsable _         = pure True
   toolName _ _ = "blacklist_user"
-  toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution."
+  toolDescription _ _ = "Blacklist a user from interacting with the bot in the current chat. Use with extra caution. To unblacklist a user, use this tool with the relevant fields set to false."
   toolHandler _ _ (IntT userId :%* BoolT ignore :%* BoolT blacklist :%* IntT duration :%* StringT reason :%* ObjT0Nil) = do
     cid     <- baseMaybeInWith (BlackListError "no ChatId found") getCid
     botname <- lift getBotName
