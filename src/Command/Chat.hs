@@ -131,7 +131,8 @@ commandChat = BotCommand Chat $ botT $ do
         [ BotUserBlackListBotId ==. botid
         , BotUserBlackListUserId ==. uid'
         , BotUserBlackListChatId ==. Just cid
-        ] []
+        ]
+        [ Desc BotUserBlackListTime ]
     Nothing   -> pure Nothing
   let appendNoteListing :: Text -> Text
       appendNoteListing t = case noteListing of

@@ -82,7 +82,7 @@ instance Dependency CommandModule
         let recvThread = foreverEffT $ do
               msg <- errorToResult recvLBSData
               liftIO . atomically $ writeTBQueue newTBQ msg
-        tid <- embedError $ forkEffT recvThread
+        tid <- forkEffT recvThread
         return (CommandModuleRead newTBQ, tid)
     )
     (\(_, tid) -> liftIO $ killThread tid)

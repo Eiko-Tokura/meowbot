@@ -49,7 +49,6 @@ type WatchDogRead a = ModuleRead (WatchDog a)
 withWatchDog
   :: ( MonadIO m
      , MonadMask m
-     , ConsFDataList FData (WatchDog a : mods)
      )
   => ModuleInitData (WatchDog a)
   -> (WatchDogRead a -> EffT mods es m b)
