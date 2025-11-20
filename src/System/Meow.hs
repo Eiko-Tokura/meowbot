@@ -40,10 +40,10 @@ type Mods =
   , CommandModule
   , RecvSentCQ
   , MeowActionQueue
-  , MeowConnection
   , SModule BotConfig
   , SModule WholeChat
   , SModule OtherData
+  , MeowConnection
   , BotGlobal
   , ConnectionManagerModule
   , MeowDatabase

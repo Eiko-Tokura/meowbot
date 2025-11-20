@@ -86,15 +86,15 @@ runBot bot meow = do
 
   initializeCounters botm.botId
 
-  AllData wc bc od <- embedEffT $ initAllData botconfig
   embedNoError
     $ effAddLogCat' (LogCat botm.botId)
-    $ runSModule_ od
-    $ runSModule_ wc
-    $ runSModule_ bc
     $ ( case botRunFlag bot of
           RunClient addr port -> void . withClientConnection addr port
           RunServer addr port ->        withServerConnection addr port
+      )
+    $ (\app -> do
+        AllData wc bc od <- embedEffT $ initAllData botconfig
+        runSModule_ od $ runSModule_ wc $ runSModule_ bc $ app
       )
     $ withMeowActionQueue
     $ withRecvSentCQ
@@ -131,9 +131,6 @@ withServerConnection addr port act = do
               )
   
         void . run $ $logInfo $ "Disconnected from client"
-
-      $logInfo "Server quits, restoring state and looping"
-
 
     ) `effCatch` \(e :: ErrorText "uncaught") -> do
       $logError $ "Uncaught Error In server: " <> toText e
