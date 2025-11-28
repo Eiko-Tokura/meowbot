@@ -5,13 +5,12 @@ import GHC.Generics (Generic)
 import Control.DeepSeq (NFData)
 
 data ChatModel
-  = OpenAI OpenAIModel
-  | DeepSeek DeepSeekModel
-  | Local LocalModel
-  | OpenRouter OpenRouterModel
+  = OpenAI      OpenAIModel
+  | DeepSeek    DeepSeekModel
+  | Local       LocalModel
+  | OpenRouter  OpenRouterModel
   | SiliconFlow SiliconFlowModel
-  | Anthropic AnthropicModel
-  | XcApi XcApiModel
+  | Anthropic   AnthropicModel
   deriving (Show, Read, Eq, Generic, NFData)
 
 data OpenAIModel      = GPT4oMini | GPT4o | O1Mini | O3Mini deriving (Show, Read, Eq, Generic, NFData)
@@ -20,7 +19,6 @@ data LocalModel       = Qwen3_30B | QwQ | Qwen2_5_32B | Command_R_Latest | Dummy
 data OpenRouterModel  = OR_DeepSeekV3_Free | OR_DeepSeekR1_Free | OR_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
 data SiliconFlowModel = SF_DeepSeekV3 | SF_DeepSeekR1 deriving (Show, Read, Eq, Generic, NFData)
 data AnthropicModel   = Claude_3_7 deriving (Show, Read, Eq, Generic, NFData)
-data XcApiModel       = XC_Claude_3_7 | XC_Claude_3_5 deriving (Show, Read, Eq, Generic, NFData)
 
 modelEndpoint :: ChatModel -> String
 modelEndpoint OpenAI {}      = "https://api.openai.com/v1/chat/completions"
@@ -30,7 +28,6 @@ modelEndpoint Local {}       = "http://10.52.1.55:11434/api/chat" -- ^ my local 
 modelEndpoint OpenRouter {}  = "https://openrouter.ai/api/v1/chat/completions"
 modelEndpoint SiliconFlow {} = "https://api.siliconflow.cn/v1/chat/completions"
 modelEndpoint Anthropic {}   = "https://api.anthropic.com/v1/messages"
-modelEndpoint XcApi {}       = "http://xcapi.top/v1/chat/completions"
 
 instance ToJSON ChatModel where
   toJSON (OpenAI GPT4oMini)              = "gpt-4o-mini"
@@ -50,6 +47,3 @@ instance ToJSON ChatModel where
   toJSON (SiliconFlow SF_DeepSeekV3)     = "deepseek-ai/DeepSeek-V3"
   toJSON (SiliconFlow SF_DeepSeekR1)     = "deepseek-ai/DeepSeek-R1"
   toJSON (Anthropic Claude_3_7)          = "claude-3.7-sonnet"
-  toJSON (XcApi XC_Claude_3_7)           = "[W2+]claude-3.7-sonnet"
-  toJSON (XcApi XC_Claude_3_5)           = "[W]claude-3.5-sonnet"
-

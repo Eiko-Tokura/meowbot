@@ -8,7 +8,7 @@ module External.ChatAPI
   , statusChatReadAPIKey, statusChatReadAPIKeyDefault
   , ChatModel(..)
   , OpenAIModel(..), DeepSeekModel(..), LocalModel(..)
-  , OpenRouterModel(..), SiliconFlowModel(..), AnthropicModel(..), XcApiModel(..)
+  , OpenRouterModel(..), SiliconFlowModel(..), AnthropicModel(..)
   , ChatParams(..), ChatSetting(..), ChatStatus(..), chatSettingAlternative, chatSettingMaybeWrapper
   , ChatAPI(..), APIKey(..)
   , EstimateTokens(..)
@@ -52,6 +52,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as TIO
 import qualified Data.Text.Lazy as TL
 import qualified Data.Text.Lazy.Encoding as TLE
+-- import qualified Data.Map.Strict as M
 
 -- | Modified ChatParams with tool support
 data ChatParams (md :: ChatModel) (ts :: k) = ChatParams
@@ -154,14 +155,6 @@ instance ChatAPI (SiliconFlow SF_DeepSeekV3) where
 instance ChatAPI (SiliconFlow SF_DeepSeekR1) where
   chatModel  = SiliconFlow SF_DeepSeekR1
   type ChatCompletionResponse (SiliconFlow SF_DeepSeekR1) = ChatCompletionResponseOpenAI
-
-instance ChatAPI (XcApi XC_Claude_3_5) where
-  chatModel  = XcApi XC_Claude_3_5
-  type ChatCompletionResponse (XcApi XC_Claude_3_5) = ChatCompletionResponseOpenAI
-
-instance ChatAPI (XcApi XC_Claude_3_7) where
-  chatModel  = XcApi XC_Claude_3_7
-  type ChatCompletionResponse (XcApi XC_Claude_3_7) = ChatCompletionResponseOpenAI
 
 data ChatCompletionResponseOpenAI = ChatCompletionResponseOpenAI
   { responseId :: Text
@@ -276,7 +269,6 @@ instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (OpenAI a) Message) where
 
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (OpenRouter b) Message)
 deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (SiliconFlow b) Message)
-deriving via (ModelDependent (OpenAI a) Message) instance ToJSON (ModelDependent (XcApi b) Message)
 
 instance {-# OVERLAPPABLE #-} ToJSON (ModelDependent (Local a) Message) where
   toJSON (ModelDependent (SystemMessage    c)  ) = A.object ["role" .= ("system" :: Text)   , "content" .= c]
@@ -315,7 +307,6 @@ instance ToJSON (ModelDependent (OpenAI a) ChatRequest) where
     <> [ "stream" .= stream | Just stream <- [stream chatReq] ]
 
 deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (SiliconFlow b) ChatRequest)
-deriving via (ModelDependent (OpenAI a) ChatRequest) instance ToJSON (ModelDependent (XcApi b) ChatRequest)
 
 instance ToJSON (ModelDependent (DeepSeek a) ChatRequest) where
   toJSON (ModelDependent chatReq) = A.object $
@@ -377,7 +368,6 @@ generateRequestBody param mSys mes = encode $ ModelDependent @md $
         OpenRouter _  -> Just False
         SiliconFlow _ -> Just False
         Anthropic _   -> Just False
-        XcApi _       -> Just False
     -- , tools       = Nothing
     }
 
@@ -441,6 +431,8 @@ data APIKey = APIKey
   , apiKeyXcApi       :: Maybe Text
   } deriving (Show, Read, Eq, Generic, NFData)
 
+-- type APIKeyMap = M.Map Text Text -- We can use this
+
 findApiKey :: ChatModel -> ChatSetting -> Maybe Text
 findApiKey (OpenAI _)      setting = apiKeyOpenAI      =<< systemApiKeys setting
 findApiKey (DeepSeek _)    setting = apiKeyDeepSeek    =<< systemApiKeys setting
@@ -448,7 +440,6 @@ findApiKey (Local _)       _       = Just "LOCAL_NO_API_KEY_NEEDED"
 findApiKey (OpenRouter _)  setting = apiKeyOpenRouter  =<< systemApiKeys setting
 findApiKey (SiliconFlow _) setting = apiKeySiliconFlow =<< systemApiKeys setting
 findApiKey (Anthropic _)   setting = apiKeyAnthropic   =<< systemApiKeys setting
-findApiKey (XcApi _)       setting = apiKeyXcApi       =<< systemApiKeys setting
 
 data GetAPIKey
   = NoAPIKeyRequired
@@ -461,7 +452,6 @@ getApiKeyByModel (Local _)    _         = NoAPIKeyRequired
 getApiKeyByModel (OpenRouter _) apiKey  = APIKeyRequired $ apiKeyOpenRouter apiKey
 getApiKeyByModel (SiliconFlow _) apiKey = APIKeyRequired $ apiKeySiliconFlow apiKey
 getApiKeyByModel (Anthropic _) apiKey   = APIKeyRequired $ apiKeyAnthropic apiKey
-getApiKeyByModel (XcApi _) apiKey       = APIKeyRequired $ apiKeyXcApi apiKey
 
 fetchChatCompletionResponse :: forall md ts m. (ChatAPI md, ConstraintList (ToolClass m) ts, MonadIO m) => Manager -> Int -> APIKey -> ChatParams md ts -> Maybe Message -> [Message] -> EffT '[ModelPricing, Logging m LogS] '[ErrorText "chat-error"] m (ChatCompletionResponse md, EstimateTokens)
 fetchChatCompletionResponse manager _ allApiKey model mSys msg = do
