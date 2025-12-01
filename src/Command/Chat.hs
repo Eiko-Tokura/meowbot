@@ -420,7 +420,7 @@ mergeChatStatus maxMessageInState cid newMsgs newStatus = do
       putType $ SM.insert cid
         chatState -- adding new messages to newest state
           { chatStatus = newStatus
-            { chatStatusMessages = strictTakeTail maxMessageInState $ chatStatusMessages (chatStatus chatState) ++ newMsgs
+            { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus chatState) ++ newMsgs
             }
           }
         allChatState
