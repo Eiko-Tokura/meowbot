@@ -28,6 +28,7 @@ import Control.Monad.Effect
 import Command.Cat.CatSet
 import Command.Hangman
 
+import Module.BotGlobal
 import Module.ConnectionManager
 import Module.Logging
 import Data.PersistModel
@@ -113,7 +114,9 @@ commandChat = BotCommand Chat $ botT $ do
                , (\(_,_,_,mid,_) -> mid) <$> mess
                , Nothing
                )
-
+  inGlobalBots <- case mUid of
+    Just uid' -> lift $ userIdInGlobalBots uid'
+    Nothing   -> lift $ return False
   cqmsg  <- MaybeT $ queries getNewMsg
   cqmsg3 <- queries $ getNewMsgN 3
   other_data <- query
@@ -140,7 +143,7 @@ commandChat = BotCommand Chat $ botT $ do
         Just noteList -> t <> "\n\n---\n\nNotes:\n" <> noteList
       appendCQHelp :: Text -> Text
       appendCQHelp t = t <> "\n\n---\n\n" <> T.intercalate "\n"
-        [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person who is replied to will be notified."
+        [ "You can include '[CQ:reply,id=<msg_id>]' (optional, at most one) to reply to a particular message with given msg_id. The person being replied to will be notified."
         , "You can include '[CQ:at,qq=<user_id>]' (optional, unlimited number) to mention a particular user with given user_id, they will be notified."
         ]
       msys = ChatSetting
@@ -314,7 +317,10 @@ commandChat = BotCommand Chat $ botT $ do
 
   -- determine If we should reply
   $(logDebug) "Determining if reply"
-  determineIfReply oneOffActive atReply mentionReply ignoredReaction activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
+
+  let shouldNotReply = inGlobalBots
+  determineIfReply shouldNotReply oneOffActive atReply mentionReply ignoredReaction activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
+
   $(logInfo) "Replying"
 
   breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
@@ -426,9 +432,10 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
-determineIfReply True _ _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
-determineIfReply oneOff atReply mentionReply ignoredReaction prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
+determineIfReply :: Bool -> Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
+determineIfReply True _ _ _ _ _ _ _ _ _ _ _ _ = MaybeT . pure $ Nothing
+determineIfReply _ True _ _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
+determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
@@ -473,8 +480,8 @@ determineIfReply oneOff atReply mentionReply ignoredReaction prob GroupChat{} cq
   MaybeT . pure $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
   MaybeT . pure $ notRateLimited
   MaybeT . pure $ notIgnoredReaction
-determineIfReply _ _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
+determineIfReply _ _ _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then MaybeT . pure $ Nothing
   else MaybeT . pure $ Just ()
-determineIfReply _ _ _ _ _ _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ _ _ _ _ _ _ _ _ _ = empty

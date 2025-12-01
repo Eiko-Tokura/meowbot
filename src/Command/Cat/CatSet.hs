@@ -68,8 +68,6 @@ modelsInUse :: CFList ChatAPI Proxy
   , OpenRouter  OR_DeepSeekV3_Free
   , SiliconFlow SF_DeepSeekV3
   , SiliconFlow SF_DeepSeekR1
-  , XcApi       XC_Claude_3_5
-  , XcApi       XC_Claude_3_7
   ]
 modelsInUse = def
 

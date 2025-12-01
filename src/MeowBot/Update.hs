@@ -29,13 +29,17 @@ import Module.RecvSentCQ
 forestSizeForEachChat = 20 -- ^ controls how many trees to keep in each chat room
 
 -- | Using a lifecycle event message, update the bot's self_id
-updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m ()
+--
+-- return True if the selfInfo is updated, False otherwise
+updateSelfInfo :: (MonadStateful OtherData m) => CQMessage -> m Bool
 updateSelfInfo cqmsg = do
   mselfInfo <- gets selfInfo
   let msid = self_id cqmsg
   case (mselfInfo, msid) of
-    (Nothing, Just sid) -> modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet NothingYet
-    _ -> return ()
+    (Nothing, Just sid) -> do
+      modify $ _selfInfo ?~ SelfInfo (coerce sid) NothingYet NothingYet
+      return True
+    _ -> return False
 
 -- | Specify the path to save the data according to the bot name.
 savedDataPath :: BotName -> FilePath

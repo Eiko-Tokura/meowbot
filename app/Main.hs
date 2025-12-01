@@ -91,7 +91,7 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   loggerInit <- pureEitherInWith id $ defaultLoggingFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
   dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
   promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs Nothing (Just 6001) (Just ["metrics"]) globalFlags
-  botGlobal  <- liftIO $ BotGlobalRead <$> newTVarIO []
+  botGlobal  <- liftIO $ BotGlobalRead <$> newTVarIO [] <*> newTVarIO mempty
 
   flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ withConnectionManager $ runBotGlobal botGlobal $ do
     $logDebug $ pack $ "Arguments: " ++ show args

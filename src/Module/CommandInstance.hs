@@ -53,6 +53,7 @@ import Utils.LabelKeys ()
 import Utils.List
 
 import qualified Data.HashMap.Strict as HM
+import qualified Data.Set as Set
 
 allPrivateCommands :: [BotCommand]
 allPrivateCommands = $(makeBotCommands $ filter (`notElem` [Retract]) [minBound .. maxBound :: CommandId])
@@ -179,7 +180,13 @@ instance
             case eventType cqmsg of
               LifeCycle -> do
                 $(logDebug) "LifeCycle event."
-                updateSelfInfo cqmsg
+                updated <- updateSelfInfo cqmsg
+                let selfId = self_id cqmsg
+                glbBotAccIds <- asksModule globalBotAccountIds
+                when updated . liftIO . atomically $ modifyTVar' glbBotAccIds $ \set -> case selfId of
+                  Just sid -> Set.insert sid set
+                  Nothing  -> set
+                
                 $(logDebug) "self info updated."
                 return [Label @"message_type" LifeCycle]
               HeartBeat -> return [Label @"message_type" HeartBeat]
