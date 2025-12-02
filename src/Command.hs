@@ -185,9 +185,9 @@ botCommandsWithIgnore cqmsg bcs = do
 _updateSavedDataDB :: Meow ()
 _updateSavedDataDB = do
   botid <- query
-  inUserGroups   <- map entityVal <$> runMeowDB (selectList [InUserGroupBotId   ==. botid] [])
-  inGroupGroups  <- map entityVal <$> runMeowDB (selectList [InGroupGroupBotId  ==. botid] [])
-  commandRulesDB <- map entityVal <$> runMeowDB (selectList [CommandRuleDBBotId ==. botid] [])
+  inUserGroups   <- map entityVal <$> runMeowCoreDB (selectList [InUserGroupBotId   ==. botid] [])
+  inGroupGroups  <- map entityVal <$> runMeowCoreDB (selectList [InGroupGroupBotId  ==. botid] [])
+  commandRulesDB <- map entityVal <$> runMeowCoreDB (selectList [CommandRuleDBBotId ==. botid] [])
   let
       userIds_userGroups   = [(inUserGroupUserId u, inUserGroupUserGroup u) | u <- inUserGroups]
       groupIds_groupGroups = [(inGroupGroupGroupId g, inGroupGroupGroupGroup g) | g <- inGroupGroups]

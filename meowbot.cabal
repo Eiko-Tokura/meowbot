@@ -14,7 +14,7 @@ name:               meowbot
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.5.0
+version:             1.1.0.0
 
 -- A short (one-line) description of the package.
 synopsis:           demo
@@ -205,6 +205,8 @@ library meowbot-lib
                    , Data.FilePathFor
                    , Data.HList
                    , Data.PersistModel
+                   , Data.PersistModel.Core
+                   , Data.PersistModel.Data
                    , Data.Template
                    , Data.UpdateMaybe
                    , External.ChatAPI
@@ -347,7 +349,8 @@ library meowbot-lib
                  , mtl
                  , parallel
                  , persistent
-                 , persistent-sqlite
+                 , persistent-postgresql
+                 , postgresql-simple
                  , persistent-template
                  , pretty-simple
                  , probabilist

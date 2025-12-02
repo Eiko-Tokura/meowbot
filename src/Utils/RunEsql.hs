@@ -1,5 +1,8 @@
 module Utils.RunEsql
-  ( runMeowDB, DB, askDB
+  ( runMeowCoreDB, runMeowDataDB
+  , DB
+  , askCoreDB, askDataDB
+  , runRawPostgreSqlPool
   , module Database.Esqueleto.Experimental
   ) where
 

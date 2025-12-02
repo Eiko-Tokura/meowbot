@@ -73,7 +73,7 @@ pingpongOptions = defaultPingPongOptions
   -- , pongTimeout  = 30
   -- }
 
-runBot :: BotInstance -> Meow a -> EffT '[BotGlobal, ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[ErrorText "meowdb"] IO ()
+runBot :: BotInstance -> Meow a -> EffT '[BotGlobal, ConnectionManagerModule, MeowDataDb, MeowCoreDb, PrometheusMan, LoggingModule] '[ErrorText "meowCoreDb"] IO ()
 runBot bot meow = do
   botm     <- embedEffT $ botInstanceToModule bot
   glbMesChan <- asksModule globalMessageChannel
@@ -107,7 +107,7 @@ runBot bot meow = do
     $ withLogDatabase
     $ meow
 
-runBots :: [BotInstance] -> EffT '[BotGlobal, ConnectionManagerModule, MeowDatabase, PrometheusMan, LoggingModule] '[] IO ()
+runBots :: [BotInstance] -> EffT '[BotGlobal, ConnectionManagerModule, MeowDataDb, MeowCoreDb, PrometheusMan, LoggingModule] '[] IO ()
 runBots bots = mapM_ (\bot -> forkEffT $ runBot bot botLoop) bots >> liftIO (threadDelay maxBound)
 
 withServerConnection
@@ -195,7 +195,7 @@ botInstanceToModule bot@(BotInstance runFlag identityFlags commandFlags mode pro
           }
     return botModules
 
-initAllData :: BotConfig -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "meowdb"] IO AllData
+initAllData :: BotConfig -> EffT '[MeowCoreDb, LoggingModule] '[ErrorText "meowCoreDb"] IO AllData
 initAllData botconfig = do
   let mods = botModules botconfig
       botid = botId mods
@@ -251,16 +251,16 @@ loadSavedDataFile botName = do
       $(logInfo) "No saved data file found! o.o"
       effThrow $ errorText @"LoadSavedDataFile" "No saved data file found! o.o"
 
-loadSavedDataDB :: BotId -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "LoadSavedDataDB", ErrorText "meowdb"] IO SavedData
+loadSavedDataDB :: BotId -> EffT '[MeowCoreDb, LoggingModule] '[ErrorText "LoadSavedDataDB", ErrorText "meowCoreDb"] IO SavedData
 loadSavedDataDB botid = do
   _                    <- fmap  entityVal      . effMaybeInWith (errorText @"LoadSavedDataDB" $ "BotId" <> toText botid <> "Not found")
-                            . fmap listToMaybe $ runMeowDB (selectList [BotSettingBotId ==. botid] [LimitTo 1])
-  botSettingsPerChat   <- map entityVal <$> runMeowDB (selectList [BotSettingPerChatBotId ==. botid] [])
-  inUserGroups         <- map entityVal <$> runMeowDB (selectList [InUserGroupBotId ==. botid] [])
-  inGroupGroups        <- map entityVal <$> runMeowDB (selectList [InGroupGroupBotId ==. botid] [])
-  commandRulesDB       <- map entityVal <$> runMeowDB (selectList [CommandRuleDBBotId ==. botid] [])
-  savedAdditionalDatas <- map entityVal <$> runMeowDB (selectList [SavedAdditionalDataBotId ==. botid] [])
-  bookDBs              <- map entityVal <$> runMeowDB (selectList [] [])
+                            . fmap listToMaybe $ runMeowCoreDB (selectList [BotSettingBotId ==. botid] [LimitTo 1])
+  botSettingsPerChat   <- map entityVal <$> runMeowCoreDB (selectList [BotSettingPerChatBotId ==. botid] [])
+  inUserGroups         <- map entityVal <$> runMeowCoreDB (selectList [InUserGroupBotId ==. botid] [])
+  inGroupGroups        <- map entityVal <$> runMeowCoreDB (selectList [InGroupGroupBotId ==. botid] [])
+  commandRulesDB       <- map entityVal <$> runMeowCoreDB (selectList [CommandRuleDBBotId ==. botid] [])
+  savedAdditionalDatas <- map entityVal <$> runMeowCoreDB (selectList [SavedAdditionalDataBotId ==. botid] [])
+  bookDBs              <- map entityVal <$> runMeowCoreDB (selectList [] [])
   let
       chatIds_chatSettings =
         [( botSettingPerChatChatId c, def
@@ -298,11 +298,11 @@ loadSavedDataDB botid = do
     , savedAdditional = savedAdditionalData
     }
 
-newSavedDataDB :: BotConfig -> SavedData -> EffT '[MeowDatabase, LoggingModule] '[ErrorText "meowdb"] IO ()
+newSavedDataDB :: BotConfig -> SavedData -> EffT '[MeowCoreDb, LoggingModule] '[ErrorText "meowCoreDb"] IO ()
 newSavedDataDB botconfig sd = do
   let botname = nameOfBot (botModules botconfig)
       botid = botId $ botModules botconfig
-  runMeowDB (do
+  runMeowCoreDB (do
     insert_ $ def
       { botSettingBotName                 = maybeBotName botname
       , botSettingBotId                   = botId $ botModules botconfig

@@ -9,8 +9,8 @@ import Control.Monad.Effect
 import Control.Monad.Logger
 import Control.System
 import Data.Coerce
-import Data.PersistModel
-import Database.Persist.Sqlite
+import Data.PersistModel.Data
+import Database.Persist.Sql
 import MeowBot.BotStructure
 import Module.Logging
 import Module.MeowTypes
@@ -26,11 +26,11 @@ LogDatabase
 withLogDatabase :: (Monad m, ConsFDataList FData (LogDatabase : mods)) => EffT (LogDatabase : mods) es m a -> EffT mods es m a
 withLogDatabase = runEffTOuter_ LogDatabaseRead LogDatabaseState
 
-instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDatabase] mods
+instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDataDb] mods
   => Loadable c LogDatabase mods ies where
   withModule _ = runEffTOuter_ LogDatabaseRead LogDatabaseState
 
-instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDatabase] mods
+instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDataDb] mods
   => EventLoop c LogDatabase mods es where
   afterEvent = do
     RecvSentCQRead {..} <- queryModule @RecvSentCQ
@@ -43,7 +43,7 @@ instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModu
     case (mcq, mNewMessage) of
       (Just cq, Just newMessage) -> when (eventType cq `elem` [PrivateMessage, GroupMessage, SelfMessage]) $ do
         $logDebug "Inserting a new message into the database."
-        runMeowDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowdb") ->
+        runMeowDataDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowDataDb") ->
           $logError $ "While trying to insert new message:" <> dbError
           )
       _    -> do

@@ -29,12 +29,12 @@ botHandleRequestEvent cqmsg str = do
   botId      <- query
   case requestType cqmsg of
     Just (RequestFriend mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      mBotReqSetting <- lift $ runMeowDB $ getBy $ UniqueBotRequestSettingBotId botId
+      mBotReqSetting <- lift $ runMeowCoreDB $ getBy $ UniqueBotRequestSettingBotId botId
       let mUid = cqmsg.userId
 
       case (mBotReqSetting, mUid) of
         (Just (Entity _ botReqSetting), Just uid) -> do
-          approve <- lift $ runMeowDB $ shouldApproveFriendRequest botReqSetting uid
+          approve <- lift $ runMeowCoreDB $ shouldApproveFriendRequest botReqSetting uid
           guard approve
         _ -> return ()
 
@@ -43,12 +43,12 @@ botHandleRequestEvent cqmsg str = do
       $(logInfo) $ " -> Approving the request."
       return . pure . pure $ BAActionAPI $ SetFriendAddRequest uid flag ""
     Just (RequestGroup RequestGroupInvite mcomment (Just flag)) -> fromMaybe (pure []) <=< runMaybeT $ do
-      mBotReqSetting <- lift $ runMeowDB $ getBy $ UniqueBotRequestSettingBotId botId
+      mBotReqSetting <- lift $ runMeowCoreDB $ getBy $ UniqueBotRequestSettingBotId botId
 
       let mGid = cqmsg.groupId
       case (mBotReqSetting, mGid) of
         (Just (Entity _ botReqSetting), Just gid) -> do
-          approve <- lift $ runMeowDB $ shouldApproveGroupInvite botReqSetting gid
+          approve <- lift $ runMeowCoreDB $ shouldApproveGroupInvite botReqSetting gid
           guard approve
         _ -> return ()
 

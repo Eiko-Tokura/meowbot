@@ -49,7 +49,7 @@ import qualified MeowBot.Parser as MP
 import Data.Sequence (Seq)
 import Data.HashMap.Strict (HashMap)
 
-import Database.Persist.Sqlite
+import Database.Persist.Sql
 import Module.Logging
 
 newtype BotId = BotId { unBotId :: Int } deriving (Show, Eq, Ord, Read, Generic)

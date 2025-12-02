@@ -54,7 +54,7 @@ generateCostRecord chatModel apiKey time mcm bid cid wid consumption mActualCost
 -- | For a specific (bot, chat) pair, find the associated cost model and wallet
 -- first finds chat-specific ownership, then global ownership, otherwise Nothing
 --
--- can be wrapped in runMeowDB as atomic if needed
+-- can be wrapped in runMeowCoreDB as atomic if needed
 findWalletAssociatedToBotChat :: BotId -> ChatId -> DB (Maybe (CostModel, WalletId))
 findWalletAssociatedToBotChat bid cid = do
   mBotChatRecord <- selectFirst [BotCostModelPerChatBotId ==. bid, BotCostModelPerChatChatId ==. cid] [Desc BotCostModelPerChatInserted]

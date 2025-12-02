@@ -6,7 +6,7 @@ import Control.Monad.Effect
 import Command
 import Data.List (sortOn)
 import Data.Ord (Down(..))
-import Data.PersistModel
+import Data.PersistModel.Data
 import MeowBot
 import MeowBot.GetInfo
 import MeowBot.Parser
@@ -54,7 +54,7 @@ statisticsCommandToAction _ (PrivateChat {}, _)   (StatProximity {}) = Nothing
 statisticsAction :: Maybe String -> ChatId -> StatisticsAction -> Meow (Maybe [BotAction])
 statisticsAction mName scid = \case
   AStatActivity bid cid days users -> do
-    pool <- askDB
+    pool <- askDataDB
     now <- liftIO getCurrentTime
     let startDay = addUTCTime (negate $ fromIntegral (days.unNDays * 86400)) now
     fetchStat <- liftIO . async $ do -- ^ doing the database fetch asynchronously, avoid blocking the main thread
@@ -98,8 +98,8 @@ statisticsAction mName scid = \case
     return $ Just [BAPureAsync fetchStat]
 
   AStatProximity bid cid days users -> do
-    pool <- askDB
-    fetchStat <- liftIO . async $ flip runSqlPool pool $ do
+    pool <- askDataDB
+    fetchStat <- liftIO . async $ flip runRawPostgreSqlPool pool $ do
       result <- statProximity bid cid days users
       let toPairs = weightPairsToPoints
                     [ ( (r.sprUserId1, unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r)

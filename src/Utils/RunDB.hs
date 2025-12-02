@@ -1,8 +1,9 @@
 module Utils.RunDB
-  ( DB, askDB
+  ( DB, askCoreDB, askDataDB
   , module Database.Persist.Sql
   , module Database.Persist
   , module Module.MeowTypes
+  , PG.runRawPostgreSqlPool
   ) where
 
 import Control.Monad.Effect
@@ -12,6 +13,10 @@ import Database.Persist.Sql hiding (In)
 import MeowBot.Prelude
 import Module.MeowTypes
 import Module.Database.Sqlite
+import qualified  Module.Database.PostgreSql as PG
 
-askDB :: (MeowDatabase `In` mods) => EffT mods es IO (Pool SqlBackend)
-askDB = asksModule @MeowDatabase dbPool
+askCoreDB :: (MeowCoreDb `In` mods) => EffT mods es IO (Pool (PG.RawPostgresql SqlBackend))
+askCoreDB = asksModule @MeowCoreDb PG.dbPool
+
+askDataDB :: (MeowDataDb `In` mods) => EffT mods es IO (Pool (PG.RawPostgresql SqlBackend))
+askDataDB = asksModule @MeowDataDb PG.dbPool

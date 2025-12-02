@@ -36,7 +36,7 @@ logBotStatistics chatId StatRecv = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
   let apiKey' = "STATISTICS"
-  runMeowDB $ do
+  runMeowCoreDB $ do
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
@@ -70,7 +70,7 @@ logBotStatistics chatId StatSent = do
   day <- liftIO $ utctDay <$> getCurrentTime
   botId <- query
   let apiKey' = "STATISTICS"
-  runMeowDB $ do
+  runMeowCoreDB $ do
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def
@@ -116,11 +116,11 @@ logBotStatistics chatId (StatTokens ChatStatus { chatEstimateTokens = EstimateTo
   managedCounter "meowbot_total_api_call_skips"  labels (AddCounter apiSkips)
   managedCounter "meowbot_total_input_estimate_tokens"  labels (AddCounter inputTokens)
   managedCounter "meowbot_total_output_estimate_tokens" labels (AddCounter outputTokens)
-  costRecord <- runMeowDB $ insertApiCostRecord utcTime botId chatId (model <$> apiInfo) (apiKey <$> apiInfo) consumption
+  costRecord <- runMeowCoreDB $ insertApiCostRecord utcTime botId chatId (model <$> apiInfo) (apiKey <$> apiInfo) consumption
   let labelsWid = labels <> [ LabelMaybe @"wallet_id" (apiCostRecordWalletId =<< costRecord) ]
   managedGauge   "meowbot_total_actual_cost"  labelsWid (GaugeAdd (maybe 0 coerce $ apiCostRecordActualCost =<< costRecord))
   managedGauge   "meowbot_total_nominal_cost" labelsWid (GaugeAdd (maybe 0 coerce $ apiCostRecordNominalCost =<< costRecord))
-  runMeowDB $ do
+  runMeowCoreDB $ do
     upsertBy
       (UniqueBotStatisticsPerApiKeyPerChatPerDay apiKey' botId chatId day)
       def

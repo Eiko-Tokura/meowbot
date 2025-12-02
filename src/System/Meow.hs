@@ -46,13 +46,14 @@ type Mods =
   , MeowConnection
   , BotGlobal
   , ConnectionManagerModule
-  , MeowDatabase
+  , MeowDataDb
+  , MeowCoreDb
   , PrometheusMan
   , LoggingModule
   ]
 
 -- | These exceptions needs restarting the bot
-type MeowErrs = '[ErrorText "recv_connection", ErrorText "send_connection", ErrorText "meowdb"]
+type MeowErrs = '[ErrorText "recv_connection", ErrorText "send_connection", ErrorText "meowCoreDb"]
 
 -- | The monads the commands run in
 type MeowT mods m = EffT mods MeowErrs m

@@ -22,12 +22,17 @@ import System.Cat
 import Module.BotGlobal
 import Module.Logging
 import Module.Logging.Logger
+import Module.Database (DB)
 import Module.Database.Sqlite
+import Module.Database.PostgreSql
 import Module.Prometheus
 import Module.Prometheus.Manager
 import Module.ConnectionManager
 import qualified Data.Text.IO as TIO
-import Data.PersistModel (migrateAll)
+import Data.PersistModel (migrateCore)
+import Data.PersistModel.Data (migrateData)
+import qualified Data.ByteString.Char8 as BC
+import Text.Read (readMaybe)
 
 import Debug.Trace
 
@@ -73,6 +78,16 @@ parseArgs = (,) <$>
       nonFlag = require (not . ("--" `isPrefixOf`)) getItem
       commandIdHint = "commandId must be one of " ++ show [minBound..maxBound :: CommandId]
 
+meowPostgresFromEnv :: String -> Maybe String -> Migration -> EffT '[] '[Text] IO (ModuleInitData (DB name PostgreSql))
+meowPostgresFromEnv prefix mDefConnString mig = do
+  connString <- liftIO (lookupEnv $ prefix <> "DB_CONN_STRING") >>= \case
+    Nothing -> pureEitherInWith id $ maybe (Left @Text $ "Environment variable " <> toText prefix <>"DB_CONN_STRING is not set.") Right mDefConnString
+    Just "" -> effThrow @Text $ "Environment variable " <> toText prefix <> "DB_CONN_STRING is not set or empty."
+    Just r  -> return r
+  poolSize   <- liftIO $ (\ms -> fromMaybe 2 $ readMaybe =<< ms) <$> lookupEnv (prefix <> "DB_POOL_SIZE")
+  migAction  <- liftIO $ (readMaybe =<<) <$> lookupEnv (prefix <> "DB_MIGRATION_ACTION")
+  return $ PostgreSqlInitData (BC.pack connString) mig poolSize migAction
+
 -- | The main function of the bot.
 --  It will parse the command line arguments and start the bot.
 --
@@ -89,11 +104,14 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   let baseLogger = stdoLogger <> fileLogger
 
   loggerInit <- pureEitherInWith id $ defaultLoggingFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
-  dbInit     <- defaultSqliteFromArgs (Just "meowbot.db") migrateAll globalFlags
+  coreDbInit <- meowPostgresFromEnv "CORE_" Nothing migrateCore
+  -- defaultPostgresFromArgs (Just "meowbot") migrateCore globalFlags
+  dataDbInit <- meowPostgresFromEnv "DATA_" Nothing migrateData
+  -- defaultPostgresFromArgs Nothing migrateData globalFlags
   promInit   <- pureEitherInWith id $ defaultPrometheusFromArgs Nothing (Just 6001) (Just ["metrics"]) globalFlags
   botGlobal  <- liftIO $ BotGlobalRead <$> newTVarIO [] <*> newTVarIO mempty
 
-  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule dbInit $ withConnectionManager $ runBotGlobal botGlobal $ do
+  flip effCatch (\(e :: ErrorText "database_print_migration") -> liftIO $ TIO.putStrLn (toText e)) $ withModule loggerInit $ withModule promInit $ withPrometheusMan $ withModule coreDbInit $ withModule dataDbInit $ withConnectionManager $ runBotGlobal botGlobal $ do
     $logDebug $ pack $ "Arguments: " ++ show args
     $logDebug $ pack $ "Parsed: " ++ show parsed
     case parsed of

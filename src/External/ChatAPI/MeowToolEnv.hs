@@ -94,20 +94,20 @@ isGroupChat = do
     _                  -> False
 {-# INLINE isGroupChat #-}
 
-hasCostModel :: (MeowDatabase `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
+hasCostModel :: (MeowCoreDb `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
 hasCostModel = fmap (fromMaybe False) . runMaybeT $ do
   botid <- lift getBotId
   cid   <- MaybeT getCid
-  srvCk <- lift $ runMeowDBMeowTool $ serviceBalanceCheck botid cid
+  srvCk <- lift $ runMeowCoreDBMeowTool $ serviceBalanceCheck botid cid
   case srvCk of
     NoCostModelAssigned -> return False
     _                   -> return True
 
-hasPositiveCostModel :: (MeowDatabase `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
+hasPositiveCostModel :: (MeowCoreDb `In` mods, MeowAllData mods) => MeowToolEnv mods Bool
 hasPositiveCostModel = fmap (fromMaybe False) . runMaybeT $ do
   botid <- lift getBotId
   cid   <- MaybeT getCid
-  srvCk <- lift $ runMeowDBMeowTool $ serviceBalanceCheck botid cid
+  srvCk <- lift $ runMeowCoreDBMeowTool $ serviceBalanceCheck botid cid
   case srvCk of
     NoCostModelAssigned -> return False
     WalletUnlimited _   -> return False
@@ -117,5 +117,5 @@ embedMeowToolEnv :: (SubList FData mods Mods, MeowAllData mods) => MeowToolEnv m
 embedMeowToolEnv = embedEffT
 {-# INLINE embedMeowToolEnv #-}
 
-runMeowDBMeowTool :: (MeowDatabase `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv mods b
-runMeowDBMeowTool = runMeowDB
+runMeowCoreDBMeowTool :: (MeowCoreDb `In` mods) => ReaderT SqlBackend IO b -> MeowToolEnv mods b
+runMeowCoreDBMeowTool = runMeowCoreDB

@@ -29,7 +29,7 @@ data NoteToolAdd
 data NoteToolReplace
 data NoteToolDelete
 
-instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolRead where
+instance (MeowAllData mods, MeowCoreDb `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolRead where
   type ToolInput NoteToolRead = ParamToData (ObjectP0 '[IntP "note_id" "note_id of the note to read"])
   type ToolOutput NoteToolRead = ParamToData (ObjectP0 --"note" "retrived note"
     '[ IntP "note_id" "note_id of the note"
@@ -44,12 +44,12 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => To
   toolHandler _ _ ((IntT note_id) :%* ObjT0Nil) = do
     botname <- lift getBotName
     cid  <- baseMaybeInWith (NoteReadError "no cid found") getCid
-    note <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
+    note <- lift $ fmap (fmap entityVal) . runMeowCoreDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
     case note of
       Just (AssistantNote _ _ _ title content time) -> return $ IntT note_id :%* StringT title :%* StringT content :%* StringT (toText time) :%* ObjT0Nil
       Nothing -> effThrow $ NoteReadError "Note not found"
 
-instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolAdd where
+instance (MeowAllData mods, MeowCoreDb `In` mods, LogDatabase `In` mods) => ToolClass (MeowToolEnv mods) NoteToolAdd where
   type ToolInput NoteToolAdd = ParamToData (ObjectP0 --"note" "the note to add"
     '[ StringP "title" "the note title should be informative"
      , StringP "content" "the note content, you can include more detailed information here"
@@ -64,10 +64,10 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => To
     cid <- baseMaybeInWith (NoteAddError "no cid found") getCid
     time <- liftIO getCurrentTime
     maxNoteId <- lift
-      $ fmap (maybe 0 (assistantNoteNoteId . entityVal)) . runMeowDBMeowTool
+      $ fmap (maybe 0 (assistantNoteNoteId . entityVal)) . runMeowCoreDBMeowTool
       $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid] [Desc AssistantNoteNoteId, LimitTo 1]
     let newNoteId = maxNoteId + 1
-    lift $ runMeowDBMeowTool $ insert $ AssistantNote
+    lift $ runMeowCoreDBMeowTool $ insert $ AssistantNote
       { assistantNoteBotName = botname
       , assistantNoteChatId = cid
       , assistantNoteNoteId = newNoteId
@@ -77,7 +77,7 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods) => To
       }
     return $ IntT newNoteId :%* ObjT0Nil
 
-instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
+instance (MeowAllData mods, MeowCoreDb `In` mods, LogDatabase `In` mods)
   => ToolClass (MeowToolEnv mods) NoteToolReplace where
   type ToolInput NoteToolReplace = ParamToData (ObjectP0 --"note" "the note to replace"
     '[ IntP "note_id" "note_id of the note to replace"
@@ -93,9 +93,9 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
     botname <- lift getBotName
     cid <- baseMaybeInWith (NoteReplaceError "no cid found") getCid
     time <- liftIO getCurrentTime
-    note <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
+    note <- lift $ fmap (fmap entityVal) . runMeowCoreDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id] []
     case note of
-      Just _ -> lift $ runMeowDBMeowTool $ updateWhere
+      Just _ -> lift $ runMeowCoreDBMeowTool $ updateWhere
         [ AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId ==. note_id ]
         [ AssistantNoteTitle =. title
         , AssistantNoteContent =. content
@@ -104,7 +104,7 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
       Nothing -> effThrow $ NoteReplaceError "Note not found"
     return $ IntT note_id :%* ObjT0Nil
 
-instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
+instance (MeowAllData mods, MeowCoreDb `In` mods, LogDatabase `In` mods)
   => ToolClass (MeowToolEnv mods) NoteToolDelete where
   type ToolInput NoteToolDelete  = ParamToData (ObjectP0 '[ArrayPInt "note_id" "array of note_id to delete"])
   type ToolOutput NoteToolDelete = ParamToData (ObjectP0 '[StringP "result" "the result of the deletion"])
@@ -115,16 +115,16 @@ instance (MeowAllData mods, MeowDatabase `In` mods, LogDatabase `In` mods)
   toolHandler _ _ ((ArrayT note_ids) :%* ObjT0Nil) = do
     botname <- lift getBotName
     cid <- baseMaybeInWith (NoteDeleteError "no cid found") getCid
-    note <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids] []
+    note <- lift $ fmap (fmap entityVal) . runMeowCoreDBMeowTool $ selectFirst [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids] []
     case note of
-      Just _ -> lift $ runMeowDBMeowTool $ deleteWhere [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids]
+      Just _ -> lift $ runMeowCoreDBMeowTool $ deleteWhere [AssistantNoteBotName ==. botname, AssistantNoteChatId ==. cid, AssistantNoteNoteId <-. note_ids]
       Nothing -> effThrow $ NoteDeleteError "Note not found"
     return $ StringT "success" :%* ObjT0Nil
 
 listNoteTitleAndContents :: BotName -> ChatId -> Meow [(Int, (Text, Text))]
 listNoteTitleAndContents botname cid
   = fmap (fmap (\(Entity _ note) -> (assistantNoteNoteId note, (assistantNoteTitle note, assistantNoteContent note))))
-  . runMeowDB $ selectList [AssistantNoteBotName ==. maybeBotName botname, AssistantNoteChatId ==. cid] []
+  . runMeowCoreDB $ selectList [AssistantNoteBotName ==. maybeBotName botname, AssistantNoteChatId ==. cid] []
 
 -- | Get the note listing, including the note_id, title and content (truncated to 20 characters)
 getNoteListing :: BotName -> ChatId -> Meow (Maybe Text)
@@ -180,7 +180,7 @@ data CronTabTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) CronTabTool where
   type ToolInput CronTabTool = ParamToData
@@ -201,7 +201,7 @@ instance
     botname <- lift getBotName
     cid <- baseMaybeInWith (TimedTaskToolError  "no ChatId found") getCid
     cronText <- pureEitherInWith (\t -> TimedTaskToolError $ "invalid crontab format: " <> toText t) $ validateCronText unVerifiedCronText
-    cronId <- lift $ runMeowDBMeowTool $ insert $ BotCronJob
+    cronId <- lift $ runMeowCoreDBMeowTool $ insert $ BotCronJob
       { botCronJobBotName          = botname
       , botCronJobBotId            = botId
       , botCronJobChatId           = Just cid
@@ -217,7 +217,7 @@ data CronTabList
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) CronTabList where
   type ToolInput CronTabList = ParamToData (ObjectP0 '[])
@@ -229,7 +229,7 @@ instance
   toolHandler _ _ ObjT0Nil = do
     botId   <- lift getBotId
     cid <- baseMaybeInWith (CronTabListError "no ChatId found") getCid
-    cronJobs <- lift $ runMeowDBMeowTool $ selectList [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid] []
+    cronJobs <- lift $ runMeowCoreDBMeowTool $ selectList [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid] []
     let cronJobsJson = map cronTabDisplayText cronJobs
     return $ StringT (T.intercalate "\n" cronJobsJson) :%* ObjT0Nil
 
@@ -238,7 +238,7 @@ data CronTabDelete
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) CronTabDelete where
   type ToolInput CronTabDelete = ParamToData (ObjectP0 '[ArrayPInt "cron_id" "list of cron job IDs to delete"])
@@ -250,7 +250,7 @@ instance
   toolHandler _ _ ((ArrayT cronIds) :%* ObjT0Nil) = do
     botId <- lift getBotId
     cid <- baseMaybeInWith (CronTabDeleteError "no ChatId found") getCid
-    lift $ runMeowDBMeowTool $ deleteWhere [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid, BotCronJobId <-. map intToKey cronIds]
+    lift $ runMeowCoreDBMeowTool $ deleteWhere [BotCronJobBotId ==. botId, BotCronJobChatId ==. Just cid, BotCronJobId <-. map intToKey cronIds]
     return $ StringT "success" :%* ObjT0Nil
 
 data SetEssenceMessage
@@ -258,7 +258,7 @@ data SetEssenceMessage
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) SetEssenceMessage where
   type ToolInput SetEssenceMessage = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to set as essence"])
@@ -284,7 +284,7 @@ data DeleteMessageTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) DeleteMessageTool where
   type ToolInput DeleteMessageTool = ParamToData (ObjectP0 '[IntP "message_id" "the message_id of the message to delete"])
@@ -309,7 +309,7 @@ data SetGroupBanTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) SetGroupBanTool where
   type ToolInput SetGroupBanTool  = ParamToData (ObjectP0
@@ -346,7 +346,7 @@ data LeaveGroupTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) LeaveGroupTool where
   type ToolInput LeaveGroupTool = ParamToData (ObjectP0 '[])
@@ -372,7 +372,7 @@ data BlackListUserTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) BlackListUserTool where
   type ToolInput BlackListUserTool  = ParamToData (ObjectP0
@@ -399,7 +399,7 @@ instance
     botname <- lift getBotName
     botid   <- lift getBotId
     time    <- liftIO getCurrentTime
-    _ <- lift $ runMeowDBMeowTool $ insert_
+    _ <- lift $ runMeowCoreDBMeowTool $ insert_
       (BotUserBlackList
         { botUserBlackListBotId          = botid
         , botUserBlackListUserId         = UserId userId
@@ -419,7 +419,7 @@ data BlackListListingTool
 instance
   ( In MeowActionQueue mods
   , In LogDatabase mods
-  , In MeowDatabase mods
+  , In MeowCoreDb mods
   , MeowAllData mods
   ) => ToolClass (MeowToolEnv mods) BlackListListingTool where
   type ToolInput BlackListListingTool = ParamToData (ObjectP0 '[])
@@ -439,7 +439,7 @@ instance
     botid   <- lift getBotId
     time    <- liftIO getCurrentTime
     -- | run an esqueleto query to get all blacklisted users in the current chat for the current bot, for each user only get the latest entry, i.e. for each BotUserBlackListUserId group return the row with maximal BotUserBlackListTime
-    bls <- lift $ fmap (fmap entityVal) . runMeowDBMeowTool $ E.select $ do
+    bls <- lift $ fmap (fmap entityVal) . runMeowCoreDBMeowTool $ E.select $ do
       bl <- E.from $ E.table @BotUserBlackList
       E.where_ (     bl E.^. BotUserBlackListBotId  E.==. E.val  botid
                E.&&. bl E.^. BotUserBlackListChatId E.==. E.just (E.val cid)
@@ -475,7 +475,7 @@ instance
 -- | A helper function to compute whether a setting is enabled from the database.
 computeSettingFromDB
   :: ( In LogDatabase mods
-     , In MeowDatabase mods
+     , In MeowCoreDb mods
      , MeowAllData mods
      )
   => (BotSetting -> Maybe b) -> (BotSettingPerChat -> Maybe b) -> MeowToolEnv mods (Maybe b)
@@ -483,9 +483,9 @@ computeSettingFromDB gSel lSel = fmap (>>= id) . runMaybeT $ do
   botId <- lift getBotId
   cid <- MaybeT getCid
   mGlobal <- do
-    grec <- MaybeT $ runMeowDBMeowTool $ selectFirst [BotSettingBotId ==. botId] []
+    grec <- MaybeT $ runMeowCoreDBMeowTool $ selectFirst [BotSettingBotId ==. botId] []
     return $ gSel $ entityVal grec
   mLocal <- runMaybeT $ do
-    localSetting <- MaybeT . lift . runMeowDBMeowTool $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botId] []
+    localSetting <- MaybeT . lift . runMeowCoreDBMeowTool $ selectFirst [BotSettingPerChatChatId ==. cid, BotSettingPerChatBotId ==. botId] []
     MaybeT . pure $ lSel $ entityVal localSetting
   return $ mLocal <|> mGlobal

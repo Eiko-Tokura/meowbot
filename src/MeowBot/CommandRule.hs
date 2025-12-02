@@ -3,7 +3,6 @@ module MeowBot.CommandRule where
 
 import Control.DeepSeq
 import Database.Persist
-import Database.Persist.Sqlite
 import GHC.Generics (Generic)
 import Language.Haskell.TH
 import MeowBot.Data.ChatId

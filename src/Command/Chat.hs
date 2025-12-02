@@ -127,10 +127,10 @@ commandChat = BotCommand Chat $ botT $ do
   utcTime    <- liftIO getCurrentTime
   ConnectionManagerModuleRead man timeout <- lift askModule
   noteListing <- lift $ getNoteListing botname cid
-  botSetting        <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotId botid)
-  botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowDB $ getBy (UniqueBotIdChatId botid cid)
+  botSetting        <- lift $ fmap (fmap entityVal) . runMeowCoreDB $ getBy (UniqueBotId botid)
+  botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowCoreDB $ getBy (UniqueBotIdChatId botid cid)
   botUserBlackList  <- lift $ fmap (fmap entityVal) $ case mUid of
-    Just uid' -> runMeowDB $ selectFirst
+    Just uid' -> runMeowCoreDB $ selectFirst
         [ BotUserBlackListBotId ==. botid
         , BotUserBlackListUserId ==. uid'
         , BotUserBlackListChatId ==. Just cid
@@ -323,7 +323,7 @@ commandChat = BotCommand Chat $ botT $ do
 
   $(logInfo) "Replying"
 
-  breakAction <- lift . runMeowDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
+  breakAction <- lift . runMeowCoreDB $ serviceBalanceGenerateActionCheckNotification botname botid cid
   LoggingRead logger <- lift (askModule @LoggingModule)
 
   case breakAction of
