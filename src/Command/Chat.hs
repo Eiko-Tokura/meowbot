@@ -350,29 +350,29 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
   let mentioned = case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let thrSeconds = 300
+  let thrSeconds = 120
       thrReplyCount = 3
-  let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
+  let -- | if last 120 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
                           (Foldable.toList (replyTimes st))
                           )
-      rateLimitChance | recentReplyCount >= thrReplyCount + 1
+      notRateLimitChance | recentReplyCount >= thrReplyCount + 1
         = Just
-        $ 0.5 ** (fromIntegral recentReplyCount - fromIntegral thrReplyCount)
+        $ 0.8 ** (fromIntegral recentReplyCount - fromIntegral thrReplyCount)
                       | otherwise = Nothing
-      rateLimited = maybe False (< chance2) rateLimitChance
+      rateLimited = maybe False (< chance2) notRateLimitChance
   lift $ $(logDebug) $ T.intercalate "\n"
     [ "recentTimes: " <> tshow (replyTimes st)
     , "recentReplyCount: " <> tshow recentReplyCount
-    , "rateLimitChance: " <> tshow rateLimitChance
+    , "notRateLimitChance: " <> tshow notRateLimitChance
     , "rateLimited: " <> tshow rateLimited
     ]
   case rateLimited of
     True -> lift $ $(logInfo) $ T.intercalate "\n"
       [ "Rate limited, not replying to " <> tshow cqmsgs
       , "recentReplyCount: " <> tshow recentReplyCount
-      , "rateLimitChance: " <> tshow rateLimitChance
+      , "notRateLimitChance: " <> tshow notRateLimitChance
       ]
     _     -> pure ()
 
