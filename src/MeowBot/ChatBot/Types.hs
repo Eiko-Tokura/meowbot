@@ -67,9 +67,11 @@ mergeChatState maxMessageInState newMsgs = _messages %~ (optimalMeowTakeTailKeep
 clearChatState :: ChatState -> ChatState
 clearChatState = const def
 
--- | Update the chat state map by inserting the new user message and checking active trigger
-updateAllChatState :: Int -> ChatId -> CQMessage -> AllChatState -> (Bool, AllChatState)
-updateAllChatState maxMessageInState cid cqmsg = lensCidChatState cid $ \cs ->
+-- | Update the chat state map by inserting the new user message and checking active trigger.
+--
+-- In case of active trigger, it resets the flag and does not add the message.
+updateAllChatStateTrigger :: Int -> ChatId -> CQMessage -> AllChatState -> (Bool, AllChatState)
+updateAllChatStateTrigger maxMessageInState cid cqmsg = lensCidChatState cid $ \cs ->
   case activeTriggerOneOff cs of
     True -> ( True
             , cs

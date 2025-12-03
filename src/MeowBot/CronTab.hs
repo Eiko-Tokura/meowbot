@@ -67,26 +67,6 @@ performCronMeowAction en (CronMeowChatBack chatId _message) = do
 
       cid = chatId
 
-      -- updateChatState :: AllChatState -> AllChatState
-      -- updateChatState s =
-      --   let mstate = SM.lookup cid s in
-      --   case mstate of
-      --     Just cs -> SM.insert cid
-      --       cs
-      --         { chatStatus = (chatStatus cs)
-      --           { chatStatusMessages = chatStatusMessages (chatStatus cs) <> [newMsg]
-      --           , chatStatusToolDepth = 0 -- ^ reset tool depth
-      --           }
-      --         , activeTriggerOneOff = True
-      --         }
-      --       s
-      --     Nothing -> SM.insert cid
-      --       def
-      --         { chatStatus =  ChatStatus 0 0 [newMsg] mempty
-      --         , activeTriggerOneOff = True
-      --         } s
-
-
   asyncChat <- liftIO $ async $ return $ do
     allChatState <- updateChatState cid (appendMessages [newMsg] . (_activeTriggerOneOff .~ True)) <$> getTypeWithDef newChatState
     putType allChatState
