@@ -228,7 +228,7 @@ commandChat = BotCommand Chat $ botT $ do
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
-  (allChatState, oneOffActive) <- lift $ updateAllChatState maxMessageInState cid cqmsg <$> getTypeWithDef newChatState
+  (oneOffActive, allChatState) <- lift $ updateAllChatState maxMessageInState cid cqmsg <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
   lift $ putType allChatState

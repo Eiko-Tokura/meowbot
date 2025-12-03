@@ -51,16 +51,15 @@ instance Default ChatState where
 
 -- | Adding the state for the cid if not exists, and applying f to it
 updateChatState :: ChatId -> (ChatState -> ChatState) -> AllChatState -> AllChatState
-updateChatState cid f = fst . updateChatStateWrite cid (\cs -> (f cs, ()))
+updateChatState cid f = lensCidChatState cid %~ f
 
-updateChatStateWrite :: ChatId -> (ChatState -> (ChatState, w)) -> AllChatState -> (AllChatState, w)
-updateChatStateWrite cid f s =
-    let state = HM.lookup cid s in
-    case state of
-      Just cs -> let (newCs, w) = f cs  in (HM.insert cid newCs s, w)
-      Nothing -> let (newCs, w) = f def in (HM.insert cid newCs s, w)
+lensCidChatState :: Functor f => ChatId -> (ChatState -> f ChatState) -> AllChatState -> f AllChatState
+lensCidChatState cid fs a = case HM.lookup cid a of
+  Just cs -> (\newCs -> HM.insert cid newCs a) <$> fs cs
+  Nothing -> (\newCs -> HM.insert cid newCs a) <$> fs def
 
-markMeowStatus cid meowStat allChatState = 
+markMeowStatus :: ChatId -> MeowStatus -> AllChatState -> AllChatState
+markMeowStatus cid meowStat allChatState =
   let mchatState = HM.lookup cid allChatState
   in case mchatState of
     Nothing -> allChatState
@@ -74,15 +73,15 @@ clearChatState :: ChatState -> ChatState
 clearChatState = const def
 
 -- | Update the chat state map by inserting the new user message and checking active trigger
-updateAllChatState :: Int -> ChatId -> CQMessage -> AllChatState -> (AllChatState, Bool)
-updateAllChatState maxMessageInState cid cqmsg = updateChatStateWrite cid $ \cs ->
+updateAllChatState :: Int -> ChatId -> CQMessage -> AllChatState -> (Bool, AllChatState)
+updateAllChatState maxMessageInState cid cqmsg = lensCidChatState cid $ \cs ->
   case activeTriggerOneOff cs of
-    True -> ( mergeChatState maxMessageInState [toUserMessage cqmsg] cs
+    True -> ( True
+            , mergeChatState maxMessageInState [toUserMessage cqmsg] cs
             & _activeTriggerOneOff .~ False
-            , True
             )
-    False -> ( mergeChatState maxMessageInState [toUserMessage cqmsg] cs
-             , False
+    False -> ( False
+             , mergeChatState maxMessageInState [toUserMessage cqmsg] cs
              )
 
 -- | If a text is empty, make it Nothing
