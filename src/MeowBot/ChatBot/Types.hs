@@ -72,7 +72,7 @@ updateAllChatState :: Int -> ChatId -> CQMessage -> AllChatState -> (Bool, AllCh
 updateAllChatState maxMessageInState cid cqmsg = lensCidChatState cid $ \cs ->
   case activeTriggerOneOff cs of
     True -> ( True
-            , mergeChatState maxMessageInState [toUserMessage cqmsg] cs
+            , cs
             & _activeTriggerOneOff .~ False
             )
     False -> ( False
