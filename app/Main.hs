@@ -104,7 +104,7 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   let baseLogger = stdoLogger <> fileLogger
 
   loggerInit <- pureEitherInWith id $ defaultLoggingFromArgs (simpleLogger True baseLogger.baseLogFunc) (Just baseLogger.cleanUpFunc) globalFlags
-  coreDbInit <- meowPostgresFromEnv "CORE_" Nothing migrateCore
+  coreDbInit <- meowPostgresFromEnv "CORE_" (Just "host=localhost dbname=meow_core_db user=meowbot password='meowbot' port=5432") migrateCore
   -- defaultPostgresFromArgs (Just "meowbot") migrateCore globalFlags
   dataDbInit <- meowPostgresFromEnv "DATA_" Nothing migrateData
   -- defaultPostgresFromArgs Nothing migrateData globalFlags

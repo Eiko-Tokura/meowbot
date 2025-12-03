@@ -1,27 +1,15 @@
 -- | less important but huge amounts of data.
 module Data.PersistModel.Data where
 
-import Command.Hangman.Model
 import Control.Applicative
-import Cron.Parser
-import Data.Additional.Saved
 import Data.Coerce
-import Data.Default
 import Data.Maybe
-import Data.Time.Calendar
 import Data.Time.Clock
 import Data.Time.Clock.POSIX
 import Database.Persist.Sql
 import Database.Persist.TH
-import External.ChatAPI
-import GHC.Generics
 import MeowBot.Data.CQHttp.CQCode
-import MeowBot.CommandRule
-import MeowBot.CronTab.CronMeowAction
-import MeowBot.CostModel.Types
 import MeowBot.Data
-import MeowBot.Data.Book
-import MeowBot.Data.IgnoreMatchType
 import Utils.Persist
 
 share [mkPersist sqlSettings, mkMigrate "migrateData"] [persistLowerCase|
