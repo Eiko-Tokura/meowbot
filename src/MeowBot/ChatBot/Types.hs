@@ -59,12 +59,7 @@ lensCidChatState cid fs a = case HM.lookup cid a of
   Nothing -> (\newCs -> HM.insert cid newCs a) <$> fs def
 
 markMeowStatus :: ChatId -> MeowStatus -> AllChatState -> AllChatState
-markMeowStatus cid meowStat allChatState =
-  let mchatState = HM.lookup cid allChatState
-  in case mchatState of
-    Nothing -> allChatState
-    Just chatState ->
-      HM.insert cid chatState { meowStatus = meowStat } allChatState
+markMeowStatus cid meowStat = lensCidChatState cid . _meowStatus .~ meowStat
 
 mergeChatState :: Int -> [Message] -> ChatState -> ChatState
 mergeChatState maxMessageInState newMsgs = _messages %~ (optimalMeowTakeTailKeepAvg maxMessageInState . (++ newMsgs))
