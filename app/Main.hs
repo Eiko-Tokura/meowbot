@@ -99,7 +99,7 @@ main = runEffT00 $ flip effCatch (\(e :: Text) -> liftIO $ TIO.putStrLn e) $ do
   let parsed = runParserE argumentHelp parseArgs args
       globalFlags = either (const []) fst parsed
 
-  stdoLogger <- liftIO createStdoutBaseLogger
+  stdoLogger <- liftIO createSimpleConcurrentStdoutBaseLogger
   fileLogger <- liftIO $ createFileLogger "meowbot.log"
   let baseLogger = stdoLogger <> fileLogger
 
