@@ -350,9 +350,9 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
   let mentioned = case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let thrSeconds = 300
+  let thrSeconds = 150
       thrReplyCount = 3
-  let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
+  let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
                           (Foldable.toList (replyTimes st))
