@@ -224,8 +224,6 @@ commandChat = BotCommand Chat $ botT $ do
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
-      --notCatSet = isNothing $ MP.runParser catSetParser msg
-
   guardMaybeT $ activeChat && not blackListed
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
@@ -340,10 +338,6 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-guardMaybeT :: Monad m => Bool -> MaybeT m ()
-guardMaybeT True  = pure ()
-guardMaybeT False = MaybeT $ pure Nothing
-
 type ShouldNotReply = Bool
 determineIfReply :: ShouldNotReply -> Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
 determineIfReply True _ _ _ _ _ _ _ _ _ _ _ _ = MaybeT . pure $ Nothing
@@ -352,13 +346,12 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
-  replied <- lift $ boolMaybe <$> beingReplied
-  let mentioned = boolMaybe $ mentionReply && case bn of
+  replied <- lift beingReplied
+  let mentioned = case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
   let thrSeconds = 300
       thrReplyCount = 3
-      notIgnoredReaction = boolMaybe $ not ignoredReaction
   let -- | if last 180 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
@@ -368,31 +361,29 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
         = Just
         $ 0.5 ** (fromIntegral recentReplyCount - fromIntegral thrReplyCount)
                       | otherwise = Nothing
-      notRateLimited = (boolMaybe . not) (maybe False (< chance2) rateLimitChance)
+      rateLimited = maybe False (< chance2) rateLimitChance
   lift $ $(logDebug) $ T.intercalate "\n"
     [ "recentTimes: " <> tshow (replyTimes st)
     , "recentReplyCount: " <> tshow recentReplyCount
     , "rateLimitChance: " <> tshow rateLimitChance
-    , "notRateLimited: " <> tshow notRateLimited
+    , "rateLimited: " <> tshow rateLimited
     ]
-  case notRateLimited of
-    Nothing -> lift $ $(logInfo) $ T.intercalate "\n"
+  case rateLimited of
+    True -> lift $ $(logInfo) $ T.intercalate "\n"
       [ "Rate limited, not replying to " <> tshow cqmsgs
       , "recentReplyCount: " <> tshow recentReplyCount
       , "rateLimitChance: " <> tshow rateLimitChance
       ]
-    _       -> pure ()
+    _     -> pure ()
 
-  ated    <- if atReply
-    then lift $ boolMaybe <$> beingAt
-    else return Nothing
-  let chanceReply = do -- chance reply only happens when recent messages contains some text
-        boolMaybe $ chance <= prob
-        boolMaybe $ notAllNoText cqmsgs
-      parsed = void $ MP.runParser (catParser bn cs) msg
-  MaybeT . pure $ chanceReply <|> parsed <|> replied <|> mentioned <|> ated <|> boolMaybe oneOff
-  MaybeT . pure $ notRateLimited
-  MaybeT . pure $ notIgnoredReaction
+  ated    <- lift beingAt
+  let chanceReply = -- chance reply only happens when recent messages contains some text
+        chance <= prob && notAllNoText cqmsgs
+      parsed = isJust $ MP.runParser (catParser bn cs) msg
+
+  guardMaybeT $ chanceReply || parsed || replied || mentioned && mentionReply || ated && atReply || oneOff
+  guardMaybeT $ not rateLimited && not ignoredReaction
+
 determineIfReply _ _ _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
   if T.isPrefixOf ":" msg
   then MaybeT . pure $ Nothing
