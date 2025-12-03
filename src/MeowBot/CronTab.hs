@@ -1,7 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module MeowBot.CronTab where
 
-import Command.Cat.CatSet
 import Command.Chat
 import Control.Concurrent.Async
 import Control.Monad
@@ -18,9 +17,10 @@ import Data.Time
 import External.ChatAPI
 import MeowBot.CronTab.CronMeowAction
 import MeowBot.BotStructure
+import MeowBot.ChatBot.Types
 import System.Meow
 import Utils.RunDB
-import qualified Data.Map.Strict as SM
+import Control.Lens
 
 newtype CronTabTick = CronTabTick UTCTime
 
@@ -67,30 +67,28 @@ performCronMeowAction en (CronMeowChatBack chatId _message) = do
 
       cid = chatId
 
-      newChatState = SM.empty :: AllChatState
-
-      updateChatState :: AllChatState -> AllChatState
-      updateChatState s =
-        let mstate = SM.lookup cid s in
-        case mstate of
-          Just cs -> SM.insert cid
-            cs
-              { chatStatus = (chatStatus cs)
-                { chatStatusMessages = chatStatusMessages (chatStatus cs) <> [newMsg]
-                , chatStatusToolDepth = 0 -- ^ reset tool depth
-                }
-              , activeTriggerOneOff = True
-              }
-            s
-          Nothing -> SM.insert cid
-            def
-              { chatStatus =  ChatStatus 0 0 [newMsg] mempty
-              , activeTriggerOneOff = True
-              } s
+      -- updateChatState :: AllChatState -> AllChatState
+      -- updateChatState s =
+      --   let mstate = SM.lookup cid s in
+      --   case mstate of
+      --     Just cs -> SM.insert cid
+      --       cs
+      --         { chatStatus = (chatStatus cs)
+      --           { chatStatusMessages = chatStatusMessages (chatStatus cs) <> [newMsg]
+      --           , chatStatusToolDepth = 0 -- ^ reset tool depth
+      --           }
+      --         , activeTriggerOneOff = True
+      --         }
+      --       s
+      --     Nothing -> SM.insert cid
+      --       def
+      --         { chatStatus =  ChatStatus 0 0 [newMsg] mempty
+      --         , activeTriggerOneOff = True
+      --         } s
 
 
   asyncChat <- liftIO $ async $ return $ do
-    allChatState <- updateChatState <$> getTypeWithDef newChatState
+    allChatState <- updateChatState cid (appendMessages [newMsg] . (_activeTriggerOneOff .~ True)) <$> getTypeWithDef newChatState
     putType allChatState
     overrideMeow OverrideSettings { chatIdOverride = Just cid } $ command commandChat
   return [BAAsync asyncChat]

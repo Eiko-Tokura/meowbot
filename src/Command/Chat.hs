@@ -17,7 +17,7 @@ import External.ChatAPI.MeowTool
 import External.ChatAPI.MeowToolEnv
 import qualified Data.BSeq as BSeq
 import qualified MeowBot.Parser as MP
-import qualified Data.Map.Strict as SM
+import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Foldable as Foldable
 
@@ -36,6 +36,7 @@ import Data.Proxy
 import Data.HList
 import Data.Coerce
 import Data.Bifunctor
+import MeowBot.ChatBot.Types
 import MeowBot.CostModel
 import MeowBot.Data.CQHttp.CQCode
 import Utils.RunDB
@@ -87,9 +88,8 @@ type ModelChat = Local QwQ
 commandChat :: BotCommand
 commandChat = BotCommand Chat $ botT $ do
   -- find chat id whose oneOffActive = true
-  let newChatState = SM.empty :: AllChatState
   allChatState <- lift $ getTypeWithDef newChatState
-  let activeStateList = Foldable.find (\(_, cs) -> activeTriggerOneOff cs) (SM.toList allChatState)
+  let activeStateList = Foldable.find (activeTriggerOneOff . snd) (HM.toList allChatState)
 
   (mMsg, cid, mMid, mUid) <-
     case activeStateList of
@@ -213,105 +213,30 @@ commandChat = BotCommand Chat $ botT $ do
       blackListed     = blackListValid && maybe False botUserBlackListBlackListed    botUserBlackList
       ignoredReaction = blackListValid && maybe False botUserBlackListIgnoreReaction botUserBlackList
 
-      -- | If a text is empty, make it Nothing
-      nullify :: Maybe Text -> Maybe Text
-      nullify (Just s) | T.null s = Nothing
-      nullify x = x
-
-      toUserMessage :: CQMessage -> Message
-      toUserMessage cqm = UserMessage $ mconcat $ catMaybes
-        [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
-        , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
-        , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
-        , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
-        , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
-        , Just ": "
-        , selectedContent . mixedMessage <$> metaMessage cqm
-        ]
-
-      selectedContent :: [Either CQCode Text] -> Text
-      selectedContent []                          = ""
-      selectedContent (Right t:rest)              = t <> selectedContent rest
-      selectedContent (Left (CQImage _):rest)     = "[CQ:image,url=<too_long>]"  <> selectedContent rest
-      selectedContent (Left (CQRecord _):rest)    = "[CQ:record,url=<too_long>]" <> selectedContent rest
-      selectedContent (Left cq@(CQAt {}):rest)    = embedCQCode cq <> selectedContent rest
-      selectedContent (Left cq@(CQReply {}):rest) = embedCQCode cq <> selectedContent rest
-      selectedContent (Left cq@(CQOther "face" _):rest)     = embedCQCode cq <> selectedContent rest
-      selectedContent (Left cq@(CQOther "markdown" _):rest) = embedCQCode cq <> selectedContent rest
-      selectedContent (Left cq@(CQOther "json" _):rest)     = embedCQCode cq <> selectedContent rest
-      selectedContent (Left (CQOther "image" meta):rest)
-        = case filter (flip elem ["summary"] . fst) meta of
-            []       -> "[CQ:image,data=<unknown_data>]"
-            filtered -> embedCQCode (CQOther "image" filtered)
-        <> selectedContent rest
-      selectedContent (Left (CQOther "mface" meta):rest)
-        = case filter (flip elem ["summary"] . fst) meta of
-            []       -> "[CQ:mface,data=<unknown_data>]"
-            filtered -> embedCQCode (CQOther "mface" filtered)
-        <> selectedContent rest
-      selectedContent (Left (CQOther cqtype _):rest)
-        = "[CQ:" <> cqtype <> ",data=<unknown_data>]"
-        <> selectedContent rest
-      selectedContent (Left _:rest) = selectedContent rest
-
       cqFilter :: CQCode -> Maybe CQCode
       cqFilter (CQImage _)         = Nothing
       cqFilter (CQOther "image" _) = Nothing
       cqFilter c                   = Just c
 
-      updateCurrentChatState :: (ChatState -> ChatState) -> AllChatState -> AllChatState
-      updateCurrentChatState f s =
-        let mstate = SM.lookup cid s in
-        case mstate of
-          Just cs -> SM.insert cid (f cs) s
-          Nothing -> SM.insert cid (f def { chatStatus = ChatStatus 0 0 [] mempty }) s
-
       recordReplyTime :: UTCTime -> ChatState -> ChatState
       recordReplyTime utcTime cs =
         cs { replyTimes = BSeq.bSeqCons utcTime (replyTimes cs) }
-
-      updateChatState :: AllChatState -> (Bool, AllChatState)
-      updateChatState s =
-        let mstate = SM.lookup cid s in
-        case mstate of
-          Just cs -> case activeTriggerOneOff cs of
-            True -> (True,) $ SM.insert cid
-              cs
-                { chatStatus = (chatStatus cs)
-                  { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus cs) -- active trigger, not append
-                  , chatStatusToolDepth = 0 -- ^ reset tool depth
-                  , chatEstimateTokens = mempty
-                  }
-                , activeTriggerOneOff = False
-                }
-              s
-            False -> (False,) $ SM.insert cid
-              cs
-                { chatStatus = (chatStatus cs)
-                  { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus cs) ++ [toUserMessage cqmsg]
-                  , chatStatusToolDepth = 0 -- ^ reset tool depth
-                  , chatEstimateTokens = mempty
-                  }
-                , activeTriggerOneOff = False
-                }
-              s
-          Nothing -> (False, SM.insert cid def { chatStatus =  ChatStatus 0 0 [toUserMessage cqmsg] mempty } s)
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
       --notCatSet = isNothing $ MP.runParser catSetParser msg
 
-  MaybeT $ if activeChat && not blackListed then pure (Just ()) else pure Nothing
+  guardMaybeT $ activeChat && not blackListed
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
-  (oneOffActive, allChatState) <- lift $ updateChatState <$> getTypeWithDef newChatState
+  (allChatState, oneOffActive) <- lift $ updateAllChatState maxMessageInState cid cqmsg <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
   lift $ putType allChatState
   -- ^ update in the state
 
-  chatState <- MaybeT . pure $ SM.lookup cid allChatState
+  chatState <- MaybeT . pure $ HM.lookup cid allChatState
 
   when oneOffActive $ $(logInfo) $ "One off active, replying to " <> tshow cid
 
@@ -363,7 +288,7 @@ commandChat = BotCommand Chat $ botT $ do
               return $ do
                 markMeow cid MeowIdle -- ^ update status to idle
                 logBotStatistics cid (StatTokens newStatus)
-                mergeChatStatus maxMessageInState cid newMsgs newStatus
+                modifyAllChatState $ updateChatState cid (mergeChatState maxMessageInState newMsgs)
                 let splitedMessageToSend = map (T.intercalate "\n---\n") . chunksOf 2 $ concatMap
                       (\case
                         AssistantMessage -- Case 1 : assistant returned pure tool call
@@ -393,37 +318,20 @@ commandChat = BotCommand Chat $ botT $ do
       -- update busy status
       lift $ markMeow cid MeowBusy
       -- record the reply time
-      lift $ updateCurrentChatState (recordReplyTime utcTime) <$> getTypeWithDef newChatState
+      lift $ modifyAllChatState (updateChatState cid $ recordReplyTime utcTime)
 
       return $ extraAction <> [BAAsync asyncAction] -- Async (Meow [BotAction])
       -- if you need to send multiple messages, you can use
       -- Async (Meow [send_msg_1, BAAsync (Async (Meow [send_msg_2]))])
       -- m a -> Async (m
 
+modifyAllChatState :: (HM.HashMap ChatId ChatState -> HM.HashMap ChatId ChatState) -> Meow ()
+modifyAllChatState f = putType . f =<< getTypeWithDef newChatState
+
 markMeow :: ChatId -> MeowStatus -> Meow ()
 markMeow cid meowStat = do
-  allChatState <- getTypeWithDef SM.empty
-  let mchatState = SM.lookup cid allChatState
-  case mchatState of
-    Nothing -> pure ()
-    Just chatState -> do
-      putType $ SM.insert cid chatState { meowStatus = meowStat } allChatState
-      $(logDebug) $ "Marked meow status to " <> tshow meowStat
-
-mergeChatStatus :: Int -> ChatId -> [Message] -> ChatStatus -> Meow ()
-mergeChatStatus maxMessageInState cid newMsgs newStatus = do
-  allChatState <- getTypeWithDef SM.empty
-  let mchatState = SM.lookup cid allChatState
-  case mchatState of
-    Nothing -> pure ()
-    Just chatState ->
-      putType $ SM.insert cid
-        chatState -- adding new messages to newest state
-          { chatStatus = newStatus
-            { chatStatusMessages = optimalMeowTakeTailKeepAvg maxMessageInState $ chatStatusMessages (chatStatus chatState) ++ newMsgs
-            }
-          }
-        allChatState
+  modifyAllChatState $ markMeowStatus cid meowStat
+  $(logDebug) $ "Marked meow status to " <> tshow meowStat
 
 notAllNoText :: [CQMessage] -> Bool
 notAllNoText = not . all (all
@@ -432,7 +340,12 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-determineIfReply :: Bool -> Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
+guardMaybeT :: Monad m => Bool -> MaybeT m ()
+guardMaybeT True  = pure ()
+guardMaybeT False = MaybeT $ pure Nothing
+
+type ShouldNotReply = Bool
+determineIfReply :: ShouldNotReply -> Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
 determineIfReply True _ _ _ _ _ _ _ _ _ _ _ _ = MaybeT . pure $ Nothing
 determineIfReply _ True _ _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
 determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do

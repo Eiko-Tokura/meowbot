@@ -230,6 +230,7 @@ library meowbot-lib
                    , MeowBot.BotStatistics
                    , MeowBot.CostModel
                    , MeowBot.CostModel.Types
+                   , MeowBot.ChatBot.Types
                    , MeowBot.CronTab
                    , MeowBot.CronTab.PeriodicCost
                    , MeowBot.CronTab.CronMeowAction

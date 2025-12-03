@@ -9,13 +9,11 @@ import MeowBot
 import qualified MeowBot.Parser as MP
 import MeowBot.Parser
 import qualified Data.Text as T
-import qualified Data.Map.Strict as SM
 import Data.Default
 import Data.Additional.Default
 import Data.HList hiding (In)
 import Data.Proxy
 import Data.Maybe
-import qualified Data.BSeq as BSeq
 import Control.Monad.Trans.Maybe
 import Module.MeowTypes
 import Control.Monad.Effect
@@ -27,32 +25,9 @@ import External.ChatAPI hiding (SystemMessage)
 
 import Utils.Unit
 import Command.Cat.CatSet.Parser
-import Data.Time.Clock
+import MeowBot.ChatBot.Types
 
--- we will have to mantain a ChatState for each chat in the Chat command (not Cat command)
-data ChatState = ChatState
-  { chatStatus :: !ChatStatus
-  , meowStatus :: !MeowStatus -- ^ avoids crafting too many messages simultaneously
-  , activeTriggerOneOff :: !Bool
-    -- ^ if set, this will override the active probability for this chat
-    -- used to actively trigger a chat
-    -- will be reset to Nothing after one chat run
-  , replyTimes :: !(BSeq.BSeq 10 UTCTime)
-  } deriving (Show, Eq)
-
-data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq)
-
-instance Default MeowStatus where def = MeowIdle
-instance Default ChatState where
-  def = ChatState
-    { chatStatus = ChatStatus 0 0 [] mempty
-    , meowStatus = def
-    , activeTriggerOneOff = False
-    , replyTimes = BSeq.BSeq mempty
-    }
-
-type AllChatState = SM.Map ChatId ChatState -- since we are keeping it as state, use strict map
-instance IsAdditionalData AllChatState      -- use getTypeWithDef
+-- instance IsAdditionalData AllChatState      -- use getTypeWithDef
 
 modelsInUse :: CFList ChatAPI Proxy
   [ Local       Qwen3_30B
@@ -85,7 +60,7 @@ modelsInUseText = cfListMap modelsInUse $ \(Proxy :: Proxy a) -> tshow (chatMode
 
 testCatSetParser = MP.runParser catSetParser ":cat-set default displayThinking true"
 
-helpCatSet = T.intercalate "\n" $
+helpCatSet = T.intercalate "\n"
   [ "modify/view chat settings:"
   , ":cat-<action> [range] <item> [value]"
   , "  where"
@@ -502,9 +477,7 @@ catSet (View (PerChatWithChatId cid) item) = do
     _                       -> do
       return [baSendToChatId cidOrigin $ "Unavailable item & mode combination."]
 
-
 catSet (Clear range) = do
-  let newChatState = SM.empty ::SM.Map ChatId ChatState
   (_, original_cid, uid, _, _) <- MaybeT $ getEssentialContent <$> query
   ecid <- case range of
     PerChat -> do
@@ -513,23 +486,13 @@ catSet (Clear range) = do
     PerChatWithChatId c -> return $ Right c
     _ -> pure $ Left "Clear command can only be used in perchat mode"
 
-  let updateChatState :: ChatId -> (ChatState -> ChatState) -> AllChatState -> AllChatState
-      updateChatState cid f s =
-        let state = SM.lookup cid s in
-        case state of
-          Just cs -> SM.insert cid (f cs) s
-          Nothing -> SM.insert cid def s
-
-      clear :: ChatState -> ChatState
-      clear _ = def
-
   case ecid of
     Left err -> do
       return [baSendToChatId original_cid $ "Error: " <> T.pack err]
     Right cid -> do
       _ <- MaybeT $ (<|> if cid == original_cid then Just () else Nothing) . void
           <$> runMeowCoreDB (selectFirst [InUserGroupUserId ==. uid, InUserGroupUserGroup ==. Admin] [])
-      allChatState <- lift $ updateChatState cid clear <$> getTypeWithDef newChatState
+      allChatState <- lift $ updateChatState cid clearChatState <$> getTypeWithDef newChatState
       -- ^ get the chat state and clear it
     
       lift . putType $ allChatState
