@@ -8,6 +8,7 @@ import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Concurrent.STM
 import Control.Lens
+import Control.Monad
 import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Control.Parallel.Strategies
@@ -25,6 +26,11 @@ import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Foldable
 import Module.RS
 import Module.RecvSentCQ
+import Module.Logging
+import Control.Monad.Logger
+import Data.PersistModel.Data (cqMessageToChatMessage)
+import Database.Persist.Sql (insert_)
+import Module.MeowTypes (runMeowDataDB, MeowDataDb)
 
 forestSizeForEachChat = 20 -- ^ controls how many trees to keep in each chat room
 
@@ -165,7 +171,7 @@ attachRule msg1 = do
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 -- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
-insertMyResponseHistory :: MonadIO m => ChatId -> MetaMessage -> EffT '[SModule OtherData, RecvSentCQ] NoError m ()
+insertMyResponseHistory :: ChatId -> MetaMessage -> EffT '[SModule BotConfig, SModule OtherData, SModule WholeChat, MeowDataDb, LoggingModule] NoError IO ()
 insertMyResponseHistory (GroupChat gid) meta = do
   utc <- liftIO getCurrentTime
   other_data <- getS
@@ -179,8 +185,21 @@ insertMyResponseHistory (GroupChat gid) meta = do
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
   putS $ other' & _sent_messages .~ (my Seq.:<| Seq.filter (withInDate utc) (sent_messages other_data))
-  tvarSCQmsg <- asksModule meowSentCQ
-  liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
+
+  -- tvarSCQmsg <- asksModule meowSentCQ
+  -- liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
+
+  botname <- getsS (nameOfBot . botModules)
+  botid   <- getsS (botId . botModules)
+  mNewMessage <- getsS (cqMessageToChatMessage botid botname <=< getNewMsg)
+  case mNewMessage of
+    Just newMessage -> do
+      $logDebug "Inserting a new message into the database."
+      runMeowDataDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowDataDb") ->
+        $logError $ "While trying to insert new message:" <> dbError
+        )
+    Nothing -> $logWarn "cqMessageToChatMessage returned Nothing, not inserting message into database."
+
 insertMyResponseHistory (PrivateChat uid) meta = do
   utc <- liftIO getCurrentTime
   other_data <- getS
@@ -194,8 +213,20 @@ insertMyResponseHistory (PrivateChat uid) meta = do
             } `using` rdeepseq
       (aid, other') = ( message_number other_data + 1, other_data {message_number = message_number other_data + 1} )
   putS $ other' & _sent_messages .~ (my Seq.:<| Seq.filter (withInDate utc) (sent_messages other_data))
-  tvarSCQmsg <- asksModule meowSentCQ
-  liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
+
+  -- tvarSCQmsg <- asksModule meowSentCQ
+  -- liftIO . atomically $ writeTVar tvarSCQmsg $ Just $ SentCQMessage my
+
+  botname <- getsS (nameOfBot . botModules)
+  botid   <- getsS (botId . botModules)
+  mNewMessage <- getsS (cqMessageToChatMessage botid botname <=< getNewMsg)
+  case mNewMessage of
+    Just newMessage -> do
+      $logDebug "Inserting a new message into the database."
+      runMeowDataDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowDataDb") ->
+        $logError $ "While trying to insert new message:" <> dbError
+        )
+    Nothing -> $logWarn "cqMessageToChatMessage returned Nothing, not inserting message into database."
 
 -- | Filter out the messages that are not within 60 seconds of the current time.
 withInDate :: UTCTime -> CQMessage -> Bool

@@ -32,7 +32,7 @@ instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModu
 
 instance Dependency' c LogDatabase '[SModule WholeChat, SModule BotConfig, SModule OtherData, RecvSentCQ, LoggingModule, MeowDataDb] mods
   => EventLoop c LogDatabase mods es where
-  afterEvent = do
+  afterEvent = effAddLogCat' (LogCat @Text "LOGCHAT") $ do
     RecvSentCQRead {..} <- queryModule @RecvSentCQ
     mrcq <- liftIO $ readTVarIO meowRecvCQ
     mscq <- liftIO $ readTVarIO meowSentCQ

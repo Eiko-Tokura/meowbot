@@ -8,7 +8,8 @@ import Control.Monad.Trans.Except
 import MeowBot.BotStructure
 import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Update
-import Module.RecvSentCQ
+import Module.MeowTypes
+import Module.Logging
 import System.Meow
 import Utils.Base64
 import Utils.ByteString
@@ -46,20 +47,20 @@ sendIOeToChatIdAsync (_, cid, _, mid, _) ioess = async $ do
     Left err -> return $ return [ baSendToChatId cid ("喵~出错啦：" <> err) ]
 
 -- | send message to a chat id, recording the message as reply.
-sendToChatId :: (MeowAllData' m mods, In RecvSentCQ mods, MonadIO m) => EssentialContent -> Text -> MeowT mods m [BotAction]
+sendToChatId :: (m ~ IO, MeowAllData' m mods, In MeowDataDb mods, MonadIO m) => EssentialContent -> Text -> MeowT mods m [BotAction]
 sendToChatId (_, cid, _, mid, _) = meowSendToChatIdFull cid (Just mid) [] []
 --([baSendToChatId cid str], insertMyResponseHistory utc cid (generateMetaMessage str [] [MReplyTo mid]) other_data )
 
 -- | send message to a chat id, recording the message as reply in meta message (optional in Maybe CQMessageId), with additional data and meta items.
 -- Also increase the message number (absolute id)
 -- will insert the message into the history.
-meowSendToChatIdFull :: (MeowAllData' m mods, In RecvSentCQ mods, MonadIO m)
+meowSendToChatIdFull :: (MeowAllData' IO mods, In MeowDataDb mods, In LoggingModule mods)
   => ChatId            -- ^ chat id to send to
   -> Maybe CQMessageId -- ^ message id to reply to, if Nothing, will not record the message as reply.
   -> [AdditionalData]  -- ^ additional data to attach to the message
   -> [MetaMessageItem] -- ^ meta items to attach to the message
   -> Text              -- ^ message content
-  -> MeowT mods m [BotAction]
+  -> MeowT mods IO [BotAction]
 meowSendToChatIdFull cid mid adt items str = do
   let meta = generateMetaMessage str adt ([MReplyTo mid' | Just mid' <- [mid] ] ++ items)
   embedEffT $ insertMyResponseHistory cid meta

@@ -4,7 +4,8 @@ module Command.Poll where
 import Command
 import Command.Poll.PollData
 import Module.RS
-import Module.RecvSentCQ
+import Module.MeowTypes
+import Module.Logging
 import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Control.Monad.Trans.Maybe
@@ -93,7 +94,7 @@ getPollMap = do
       liftIO $ print s
       return emptyMap
 
-doPollCommand :: (MonadIO m, MeowAllData' m mods, RecvSentCQ `In` mods) => EssentialContent -> PollCommand -> MeowT mods m [BotAction]
+doPollCommand :: (m ~ IO, MonadIO m, MeowAllData' m mods, MeowDataDb `In` mods, LoggingModule `In` mods) => EssentialContent -> PollCommand -> MeowT mods m [BotAction]
 doPollCommand (_, cid, _, _, _) (CreatePoll env title options) = do
   pollMap <- getPollMap
   let newPollId = head [i | i <- [0..], i `notElem` M.keys pollMap] -- safe because of infinite list
