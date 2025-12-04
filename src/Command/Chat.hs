@@ -5,7 +5,7 @@ import Command
 import Command.Cat (catParser)
 import MeowBot
 import MeowBot.Prelude
-import MeowBot.GetInfo
+import MeowBot.GetInfo as Info
 import MeowBot.BotStatistics
 import External.ChatAPI as API
 import External.ChatAPI.Tool
@@ -126,6 +126,7 @@ commandChat = BotCommand Chat $ botT $ do
   utcTime    <- liftIO getCurrentTime
   ConnectionManagerModuleRead man timeout <- lift askModule
   noteListing <- lift $ getNoteListing botname cid
+  userHasPositiveCostModel <- lift $ Info.hasPositiveCostModel cid
   botSetting        <- lift $ fmap (fmap entityVal) . runMeowCoreDB $ getBy (UniqueBotId botid)
   botSettingPerChat <- lift $ fmap (fmap entityVal) . runMeowCoreDB $ getBy (UniqueBotIdChatId botid cid)
   botUserBlackList  <- lift $ fmap (fmap entityVal) $ case mUid of
@@ -236,8 +237,20 @@ commandChat = BotCommand Chat $ botT $ do
   -- determine If we should reply
   $(logDebug) "Determining if reply"
 
-  let shouldNotReply = inGlobalBots
-  determineIfReply shouldNotReply oneOffActive atReply mentionReply ignoredReaction activeProbability cid cqmsg3 mMsg botname msys chatState utcTime
+  let determineIfReplyData = DetermineReplyData
+        { shouldNotReply           = inGlobalBots
+        , oneOffActive             = oneOffActive
+        , atReply                  = atReply
+        , mentionReply             = mentionReply
+        , ignoredReaction          = ignoredReaction
+        , activeProbability        = activeProbability
+        , userHasPositiveCostModel = userHasPositiveCostModel
+        , cid                      = cid
+        , chatState                = chatState
+        , chatSetting              = msys
+        , utcTime                  = utcTime
+        }
+  determineIfReply determineIfReplyData cqmsg3 mMsg botname
 
   $(logInfo) "Replying"
 
@@ -331,11 +344,25 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
+data DetermineReplyData = DetermineReplyData
+  { shouldNotReply           :: Bool
+  , oneOffActive             :: Bool
+  , atReply                  :: Bool
+  , mentionReply             :: Bool
+  , ignoredReaction          :: Bool
+  , userHasPositiveCostModel :: Bool
+  , activeProbability        :: Double
+  , cid                      :: ChatId
+  , chatState                :: ChatState
+  , chatSetting              :: ChatSetting
+  , utcTime                  :: UTCTime
+  }
+
 type ShouldNotReply = Bool
-determineIfReply :: ShouldNotReply -> Bool -> Bool -> Bool -> Bool -> Double -> ChatId -> [CQMessage] -> Maybe Text -> BotName -> ChatSetting -> ChatState -> UTCTime -> MaybeT (MeowT Mods IO) ()
-determineIfReply True _ _ _ _ _ _ _ _ _ _ _ _ = MaybeT . pure $ Nothing
-determineIfReply _ True _ _ _ _ _ _ _ _ _ ChatState {meowStatus = MeowIdle} _ = MaybeT . pure $ Just ()
-determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} cqmsgs (Just msg) bn cs st@(ChatState {meowStatus = MeowIdle}) utc = do
+determineIfReply :: DetermineReplyData -> [CQMessage] -> Maybe Text -> BotName -> MaybeT (MeowT Mods IO) ()
+determineIfReply (shouldNotReply -> True) _ _ _ = MaybeT . pure $ Nothing
+determineIfReply (oneOffActive   -> True) _ _ _ = MaybeT . pure $ Just ()
+determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- cid, (meowStatus -> MeowIdle) <- chatState = do
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
@@ -344,26 +371,26 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
   let thrSeconds = 120
-      thrReplyCount = 3
+      thrReplyCount = if userHasPositiveCostModel then 6 else 3
   let -- | if last 120 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
-                          (\t -> diffUTCTime utc t < thrSeconds) -- last 180 seconds
-                          (Foldable.toList (replyTimes st))
+                          (\t -> diffUTCTime utcTime t < thrSeconds) -- last 180 seconds
+                          (Foldable.toList (replyTimes chatState))
                           )
       notRateLimitChance | recentReplyCount >= thrReplyCount + 1
         = Just
-        $ 0.8 ** (fromIntegral recentReplyCount - fromIntegral thrReplyCount)
+        $ 0.7 ** (fromIntegral recentReplyCount - fromIntegral thrReplyCount)
                       | otherwise = Nothing
       rateLimited = maybe False (< chance2) notRateLimitChance
   lift $ $(logDebug) $ T.intercalate "\n"
-    [ "recentTimes: " <> tshow (replyTimes st)
+    [ "recentTimes: " <> tshow (replyTimes chatState)
     , "recentReplyCount: " <> tshow recentReplyCount
     , "notRateLimitChance: " <> tshow notRateLimitChance
     , "rateLimited: " <> tshow rateLimited
     ]
   case rateLimited of
     True -> lift $ $(logInfo) $ T.intercalate "\n"
-      [ "Rate limited, not replying to " <> tshow cqmsgs
+      [ "Rate limited, not replying."
       , "recentReplyCount: " <> tshow recentReplyCount
       , "notRateLimitChance: " <> tshow notRateLimitChance
       ]
@@ -371,14 +398,14 @@ determineIfReply _ oneOff atReply mentionReply ignoredReaction prob GroupChat{} 
 
   ated    <- lift beingAt
   let chanceReply = -- chance reply only happens when recent messages contains some text
-        chance <= prob && notAllNoText cqmsgs
-      parsed = isJust $ MP.runParser (catParser bn cs) msg
+        chance <= activeProbability && notAllNoText cqmsgs
+      parsed = isJust $ MP.runParser (catParser bn chatSetting) msg
 
-  guardMaybeT $ chanceReply || parsed || replied || mentioned && mentionReply || ated && atReply || oneOff
+  guardMaybeT $ chanceReply || parsed || replied || mentioned && mentionReply || ated && atReply || oneOffActive
   guardMaybeT $ not rateLimited && not ignoredReaction
 
-determineIfReply _ _ _ _ _ _ PrivateChat{} _ (Just msg) _ _ ChatState {meowStatus = MeowIdle} _ = do
+determineIfReply DetermineReplyData {cid = PrivateChat{}, chatState = (meowStatus -> MeowIdle)} _ (Just msg) _ = do
   if T.isPrefixOf ":" msg
   then MaybeT . pure $ Nothing
   else MaybeT . pure $ Just ()
-determineIfReply _ _ _ _ _ _ _ _ _ _ _ _ _ = empty
+determineIfReply _ _ _ _ = empty

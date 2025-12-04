@@ -10,6 +10,8 @@ import MeowBot.Parser
 import Data.List.NonEmpty (NonEmpty(..), prependList)
 import Data.PersistModel
 import Utils.RunDB
+import MeowBot.CostModel
+import Control.Monad.Effect as ME
 
 type IsAdmin = Bool
 newtype IsSuperUser = IsSuperUser { boolIsSuperUser :: Bool }
@@ -52,3 +54,19 @@ replyContextParser = do
   return $ prevCQMsgs `prependList` (aCQMsg :| [uCQMsg])
 {-# INLINABLE replyContextParser #-}
 
+hasCostModel :: (MeowCoreDb `ME.In` mods, MeowAllData mods) => ChatId -> MeowT mods IO Bool
+hasCostModel cid = fmap (fromMaybe False) . runMaybeT $ do
+  botid <- query
+  srvCk <- lift $ runMeowCoreDB $ serviceBalanceCheck botid cid
+  case srvCk of
+    NoCostModelAssigned -> return False
+    _                   -> return True
+
+hasPositiveCostModel :: (MeowCoreDb `ME.In` mods, MeowAllData mods) => ChatId -> MeowT mods IO Bool
+hasPositiveCostModel cid = fmap (fromMaybe False) . runMaybeT $ do
+  botid <- query
+  srvCk <- lift $ runMeowCoreDB $ serviceBalanceCheck botid cid
+  case srvCk of
+    NoCostModelAssigned -> return False
+    WalletUnlimited _   -> return False
+    _                   -> return True
