@@ -27,8 +27,8 @@ runMeowDataDB ::
   ) => ReaderT SqlBackend IO b -> EffT' c mods es IO b
 runMeowDataDB acts = do
   pool <- asksModule @MeowDataDb PG.dbPool
-  eResult <- lift $ try @IOException $ PG.runRawPostgreSqlPool acts pool
+  eResult <- lift $ try @SomeException $ PG.runRawPostgreSqlPool acts pool
   case eResult of
-    Left (e :: IOException) -> do
+    Left (e :: SomeException) -> do
       effThrow (errorText @"meowDataDb" (toText e))
     Right result -> return result

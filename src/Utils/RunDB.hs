@@ -12,7 +12,6 @@ import Database.Persist
 import Database.Persist.Sql hiding (In)
 import MeowBot.Prelude
 import Module.MeowTypes
-import Module.Database.Sqlite
 import qualified  Module.Database.PostgreSql as PG
 
 askCoreDB :: (MeowCoreDb `In` mods) => EffT mods es IO (Pool (PG.RawPostgresql SqlBackend))

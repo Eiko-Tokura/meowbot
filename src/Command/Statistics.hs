@@ -3,6 +3,7 @@
 module Command.Statistics where
 
 import Control.Monad.Effect
+import Control.Exception
 import Command
 import Data.List (sortOn)
 import Data.Ord (Down(..))
@@ -55,10 +56,11 @@ statisticsAction :: Maybe String -> ChatId -> StatisticsAction -> Meow (Maybe [B
 statisticsAction mName scid = \case
   AStatActivity bid cid days users -> do
     pool <- askDataDB
+    let errMsg e = [baSendToChatId scid $ "遇到了一些问题呢qwq:" <> toText (show e)]
     now <- liftIO getCurrentTime
     let startDay = addUTCTime (negate $ fromIntegral (days.unNDays * 86400)) now
-    fetchStat <- liftIO . async $ do -- ^ doing the database fetch asynchronously, avoid blocking the main thread
-      userActivity <- fmap toUnValue $ flip runSqlPool pool $ select $ do
+    fetchStat <- liftIO . async $ fmap (either errMsg id) . try @SomeException $ do
+      userActivity <- fmap toUnValue $ flip runRawPostgreSqlPool pool $ select $ do
         p <- from $ table @ChatMessage
         where_
           (   p ^. ChatMessageBotId  ==. val bid
@@ -99,7 +101,8 @@ statisticsAction mName scid = \case
 
   AStatProximity bid cid days users -> do
     pool <- askDataDB
-    fetchStat <- liftIO . async $ flip runRawPostgreSqlPool pool $ do
+    let errMsg e = [baSendToChatId scid $ "遇到了一些问题呢qwq:" <> toText (show e)]
+    fetchStat <- liftIO . async $ fmap (either errMsg id) . try @SomeException . flip runRawPostgreSqlPool pool $ do
       result <- statProximity bid cid days users
       let toPairs = weightPairsToPoints
                     [ ( (r.sprUserId1, unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r)
