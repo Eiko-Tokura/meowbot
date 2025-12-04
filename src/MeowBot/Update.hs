@@ -7,7 +7,6 @@ import MeowBot.BotStructure
 import Data.Maybe (fromMaybe, listToMaybe)
 
 import Control.Lens
-import Control.Monad
 import Control.Monad.Effect
 import Control.Monad.RS.Class
 import Control.Parallel.Strategies
@@ -150,7 +149,7 @@ attachRule msg1 = do
 
 -- | This will put meowmeow's response into the chat history and increase the message number (absolute id)
 -- also updates the tvarSCQmsg to notify all the modules that a message has been sent.
-insertMyResponseHistory :: ChatId -> MetaMessage -> EffT '[SModule BotConfig, SModule OtherData, SModule WholeChat, MeowDataDb, LoggingModule] NoError IO ()
+insertMyResponseHistory :: ChatId -> MetaMessage -> EffT '[SModule BotConfig, SModule OtherData, MeowDataDb, LoggingModule] NoError IO ()
 insertMyResponseHistory (GroupChat gid) meta = do
   utc <- liftIO getCurrentTime
   other_data <- getS
@@ -170,10 +169,10 @@ insertMyResponseHistory (GroupChat gid) meta = do
 
   botname <- getsS (nameOfBot . botModules)
   botid   <- getsS (botId . botModules)
-  mNewMessage <- getsS (cqMessageToChatMessage botid botname <=< getNewMsg)
+  let mNewMessage = cqMessageToChatMessage botid botname my
   case mNewMessage of
     Just newMessage -> do
-      $logDebug "Inserting a new message into the database."
+      $logInfo "Inserting a new message into the database."
       runMeowDataDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowDataDb") ->
         $logError $ "While trying to insert new message:" <> dbError
         )
@@ -198,10 +197,10 @@ insertMyResponseHistory (PrivateChat uid) meta = do
 
   botname <- getsS (nameOfBot . botModules)
   botid   <- getsS (botId . botModules)
-  mNewMessage <- getsS (cqMessageToChatMessage botid botname <=< getNewMsg)
+  let mNewMessage = cqMessageToChatMessage botid botname my
   case mNewMessage of
     Just newMessage -> do
-      $logDebug "Inserting a new message into the database."
+      $logInfo "Inserting a new message into the database."
       runMeowDataDB (insert_ newMessage) `effCatch` (\(ErrorText dbError :: ErrorText "meowDataDb") ->
         $logError $ "While trying to insert new message:" <> dbError
         )
