@@ -168,6 +168,22 @@ data StatProximityRow = StatProximityRow
   , sprWeight  :: Double
   }
 
+{-|
+
+ For this query you would want to have indexes on:
+
+ @
+ CREATE INDEX CONCURRENTLY idx_chat_message_bot_chat_time
+   ON chat_message (bot_id, chat_id, time)
+   INCLUDE (user_id, message_id, sender_card, sender_nickname, reply_to);
+
+ CREATE INDEX CONCURRENTLY idx_chat_message_bot_chat_message_id
+   ON chat_message (bot_id, chat_id, message_id);
+
+ ANALYZE chat_message;
+ @
+
+-}
 statProximity :: BotId -> GroupId -> NDays -> NUsers -> DB [StatProximityRow]
 statProximity bid (GroupId gid) ndays nUsers = do
   let wReply   = toText (5.0 :: Double) :: Text
