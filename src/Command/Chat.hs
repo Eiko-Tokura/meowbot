@@ -15,7 +15,6 @@ import External.ChatAPI.ModelPricing
 import External.ChatAPI.Cost
 import External.ChatAPI.MeowTool
 import External.ChatAPI.MeowToolEnv
-import qualified Data.BSeq as BSeq
 import qualified MeowBot.Parser as MP
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
@@ -218,10 +217,6 @@ commandChat = BotCommand Chat $ botT $ do
       cqFilter (CQOther "image" _) = Nothing
       cqFilter c                   = Just c
 
-      recordReplyTime :: UTCTime -> ChatState -> ChatState
-      recordReplyTime utcTime cs =
-        cs { replyTimes = BSeq.bSeqCons utcTime (replyTimes cs) }
-
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
   guardMaybeT $ activeChat && not blackListed
@@ -327,9 +322,7 @@ modifyAllChatState :: (HM.HashMap ChatId ChatState -> HM.HashMap ChatId ChatStat
 modifyAllChatState f = putType . f =<< getTypeWithDef newChatState
 
 markMeow :: ChatId -> MeowStatus -> Meow ()
-markMeow cid meowStat = do
-  modifyAllChatState $ markMeowStatus cid meowStat
-  $(logDebug) $ "Marked meow status to " <> tshow meowStat
+markMeow cid meowStat = modifyAllChatState $ markMeowStatus cid meowStat
 
 notAllNoText :: [CQMessage] -> Bool
 notAllNoText = not . all (all

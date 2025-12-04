@@ -183,7 +183,7 @@ WITH m AS (
   WHERE bot_id = #{bid.unBotId}
     AND chat_id = #{gid}
     AND user_id IS NOT NULL
-    AND time >= datetime('now', '-' || #{ndays.unNDays} || ' days')
+    AND time >= (now() - (#{ndays.unNDays} * interval '1 day'))
 ),
 
 -- per-user message counts in-window
@@ -206,7 +206,7 @@ edges_reply AS (
   SELECT
     CASE WHEN a.user_id < r.user_id THEN a.user_id ELSE r.user_id END AS u1,
     CASE WHEN a.user_id < r.user_id THEN r.user_id ELSE a.user_id END AS u2,
-    ABS(strftime('%s', a.time) - strftime('%s', r.time)) AS dt_sec
+    ABS(EXTRACT(EPOCH FROM a.time) - EXTRACT(EPOCH FROM r.time)) AS dt_sec
   FROM m AS a
   JOIN chat_message AS r
     ON r.bot_id     = #{bid.unBotId}
@@ -237,11 +237,12 @@ edges_adjacent AS (
   SELECT
     CASE WHEN s.user_id < s.prev_uid THEN s.user_id ELSE s.prev_uid END AS u1,
     CASE WHEN s.user_id < s.prev_uid THEN s.prev_uid ELSE s.user_id END AS u2,
-    (strftime('%s', s.time) - strftime('%s', s.prev_time)) AS dt_sec
+    (EXTRACT(EPOCH FROM s.time) - EXTRACT(EPOCH FROM s.prev_time)) AS dt_sec
   FROM seq AS s
   WHERE s.prev_uid IS NOT NULL
     AND s.user_id <> s.prev_uid
-    AND (strftime('%s', s.time) - strftime('%s', s.prev_time)) BETWEEN 0 AND #{adjSecMax}
+    AND (EXTRACT(EPOCH FROM s.time) - EXTRACT(EPOCH FROM s.prev_time))
+      BETWEEN 0 AND #{adjSecMax}
 ),
 edges_adjacent_w AS (
   SELECT u1, u2,

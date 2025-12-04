@@ -34,6 +34,10 @@ makeLenses_ ''ChatState
 _messages :: Lens' ChatState [Message]
 _messages = _chatStatus . _chatStatusMessages
 
+recordReplyTime :: UTCTime -> ChatState -> ChatState
+recordReplyTime utcTime cs =
+  cs { replyTimes = BSeq.bSeqCons utcTime (replyTimes cs) }
+
 appendMessages :: [Message] -> ChatState -> ChatState
 appendMessages msgs = _messages %~ (++ msgs)
 
