@@ -370,9 +370,9 @@ determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- c
   let mentioned = case bn of
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
-  let thrSeconds = 120
-      thrReplyCount = if userHasPositiveCostModel then 6 else 3
-  let -- | if last 120 seconds there are >= 4 replies, decrease the chance to reply exponentially
+  let thrSeconds    = 150
+      thrReplyCount = if userHasPositiveCostModel then 7 else 3
+  let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utcTime t < thrSeconds) -- last 180 seconds
                           (Foldable.toList (replyTimes chatState))
