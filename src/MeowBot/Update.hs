@@ -6,7 +6,6 @@ import MeowBot.BotStructure
 
 import Data.Maybe (fromMaybe, listToMaybe)
 
-import Control.Concurrent.STM
 import Control.Lens
 import Control.Monad
 import Control.Monad.Effect
@@ -25,7 +24,6 @@ import qualified MeowBot.Parser as MP
 import qualified Data.Sequence as Seq
 import qualified Data.Foldable as Foldable
 import Module.RS
-import Module.RecvSentCQ
 import Module.Logging
 import Control.Monad.Logger
 import Data.PersistModel.Data (cqMessageToChatMessage)
@@ -110,25 +108,6 @@ updateAllDataByResponse (rdata, mecho) = do
 type End a = a -> a
 -- | The element will be put into the forest with the correct key, and inserted into a tree determined by the attachTo function.
 -- and also put at the top of the list.
--- updateListByFuncKeyElement :: (Ord k)
---   => [ ( k
---        , ( [Tree a], [a] )
---        )
---      ]
---   -> End [ (k, ([Tree a], [a])) ]
---   -> Maybe (a -> Bool)
---   -> k
---   -> a
---   -> [ (k, ([Tree a], [a])) ]
--- updateListByFuncKeyElement [] past _ key element = (key, ([Node element []], [element])) : past []
--- updateListByFuncKeyElement (l: !ls) past attachTo key element
---   | keyl == key   =  ( keyl
---                      , ( strictTake forestSizeForEachChat $ putElementIntoForest attachTo element treel
---                        , strictTake forestSizeForEachChat $ element : list
---                        ) `using` evalTuple2 rseq rseq -- when eval this tuple, evaluate the two lists
---                      ) : let !pastls = past ls in pastls
---   | otherwise     = updateListByFuncKeyElement ls (past . (l:)) attachTo key element
---   where (keyl, (treel, list)) = l
 updateListByFuncKeyElement
   :: WholeChat
   -> ChatId

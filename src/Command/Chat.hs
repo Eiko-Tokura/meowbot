@@ -35,6 +35,7 @@ import Data.Proxy
 import Data.HList
 import Data.Coerce
 import Data.Bifunctor
+import Data.BSeq
 import MeowBot.ChatBot.Types
 import MeowBot.CostModel
 import MeowBot.Data.CQHttp.CQCode
@@ -204,6 +205,10 @@ commandChat = BotCommand Chat $ botT $ do
         [ botSettingPerChatMaxMessageInState =<< botSettingPerChat
         , botSettingMaxMessageInState =<< botSetting
         ] -- ^ maximum number of messages to keep in state
+      multiResponse = fromMaybe False $ asum
+        [ botSettingPerChatMultiResponse =<< botSettingPerChat
+        , botSettingMultiResponse =<< botSetting
+        ] -- ^ if true, ignores MeowStatus, reply as long as triggered
       modelCat = maybe modelCat runPersistUseShow (asum
         [ botSettingPerChatDefaultModel =<< botSettingPerChat
         , botSettingDefaultModel =<< botSetting
@@ -246,7 +251,9 @@ commandChat = BotCommand Chat $ botT $ do
         , activeProbability        = activeProbability
         , userHasPositiveCostModel = userHasPositiveCostModel
         , cid                      = cid
-        , chatState                = chatState
+        , chatTimeSequence         = chatState.replyTimes
+        , meowStatus               = chatState.meowStatus
+        , multiResponse            = multiResponse
         , chatSetting              = msys
         , utcTime                  = utcTime
         }
@@ -344,25 +351,32 @@ notAllNoText = not . all (all
     Right t -> T.null $ T.strip t
   ) . maybe [] mixedMessage . metaMessage)
 
-data DetermineReplyData = DetermineReplyData
+data DetermineReplyData = forall length. DetermineReplyData
   { shouldNotReply           :: Bool
   , oneOffActive             :: Bool
   , atReply                  :: Bool
   , mentionReply             :: Bool
   , ignoredReaction          :: Bool
   , userHasPositiveCostModel :: Bool
+  , multiResponse            :: Bool
   , activeProbability        :: Double
   , cid                      :: ChatId
-  , chatState                :: ChatState
+  , chatTimeSequence         :: BSeq length UTCTime
+  , meowStatus               :: MeowStatus
   , chatSetting              :: ChatSetting
   , utcTime                  :: UTCTime
   }
+
+notLocked :: DetermineReplyData -> Bool
+notLocked DetermineReplyData {..} | MeowIdle <- meowStatus = True
+notLocked DetermineReplyData {..} | multiResponse = True
+notLocked _ = False
 
 type ShouldNotReply = Bool
 determineIfReply :: DetermineReplyData -> [CQMessage] -> Maybe Text -> BotName -> MaybeT (MeowT Mods IO) ()
 determineIfReply (shouldNotReply -> True) _ _ _ = MaybeT . pure $ Nothing
 determineIfReply (oneOffActive   -> True) _ _ _ = MaybeT . pure $ Just ()
-determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- cid, (meowStatus -> MeowIdle) <- chatState = do
+determineIfReply d@DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- cid, notLocked d = do
   chance   <- getUniformR (0, 1 :: Double)
   chance2  <- getUniformR (0, 1 :: Double)
   lift $ $(logDebug) $ "Chance: " <> tshow chance
@@ -375,7 +389,7 @@ determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- c
   let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utcTime t < thrSeconds) -- last 180 seconds
-                          (Foldable.toList (replyTimes chatState))
+                          (Foldable.toList chatTimeSequence)
                           )
       notRateLimitChance | recentReplyCount >= thrReplyCount + 1
         = Just
@@ -383,7 +397,7 @@ determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- c
                       | otherwise = Nothing
       rateLimited = maybe False (< chance2) notRateLimitChance
   lift $ $(logDebug) $ T.intercalate "\n"
-    [ "recentTimes: " <> tshow (replyTimes chatState)
+    [ "recentTimes: " <> tshow chatTimeSequence
     , "recentReplyCount: " <> tshow recentReplyCount
     , "notRateLimitChance: " <> tshow notRateLimitChance
     , "rateLimited: " <> tshow rateLimited
@@ -404,7 +418,7 @@ determineIfReply DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <- c
   guardMaybeT $ chanceReply || parsed || replied || mentioned && mentionReply || ated && atReply || oneOffActive
   guardMaybeT $ not rateLimited && not ignoredReaction
 
-determineIfReply DetermineReplyData {cid = PrivateChat{}, chatState = (meowStatus -> MeowIdle)} _ (Just msg) _ = do
+determineIfReply d@DetermineReplyData {cid = PrivateChat{}} _ (Just msg) _ | notLocked d = do
   if T.isPrefixOf ":" msg
   then MaybeT . pure $ Nothing
   else MaybeT . pure $ Just ()

@@ -4,20 +4,15 @@
 module Data.PersistModel.Core where
 
 import Command.Hangman.Model
-import Control.Applicative
 import Cron.Parser
 import Data.Additional.Saved
-import Data.Coerce
 import Data.Default
-import Data.Maybe
 import Data.Time.Calendar
 import Data.Time.Clock
-import Data.Time.Clock.POSIX
 import Database.Persist.Sql
 import Database.Persist.TH
 import External.ChatAPI
 import GHC.Generics
-import MeowBot.Data.CQHttp.CQCode
 import MeowBot.CommandRule
 import MeowBot.CronTab.CronMeowAction
 import MeowBot.CostModel.Types
@@ -252,6 +247,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   mentionReply            Bool                 Maybe
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
+  multiResponse           Bool                 Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
@@ -285,6 +281,7 @@ BotSettingPerChat -- Overlapping BotSetting
   mentionReply            Bool                 Maybe
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
+  multiResponse           Bool                 Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe

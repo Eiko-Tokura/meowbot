@@ -14,6 +14,15 @@ import MeowBot.Data.CQHttp.CQCode
 import MeowBot.Prelude
 import Control.Lens
 
+{- We wish to refactor the ChatBot pipeline in pure functions
+   
+   1. userInput :: CQMessage -> ChatState -> ChatState
+
+   2. chatBotReaction :: ChatState -> [Message]
+
+   3. merge :: [Message] -> ChatState -> ChatState
+-}
+
 newChatState = HM.empty :: HM.HashMap ChatId ChatState
 
 data MeowStatus = MeowIdle | MeowBusy deriving (Show, Eq)
