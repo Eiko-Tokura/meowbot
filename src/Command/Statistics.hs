@@ -86,7 +86,7 @@ statisticsAction mName scid = \case
       let allActivity =  take (fromIntegral users)
                       $  sortOn (Down . snd)
                       $  [(name u, fromIntegral a) | (u, a) <- userActivity]
-                      <> maybeToList ((fromMaybe ">w<" mName, ) . fromIntegral <$> listToMaybe selfActivity)
+                      <> maybeToList ((fromMaybe "meowbot" mName, ) . fromIntegral <$> listToMaybe selfActivity)
           plot = SimpleNamedBarPlot
                    { snbpTitle =  "Top " ++ show (length allActivity)
                                ++ " active users in the past "
@@ -101,9 +101,10 @@ statisticsAction mName scid = \case
 
   AStatProximity bid cid days users -> do
     pool <- askDataDB
+    let bname = pack $ fromMaybe "meowbot" mName
     let errMsg e = [baSendToChatId scid $ "遇到了一些问题呢qwq:" <> toText (show e)]
     fetchStat <- liftIO . async $ fmap (either errMsg id) . try @SomeException . flip runRawPostgreSqlPool pool $ do
-      result <- statProximity bid cid days users
+      result <- statProximity (0, bname) bid cid days users
       let toPairs = weightPairsToPoints
                     [ ( (r.sprUserId1, unpack $ fromMaybe (toText $ unUserId $ sprUserId1 r) $ sprName1 r)
                       , (r.sprUserId2, unpack $ fromMaybe (toText $ unUserId $ sprUserId2 r) $ sprName2 r)
@@ -184,8 +185,8 @@ data StatProximityRow = StatProximityRow
  @
 
 -}
-statProximity :: BotId -> GroupId -> NDays -> NUsers -> DB [StatProximityRow]
-statProximity bid (GroupId gid) ndays nUsers = do
+statProximity :: (UserId, Text) -> BotId -> GroupId -> NDays -> NUsers -> DB [StatProximityRow]
+statProximity (UserId botUid, botName) bid (GroupId gid) ndays nUsers = do
   let wReply   = toText (5.0 :: Double) :: Text
       wAdj     = toText (1.0 :: Double) :: Text
       kReplySec = 1200 :: Int -- 20 minutes
@@ -197,11 +198,20 @@ statProximity bid (GroupId gid) ndays nUsers = do
     <- (`Sql.rawSql` [])
       [st|
 WITH m AS (
-  SELECT id, user_id, time, message_id, sender_card, sender_nickname, reply_to
+  SELECT
+    id,
+    -- canonical user_id: real users OR the bot itself
+    COALESCE(user_id, CASE WHEN event_type = 5 THEN #{botUid} END) AS user_id,
+    time,
+    message_id,
+    sender_card,
+    sender_nickname,
+    reply_to
   FROM chat_message
   WHERE bot_id = #{bid.unBotId}
     AND chat_id = #{gid}
-    AND user_id IS NOT NULL
+    -- keep normal user messages, plus SelfMessage from the bot
+    AND (user_id IS NOT NULL OR event_type = 5)
     AND time >= (now() - (#{ndays.unNDays} * interval '1 day'))
 ),
 
@@ -222,20 +232,28 @@ top_users AS (
 
 -- replies: only keep pairs where BOTH endpoints are in top_users
 edges_reply AS (
+  WITH r_mapped AS (
+    SELECT
+      r.*,
+      COALESCE(r.user_id,
+               CASE WHEN r.event_type = 5 THEN #{botUid} END) AS r_uid
+    FROM chat_message AS r
+    WHERE r.bot_id  = #{bid.unBotId}
+      AND r.chat_id = #{gid}
+  )
   SELECT
-    CASE WHEN a.user_id < r.user_id THEN a.user_id ELSE r.user_id END AS u1,
-    CASE WHEN a.user_id < r.user_id THEN r.user_id ELSE a.user_id END AS u2,
-    ABS(EXTRACT(EPOCH FROM a.time) - EXTRACT(EPOCH FROM r.time)) AS dt_sec
+    CASE WHEN a.user_id < r_m.r_uid THEN a.user_id ELSE r_m.r_uid END AS u1,
+    CASE WHEN a.user_id < r_m.r_uid THEN r_m.r_uid ELSE a.user_id END AS u2,
+    ABS(EXTRACT(EPOCH FROM a.time) - EXTRACT(EPOCH FROM r_m.time)) AS dt_sec
   FROM m AS a
-  JOIN chat_message AS r
-    ON r.bot_id     = #{bid.unBotId}
-   AND r.chat_id    = #{gid}
-   AND r.message_id = a.reply_to
+  JOIN r_mapped AS r_m
+    ON r_m.message_id = a.reply_to
   JOIN top_users t1 ON t1.user_id = a.user_id
-  JOIN top_users t2 ON t2.user_id = r.user_id
+  JOIN top_users t2 ON t2.user_id = r_m.r_uid
   WHERE a.reply_to IS NOT NULL
-    AND r.user_id IS NOT NULL
-    AND a.user_id <> r.user_id
+    -- drop replies to messages that still have “no user”
+    AND r_m.r_uid IS NOT NULL
+    AND a.user_id <> r_m.r_uid
 ),
 edges_reply_w AS (
   SELECT u1, u2,
@@ -359,10 +377,10 @@ ORDER BY en.w_norm DESC;
   return $ [ StatProximityRow
               { sprUserId1 = u1
               , sprN1      = n1
-              , sprName1   = mcard1 <|> mname1
+              , sprName1   = if u1 == UserId botUid then Just botName else mcard1 <|> mname1
               , sprUserId2 = u2
               , sprN2      = n2
-              , sprName2   = mcard2 <|> mname2
+              , sprName2   = if u2 == UserId botUid then Just botName else mcard2 <|> mname2
               , sprWeight  = w_norm
               }
            | ( Single u1, Single n1, Single mcard1, Single mname1
