@@ -177,42 +177,19 @@ commandChat = BotCommand Chat $ botT $ do
         )
         Nothing
       sd = savedData other_data
-      displayThinking = fromMaybe False $ asum
-        [ botSettingPerChatDisplayThinking =<< botSettingPerChat
-        , botSettingDisplayThinking =<< botSetting
-        ] -- ^ whether to display thinking message
-      displayToolMessage = fromMaybe False $ asum
-        [ botSettingPerChatDisplayToolMessage =<< botSettingPerChat
-        , botSettingDisplayToolMessage =<< botSetting
-        ] -- ^ whether to display tool message
-      activeChat = fromMaybe False $ asum
-        [ botSettingPerChatActiveChat =<< botSettingPerChat
-        , botSettingActiveChat =<< botSetting
-        ] -- ^ whether to chat actively randomly
-      mentionReply = fromMaybe False $ asum
-        [ botSettingPerChatMentionReply =<< botSettingPerChat
-        , botSettingMentionReply =<< botSetting
-        ] -- ^ whether to reply when mentioned
-      atReply = fromMaybe True $ asum
-        [ botSettingPerChatAtReply =<< botSettingPerChat
-        , botSettingAtReply =<< botSetting
-        ] -- ^ whether to reply when ated
-      activeProbability = fromMaybe 0.013 $ asum
-        [ botSettingPerChatActiveProbability =<< botSettingPerChat
-        , botSettingActiveProbability =<< botSetting
-        ] -- ^ probability to chat actively
-      maxMessageInState = fromMaybe 24 $ asum
-        [ botSettingPerChatMaxMessageInState =<< botSettingPerChat
-        , botSettingMaxMessageInState =<< botSetting
-        ] -- ^ maximum number of messages to keep in state
-      multiResponse = fromMaybe False $ asum
-        [ botSettingPerChatMultiResponse =<< botSettingPerChat
-        , botSettingMultiResponse =<< botSetting
-        ] -- ^ if true, ignores MeowStatus, reply as long as triggered
-      modelCat = maybe modelCat runPersistUseShow (asum
-        [ botSettingPerChatDefaultModel =<< botSettingPerChat
-        , botSettingDefaultModel =<< botSetting
-        ])
+
+      readBotSettingField :: a -> (b -> a) -> (BotSettingPerChat -> Maybe b) -> (BotSetting -> Maybe b) -> a
+      readBotSettingField def apl f g = maybe def apl $ (f =<< botSettingPerChat) <|> (g  =<< botSetting)
+
+      displayThinking    = readBotSettingField False id botSettingPerChatDisplayThinking    botSettingDisplayThinking
+      displayToolMessage = readBotSettingField False id botSettingPerChatDisplayToolMessage botSettingDisplayToolMessage
+      activeChat         = readBotSettingField False id botSettingPerChatActiveChat         botSettingActiveChat
+      mentionReply       = readBotSettingField False id botSettingPerChatMentionReply       botSettingMentionReply
+      atReply            = readBotSettingField True  id botSettingPerChatAtReply            botSettingAtReply
+      activeProbability  = readBotSettingField 0.013 id botSettingPerChatActiveProbability  botSettingActiveProbability
+      maxMessageInState  = readBotSettingField 24    id botSettingPerChatMaxMessageInState  botSettingMaxMessageInState
+      multiResponse      = readBotSettingField False id botSettingPerChatMultiResponse      botSettingMultiResponse
+      modelCat          =  readBotSettingField modelCat runPersistUseShow botSettingPerChatDefaultModel botSettingDefaultModel
 
       blackListValid  = maybe True  (>= utcTime) (botUserBlackListValidTo =<< botUserBlackList)
       blackListed     = blackListValid && maybe False botUserBlackListBlackListed    botUserBlackList
@@ -385,8 +362,8 @@ determineIfReply d@DetermineReplyData {..} cqmsgs (Just msg) bn | GroupChat{} <-
         BotName (Just name) -> T.isInfixOf (T.pack name) msg
         _                   -> False
   let thrSeconds    = 150
-      thrReplyCount = if userHasPositiveCostModel then 7 else 3
-  let -- | if last 150 seconds there are >= 4 replies, decrease the chance to reply exponentially
+      thrReplyCount = if userHasPositiveCostModel then 7 else 4
+  let -- | if last 150 seconds there are >= 5 replies, decrease the chance to reply exponentially
       recentReplyCount = length (filter
                           (\t -> diffUTCTime utcTime t < thrSeconds) -- last 180 seconds
                           (Foldable.toList chatTimeSequence)
