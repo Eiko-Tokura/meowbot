@@ -91,7 +91,7 @@ updateAllChatStateTrigger maxMessageInState cid conf cqmsg = lensCidChatState ci
             & _activeTriggerOneOff .~ False
             )
     False -> ( False
-             , mergeChatState maxMessageInState [toUserMessage conf cqmsg] cs
+             , mergeChatState maxMessageInState (maybeToList $ toMessage conf cqmsg) cs
              )
 
 -- | If a text is empty, make it Nothing
@@ -125,17 +125,23 @@ selectedContent (Left (CQOther cqtype _):rest)
 selectedContent (Left _:rest) = selectedContent rest
 
 newtype ToUserMessageConfig = ToUserMessageConfig
-  { withUtcTime :: Maybe UTCTime
+  { withUtcTime :: Bool
   }
 
-toUserMessage :: ToUserMessageConfig -> CQMessage -> Message
-toUserMessage conf cqm = UserMessage $ mconcat $ catMaybes
-  [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
-  , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
-  , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
-  , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
-  , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
-  , fmap (\utc -> "<utc_time>" <> toText utc <> "</utc_time>") (withUtcTime conf)
-  , Just ": "
-  , selectedContent . mixedMessage <$> metaMessage cqm
-  ]
+toMessage :: ToUserMessageConfig -> CQMessage -> Maybe Message
+toMessage conf cqm | (PrivateMessage; GroupMessage) <- eventType cqm = do
+  ms <- selectedContent . mixedMessage <$> metaMessage cqm
+  pure $ UserMessage $ mconcat $ catMaybes
+    [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
+    , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
+    , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
+    , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
+    , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
+    , fmap (\utc -> "<utc_time>" <> toText utc <> "</utc_time>") (if withUtcTime conf then utcTime cqm else Nothing)
+    , Just ": "
+    , Just ms
+    ]
+toMessage _ cqm | SelfMessage <- eventType cqm = do
+  ms <- selectedContent . mixedMessage <$> cqm.metaMessage
+  return $ AssistantMessage ms Nothing Nothing Nothing
+toMessage _ _ = Nothing

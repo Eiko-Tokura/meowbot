@@ -46,6 +46,7 @@ import Utils.List
 import Data.Additional.Default
 
 import Probability.Foundation
+import Data.PersistModel.Data
 
 type MeowTools =
   [ TimeTool
@@ -68,6 +69,16 @@ type MeowTools =
   ]
 
 type ModelChat = Local QwQ
+
+sourceChatState :: Int -> BotId -> ChatId -> ToUserMessageConfig -> Meow ChatState
+sourceChatState nMes botid cid conf = do
+  chatMes <- (fmap (map $ chatMessageToCQMessage . entityVal) . runMeowDataDB $ selectList
+    [ ChatMessageChatId ==. cid, ChatMessageBotId ==. botid ]
+    [ Desc ChatMessageTime
+    , LimitTo nMes
+    ]) `effCatch` (\(_ :: ErrorText "meowDataDb") -> return [])
+  $logInfo $ "Sourced " <> tshow (length chatMes) <> " messages from database for chat " <> tshow cid
+  return $ foldl' (\s cq -> mergeChatState nMes (maybeToList $ toMessage conf cq) s) def (reverse chatMes)
 
 -- | A new command that enables the bot to chat with users
 -- should be more powerful than the previous legacy command Cat
@@ -181,6 +192,8 @@ commandChat = BotCommand Chat $ botT $ do
       readBotSettingField :: a -> (b -> a) -> (BotSettingPerChat -> Maybe b) -> (BotSetting -> Maybe b) -> a
       readBotSettingField def apl f g = maybe def apl $ (f =<< botSettingPerChat) <|> (g =<< botSetting)
 
+      usPos = userHasPositiveCostModel
+
       displayThinking    = readBotSettingField False id botSettingPerChatDisplayThinking    botSettingDisplayThinking
       displayToolMessage = readBotSettingField False id botSettingPerChatDisplayToolMessage botSettingDisplayToolMessage
       activeChat         = readBotSettingField False id botSettingPerChatActiveChat         botSettingActiveChat
@@ -188,8 +201,9 @@ commandChat = BotCommand Chat $ botT $ do
       atReply            = readBotSettingField True  id botSettingPerChatAtReply            botSettingAtReply
       activeProbability  = readBotSettingField 0.013 id botSettingPerChatActiveProbability  botSettingActiveProbability
       maxMessageInState  = readBotSettingField 24    id botSettingPerChatMaxMessageInState  botSettingMaxMessageInState
-      multiResponse      = readBotSettingField False id botSettingPerChatMultiResponse      botSettingMultiResponse
-      withTimeStamp      = readBotSettingField False id botSettingPerChatWithTimeStamp      botSettingWithTimeStamp
+      multiResponse      = readBotSettingField usPos id botSettingPerChatMultiResponse      botSettingMultiResponse
+      withTimeStamp      = readBotSettingField usPos id botSettingPerChatWithTimeStamp      botSettingWithTimeStamp
+      sourceOnStartup    = readBotSettingField usPos id botSettingPerChatSourceOnStartup    botSettingSourceOnStartup
       modelCat           = readBotSettingField modelCat runPersistUseShow botSettingPerChatDefaultModel botSettingDefaultModel
 
       blackListValid  = maybe True  (>= utcTime) (botUserBlackListValidTo =<< botUserBlackList)
@@ -204,11 +218,19 @@ commandChat = BotCommand Chat $ botT $ do
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
       toMessageConf = ToUserMessageConfig
-        { withUtcTime = if withTimeStamp then Just utcTime else Nothing
+        { withUtcTime = withTimeStamp
         }
 
+      notInitialized = isNothing $ HM.lookup cid allChatState
+
+  -- | only chat when set to active
   guardMaybeT $ activeChat && not blackListed
-  -- ^ only chat when set to active
+
+  when (notInitialized && sourceOnStartup) $ do
+    $(logInfo) $ "Chat state for " <> tshow cid <> " not initialized, sourcing from database."
+    initialChatState <- lift $ sourceChatState maxMessageInState botid cid toMessageConf
+    lift $ modifyAllChatState $ updateChatState cid (const initialChatState)
+
   $(logDebug) "Chat command is active"
 
   (oneOffActive, allChatState) <- lift $ updateAllChatStateTrigger maxMessageInState cid toMessageConf cqmsg <$> getTypeWithDef newChatState

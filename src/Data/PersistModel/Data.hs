@@ -45,7 +45,7 @@ cqMessageToChatMessage botid botname cqm = do
     , chatMessageChatId         = cid
     , chatMessageUserId         = userId cqm
     , chatMessageAbsoluteId     = aid
-    , chatMessagePureContent    = fromMaybe "" $ onlyMessage <$> metaMessage cqm
+    , chatMessagePureContent    = maybe "" onlyMessage (metaMessage cqm)
     , chatMessageCqCodes        = cqcodes =<< maybe [] pure (metaMessage cqm)
     , chatMessageReplyTo        = replyTo =<< metaMessage cqm
     , chatMessageSenderNickname = senderNickname =<< sender cqm
@@ -53,3 +53,32 @@ cqMessageToChatMessage botid botname cqm = do
     , chatMessageSenderRole     = PersistUseInt64 <$> (senderRole =<< sender cqm)
     }
 
+chatMessageToCQMessage :: ChatMessage -> CQMessage
+chatMessageToCQMessage cm = CQMessage
+  { eventType    = coerce $ chatMessageEventType cm
+  , messageId    = chatMessageMessageId cm
+  , groupId      = case chatMessageChatId cm of
+                      GroupChat gid   -> Just gid
+                      _               -> Nothing
+  , userId       = case chatMessageChatId cm of
+                      PrivateChat uid -> Just uid
+                      _               -> Nothing
+  , sender       = Just $ CQSenderInfo
+                      { senderNickname = chatMessageSenderNickname cm
+                      , senderCard     = chatMessageSenderCard cm
+                      , senderRole     = coerce $ chatMessageSenderRole cm
+                      }
+  , message      = Just $ chatMessagePureContent cm
+  , time         = Just . round . utcTimeToPOSIXSeconds $ chatMessageTime cm
+  , utcTime      = Just $ chatMessageTime cm
+  , self_id      = Nothing
+  , target_id    = Nothing
+  , responseData = Nothing
+  , echoR        = Nothing
+  , absoluteId   = Nothing
+  , metaMessage  = Just $ generateMetaMessage (chatMessagePureContent cm) [] $
+                      [ MCQCode cq | cq <- chatMessageCqCodes cm ] ++
+                      maybe [] (\rid -> [MReplyTo rid]) (chatMessageReplyTo cm)
+  , noticeType   = Nothing
+  , requestType  = Nothing
+  }
