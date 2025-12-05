@@ -203,6 +203,7 @@ commandChat = BotCommand Chat $ botT $ do
       maxMessageInState  = readBotSettingField 24    id botSettingPerChatMaxMessageInState  botSettingMaxMessageInState
       multiResponse      = readBotSettingField usPos id botSettingPerChatMultiResponse      botSettingMultiResponse
       withTimeStamp      = readBotSettingField usPos id botSettingPerChatWithTimeStamp      botSettingWithTimeStamp
+      timeStampTimezone  = readBotSettingField 8 id botSettingPerChatWithTimeStampTimezone botSettingWithTimeStampTimezone
       sourceOnStartup    = readBotSettingField usPos id botSettingPerChatSourceOnStartup    botSettingSourceOnStartup
       modelCat           = readBotSettingField modelCat runPersistUseShow botSettingPerChatDefaultModel botSettingDefaultModel
 
@@ -218,7 +219,8 @@ commandChat = BotCommand Chat $ botT $ do
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
       toMessageConf = ToUserMessageConfig
-        { withUtcTime = withTimeStamp
+        { withUtcTime       = withTimeStamp
+        , timeStampTimezone = timeStampTimezone
         }
 
       notInitialized = isNothing $ HM.lookup cid allChatState

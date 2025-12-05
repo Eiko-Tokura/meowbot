@@ -124,9 +124,21 @@ selectedContent (Left (CQOther cqtype _):rest)
   <> selectedContent rest
 selectedContent (Left _:rest) = selectedContent rest
 
-newtype ToUserMessageConfig = ToUserMessageConfig
-  { withUtcTime :: Bool
+data ToUserMessageConfig = ToUserMessageConfig
+  { withTime          :: Bool
+  , timeStampTimezone :: Int
   }
+
+timeZoneString :: Int -> UTCTime -> Text
+timeZoneString tz t = T.concat
+  [ T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S:%Q" $ addUTCTime (fromIntegral $ tz * 3600) t
+  , " (UTC"
+  , T.pack $ case compare tz 0 of
+      LT -> "-" ++ show (abs tz)
+      EQ -> ""
+      GT -> "+" ++ show tz
+  , ")"
+  ]
 
 toMessage :: ToUserMessageConfig -> CQMessage -> Maybe Message
 toMessage conf cqm | (PrivateMessage; GroupMessage) <- eventType cqm = do
@@ -137,7 +149,7 @@ toMessage conf cqm | (PrivateMessage; GroupMessage) <- eventType cqm = do
     , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
     , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
     , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
-    , fmap (\utc -> "<utc_time>" <> toText utc <> "</utc_time>") (if withUtcTime conf then utcTime cqm else Nothing)
+    , fmap (\utc -> "<time>" <> toText utc <> "</time>") (if conf.withTime then utcTime cqm else Nothing)
     , Just ": "
     , Just ms
     ]
