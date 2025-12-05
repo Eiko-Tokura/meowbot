@@ -35,7 +35,7 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
         = Map.filterWithKey (\gid _ -> gid `elem` gids)
         $ Map.unionWith const mapG (Map.fromList [(gid, defVal) | gid <- gids])
 
-      doNothing = MaybeT $ return Nothing
+      doNothing = MaybeT $ return $ Just []
 
       fetchFriendList = do
         parseResponse <- lift $ queryAPI GetFriendList
@@ -69,7 +69,7 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
 
   l1 <- withExpireTimeDo aDay updateLensSelfFriends selfFriends fetchFriendList doNothing (const doNothing)
 
-  fmap (l1 <>) <$> withExpireTimeDo anHour updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
+  l2 <- withExpireTimeDo aDay updateLensSelfInGroups selfInGroups fetchGroupList doNothing $ \groupMap -> do
     utcTime <- liftIO getCurrentTime
 
     let groupList = Map.toList groupMap
@@ -98,7 +98,12 @@ commandUpdater = BotCommand Updater $ effAddLogCat' (LogCat @Text "OTHER:UPDATER
     modify $ \od -> od { selfInfo = Just s_ }
 
     parsers <- lift $ queryAPI `mapM` [GetGroupMemberInfo gid selfId False | gid <- fst <$> updateNeeded]
-    return $ pure $ BARawQueryCallBack [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
+    let callbacks = [ fmap (nextStepFor gid) . parser | gid <- fst <$> updateNeeded | parser <- parsers ]
+    return $ case callbacks of
+      [] -> []
+      _  -> pure $ BARawQueryCallBack callbacks
+
+  return $ l1 <> l2
 
 withExpireTimeDo
   :: (MonadIO m)

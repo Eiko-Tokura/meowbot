@@ -89,6 +89,20 @@ data BotAction
   | BADelayedPureAction  Int  [BotAction]
   | BADelayedPureAction1 Int  BotAction
 
+instance Show BotAction where
+  show (BASendPrivate uid msg)      = "BASendPrivate uid=" ++ show uid ++ " msg=" ++ show msg
+  show (BASendGroup gid msg)        = "BASendGroup gid=" ++ show gid ++ " msg=" ++ show msg
+  show (BARetractMsg cqmid)         = "BARetractMsg " ++ show cqmid
+  show (BAActionAPI api)            = "BAActionAPI " ++ show api
+  show (BAQueryAPI (SomeQueryAPI query _)) = "BAQueryAPI " ++ show query
+  show (BARawQueryCallBack _)       = "BARawQueryCallBack <function>"
+  show (BAAsync _)                  = "BAAsync <async action>"
+  show (BAPureAsync _)              = "BAPureAsync <pure async action>"
+  show (BASimpleAction _)           = "BASimpleAction <function>"
+  show (BADelayedAction ms _)       = "BADelayedAction " ++ show ms ++ "ms <function>"
+  show (BADelayedPureAction ms _)   = "BADelayedPureAction " ++ show ms ++ "ms <actions>"
+  show (BADelayedPureAction1 ms _)  = "BADelayedPureAction1 " ++ show ms ++ "ms <action>"
+
 ---
 
 -- | Because of the reference to Meow, have to put it here
