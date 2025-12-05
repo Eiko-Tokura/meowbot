@@ -1,4 +1,7 @@
 {-# OPTIONS_GHC -Werror=incomplete-patterns #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant $" #-}
+{-# HLINT ignore "Redundant bracket" #-}
 module Command.Cat.CatSet
   ( module Command.Cat.CatSet
   , catSetParser
@@ -86,6 +89,8 @@ helpCatSet = T.intercalate "\n"
   , "    activeChat :: Bool"
   , "    atReply :: Bool"
   , "    mentionReply :: Bool"
+  , "    multiResponse :: Bool"
+  , "    withTimeStamp :: Bool"
   , "    activeProbability :: Double"
   , "    maxMessageInState :: Int"
   , "   special item:"
@@ -170,6 +175,12 @@ catSet (Set Default item) = do
     MentionReply         mdt -> do
       lift $ runMeowCoreDB (updateWhere selector [BotSettingMentionReply =. mdt])
       return [ baSendToChatId cid $ "MentionReply set to " <> tshow mdt ]
+    MultiResponse       mdt -> do
+      lift $ runMeowCoreDB (updateWhere selector [BotSettingMultiResponse =. mdt])
+      return [ baSendToChatId cid $ "MultiResponse set to " <> tshow mdt ]
+    WithTimeStamp       mdt -> do
+      lift $ runMeowCoreDB (updateWhere selector [BotSettingWithTimeStamp =. mdt])
+      return [ baSendToChatId cid $ "WithTimeStamp set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runMeowCoreDB (updateWhere selector [BotSettingActiveProbability =. mdt])
       return [ baSendToChatId cid $ "ActiveProbability set to " <> tshow mdt ]
@@ -252,6 +263,12 @@ catSet (Set (PerChatWithChatId cid) item) = do
     MentionReply         mdt -> do
       lift $ runMeowCoreDB $ updateWhere selector [BotSettingPerChatMentionReply =. mdt]
       return [ baSendToChatId cid' $ "MentionReply set to " <> tshow mdt ]
+    MultiResponse       mdt -> do
+      lift $ runMeowCoreDB $ updateWhere selector [BotSettingPerChatMultiResponse =. mdt]
+      return [ baSendToChatId cid' $ "MultiResponse set to " <> tshow mdt ]
+    WithTimeStamp       mdt -> do
+      lift $ runMeowCoreDB $ updateWhere selector [BotSettingPerChatWithTimeStamp =. mdt]
+      return [ baSendToChatId cid' $ "WithTimeStamp set to " <> tshow mdt ]
     ActiveProbability    mdt -> do
       lift $ runMeowCoreDB $ updateWhere selector [BotSettingPerChatActiveProbability =. mdt]
       return [ baSendToChatId cid' $ "ActiveProbability set to " <> tshow mdt ]
@@ -288,6 +305,8 @@ catSet (UnSet range item) = do
     ActiveChat              _ -> catSet (Set range $ ActiveChat Nothing)
     AtReply                 _ -> catSet (Set range $ AtReply Nothing)
     MentionReply            _ -> catSet (Set range $ MentionReply Nothing)
+    MultiResponse           _ -> catSet (Set range $ MultiResponse Nothing)
+    WithTimeStamp           _ -> catSet (Set range $ WithTimeStamp Nothing)
     ActiveProbability       _ -> catSet (Set range $ ActiveProbability Nothing)
     MaxMessageInState       _ -> catSet (Set range $ MaxMessageInState Nothing)
     EnableNotes             _ -> catSet (Set range $ EnableNotes Nothing)
