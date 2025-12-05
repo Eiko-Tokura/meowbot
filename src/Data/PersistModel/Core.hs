@@ -248,6 +248,7 @@ BotSetting -- Overlappable by BotSettingPerChat
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
   multiResponse           Bool                 Maybe
+  withTimeStamp           Bool                 Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe
@@ -282,6 +283,7 @@ BotSettingPerChat -- Overlapping BotSetting
   activeProbability       Double               Maybe
   maxMessageInState       Int                  Maybe
   multiResponse           Bool                 Maybe
+  withTimeStamp           Bool                 Maybe
   enableNotes             Bool                 Maybe
   enableCronTab           Bool                 Maybe
   enableSetEssence        Bool                 Maybe

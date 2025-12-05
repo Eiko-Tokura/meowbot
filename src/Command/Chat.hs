@@ -179,7 +179,7 @@ commandChat = BotCommand Chat $ botT $ do
       sd = savedData other_data
 
       readBotSettingField :: a -> (b -> a) -> (BotSettingPerChat -> Maybe b) -> (BotSetting -> Maybe b) -> a
-      readBotSettingField def apl f g = maybe def apl $ (f =<< botSettingPerChat) <|> (g  =<< botSetting)
+      readBotSettingField def apl f g = maybe def apl $ (f =<< botSettingPerChat) <|> (g =<< botSetting)
 
       displayThinking    = readBotSettingField False id botSettingPerChatDisplayThinking    botSettingDisplayThinking
       displayToolMessage = readBotSettingField False id botSettingPerChatDisplayToolMessage botSettingDisplayToolMessage
@@ -189,7 +189,8 @@ commandChat = BotCommand Chat $ botT $ do
       activeProbability  = readBotSettingField 0.013 id botSettingPerChatActiveProbability  botSettingActiveProbability
       maxMessageInState  = readBotSettingField 24    id botSettingPerChatMaxMessageInState  botSettingMaxMessageInState
       multiResponse      = readBotSettingField False id botSettingPerChatMultiResponse      botSettingMultiResponse
-      modelCat          =  readBotSettingField modelCat runPersistUseShow botSettingPerChatDefaultModel botSettingDefaultModel
+      withTimeStamp      = readBotSettingField False id botSettingPerChatWithTimeStamp      botSettingWithTimeStamp
+      modelCat           = readBotSettingField modelCat runPersistUseShow botSettingPerChatDefaultModel botSettingDefaultModel
 
       blackListValid  = maybe True  (>= utcTime) (botUserBlackListValidTo =<< botUserBlackList)
       blackListed     = blackListValid && maybe False botUserBlackListBlackListed    botUserBlackList
@@ -202,11 +203,15 @@ commandChat = BotCommand Chat $ botT $ do
 
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
+      toMessageConf = ToUserMessageConfig
+        { withUtcTime = if withTimeStamp then Just utcTime else Nothing
+        }
+
   guardMaybeT $ activeChat && not blackListed
   -- ^ only chat when set to active
   $(logDebug) "Chat command is active"
 
-  (oneOffActive, allChatState) <- lift $ updateAllChatStateTrigger maxMessageInState cid cqmsg <$> getTypeWithDef newChatState
+  (oneOffActive, allChatState) <- lift $ updateAllChatStateTrigger maxMessageInState cid toMessageConf cqmsg <$> getTypeWithDef newChatState
   -- ^ get the updated chat state
 
   lift $ putType allChatState

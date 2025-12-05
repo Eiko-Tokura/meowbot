@@ -83,15 +83,15 @@ clearChatState = const def
 -- | Update the chat state map by inserting the new user message and checking active trigger.
 --
 -- In case of active trigger, it resets the flag and does not add the message.
-updateAllChatStateTrigger :: Int -> ChatId -> CQMessage -> AllChatState -> (Bool, AllChatState)
-updateAllChatStateTrigger maxMessageInState cid cqmsg = lensCidChatState cid $ \cs ->
+updateAllChatStateTrigger :: Int -> ChatId -> ToUserMessageConfig -> CQMessage -> AllChatState -> (Bool, AllChatState)
+updateAllChatStateTrigger maxMessageInState cid conf cqmsg = lensCidChatState cid $ \cs ->
   case activeTriggerOneOff cs of
     True -> ( True
             , cs
             & _activeTriggerOneOff .~ False
             )
     False -> ( False
-             , mergeChatState maxMessageInState [toUserMessage cqmsg] cs
+             , mergeChatState maxMessageInState [toUserMessage conf cqmsg] cs
              )
 
 -- | If a text is empty, make it Nothing
@@ -124,13 +124,18 @@ selectedContent (Left (CQOther cqtype _):rest)
   <> selectedContent rest
 selectedContent (Left _:rest) = selectedContent rest
 
-toUserMessage :: CQMessage -> Message
-toUserMessage cqm = UserMessage $ mconcat $ catMaybes
+newtype ToUserMessageConfig = ToUserMessageConfig
+  { withUtcTime :: Maybe UTCTime
+  }
+
+toUserMessage :: ToUserMessageConfig -> CQMessage -> Message
+toUserMessage conf cqm = UserMessage $ mconcat $ catMaybes
   [ fmap (\r -> "<role>" <> r <> "</role>") (roleToText =<< senderRole =<< sender cqm)
   , fmap (\t -> "<msg_id>" <> toText t <> "</msg_id>") (messageId cqm)
   , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
   , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
   , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
+  , fmap (\utc -> "<utc_time>" <> toText utc <> "</utc_time>") (withUtcTime conf)
   , Just ": "
   , selectedContent . mixedMessage <$> metaMessage cqm
   ]
