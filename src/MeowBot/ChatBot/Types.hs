@@ -149,7 +149,8 @@ toMessage conf cqm | (PrivateMessage; GroupMessage) <- eventType cqm = do
     , fmap (\(UserId uid) -> "<user_id>" <> toText uid <> "</user_id>") (userId cqm)
     , fmap (\t -> "<username>" <> t <> "</username>") (senderNickname =<< sender cqm)
     , fmap (\t -> "<nickname>" <> t <> "</nickname>") (nullify $ senderCard =<< sender cqm)
-    , fmap (\utc -> "<time>" <> toText utc <> "</time>") (if conf.withTime then utcTime cqm else Nothing)
+    , fmap (\utc -> "<time>" <> toText utc <> "</time>") $
+        if conf.withTime then timeZoneString conf.timeStampTimezone <$> cqm.utcTime else Nothing
     , Just ": "
     , Just ms
     ]
