@@ -49,8 +49,7 @@ import Probability.Foundation
 import Data.PersistModel.Data
 
 type MeowTools =
-  [ TimeTool
-  , SkipTool
+  [ SkipTool
   , ActionTool
   , NoteToolAdd
   , NoteToolRead

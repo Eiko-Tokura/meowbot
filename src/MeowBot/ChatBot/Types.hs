@@ -131,7 +131,7 @@ data ToUserMessageConfig = ToUserMessageConfig
 
 timeZoneString :: Int -> UTCTime -> Text
 timeZoneString tz t = T.concat
-  [ T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S:%Q" $ addUTCTime (fromIntegral $ tz * 3600) t
+  [ T.pack $ formatTime defaultTimeLocale "%Y-%m-%d %H:%M:%S" $ addUTCTime (fromIntegral $ tz * 3600) t
   , " (UTC"
   , T.pack $ case compare tz 0 of
       LT -> "-" ++ show (abs tz)
