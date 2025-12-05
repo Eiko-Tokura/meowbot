@@ -219,7 +219,7 @@ commandChat = BotCommand Chat $ botT $ do
       params = ChatParams False msys man timeout :: ChatParams ModelChat MeowTools
 
       toMessageConf = ToUserMessageConfig
-        { withUtcTime       = withTimeStamp
+        { withTime          = withTimeStamp
         , timeStampTimezone = timeStampTimezone
         }
 
